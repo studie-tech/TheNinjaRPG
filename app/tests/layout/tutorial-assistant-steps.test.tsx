@@ -1131,7 +1131,7 @@ describe("quest steps", () => {
 
   it("answers the related quest's dialog from the lesson", () => {
     const index = TUTORIAL_STEPS.findIndex(
-      (step) => step.advanceOn === "questDialog" && !step.teachOnPage,
+      (step) => step.advanceOn === "questDialog" && step.teachOnPage,
     );
     const step = TUTORIAL_STEPS[index]!;
     const view = showAfterIdle(
@@ -1170,7 +1170,7 @@ describe("quest steps", () => {
       (step) =>
         step.advanceOn === "questReward" &&
         typeof step.objectiveId === "string" &&
-        !step.teachOnPage,
+        step.teachOnPage,
     );
     const step = TUTORIAL_STEPS[index]!;
     const questId = String(step.relatedValue);
@@ -1270,23 +1270,9 @@ describe("quest steps", () => {
       (step) => step.id === "tools-claim-jutsu",
     );
     expect(TUTORIAL_STEPS[jutsuClaim]?.elementIds ?? []).toEqual([]);
+    // It is claimed on the Quests tab, which the dock marks; the lesson has no second Claim.
     const view = showAfterIdle(jutsuClaim, starterQuest(jutsuClaim, true));
-    const claim = view.getByRole("button", { name: "Claim 1,000 XP" });
-    expect(claim.closest("[data-tutorial-claim-highlight]")).toBeTruthy();
-    // A claim names every reward, so a long one wraps inside the dock.
-    expect(claim.className).toContain("whitespace-normal");
-    expect(claim.className).not.toContain("whitespace-nowrap");
-    expect(claim.className).toContain("h-auto");
-    expect(overlay()).toBeTruthy();
-    fireEvent.click(claim);
-    expect(state.checkRewards).toHaveBeenCalledWith({
-      questId: String(TUTORIAL_STEPS[jutsuClaim]?.relatedValue),
-    });
-    cleanup();
-    // Nothing to claim yet: no dimming, no pointer.
-    show(jutsuClaim, starterQuest(jutsuClaim, false));
-    expect(document.querySelector("[data-tutorial-claim-highlight]")).toBeNull();
-    expect(overlay()).toBeNull();
+    expect(view.queryByRole("button", { name: "Claim 1,000 XP" })).toBeNull();
     cleanup();
     // The first fight's reward is claimed from the logbook's gift: the lesson keeps its
     // own Claim back until the player is stuck.
@@ -1435,19 +1421,15 @@ describe("quest steps", () => {
     vi.useFakeTimers();
     for (const stepId of claimSteps) {
       const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
-      const questId = String(TUTORIAL_STEPS[index]?.relatedValue);
       state.checkRewards.mockClear();
       const view = show(index, readyQuest(index));
-      // Nothing is claimed while the player only reads the lesson, and the lesson's
-      // own Claim waits until they have read it and then been idle for a while.
-      act(() => vi.advanceTimersByTime(10_000));
+      // The Quests tab is marked throughout, so nothing is claimed, or offered, elsewhere.
+      act(() => vi.advanceTimersByTime(idleWaitMs(index) * 2));
       expect(state.checkRewards).not.toHaveBeenCalled();
       expect(view.queryByRole("button", { name: /^Claim / })).toBeNull();
-      act(() => vi.advanceTimersByTime(idleWaitMs(index) - 10_000));
-      fireEvent.click(view.getByRole("button", { name: /^Claim / }));
-      expect(state.checkRewards).toHaveBeenLastCalledWith({ questId });
       cleanup();
     }
+    vi.useRealTimers();
   });
 
   it("teaches the trip on the page and offers the lesson's trip only once stuck", () => {
@@ -1550,7 +1532,6 @@ describe("quest steps", () => {
       expect(step.action).toContain("Open Quests");
       expect(getQuestsTabLesson({ tutorialOn: true, tutorialStep: index })).toEqual({
         questId: String(step.relatedValue),
-        marks: step.questsTab!.marks,
         prompt: step.questsTab!.prompt ?? "Claim your reward here.",
       });
       expect(getQuestsTabLesson({ tutorialOn: false, tutorialStep: index })).toBeNull();
@@ -1558,7 +1539,7 @@ describe("quest steps", () => {
     expect(getQuestsTabLesson({ tutorialOn: true, tutorialStep: 0 })).toBeNull();
   });
 
-  it("says on the Quests tab what each lesson sent there asks, however little it marks", () => {
+  it("says on the Quests tab what each lesson sent there asks", () => {
     expect(
       TUTORIAL_STEPS.filter((step) => step.questsTab).map((step) => [
         step.id,
@@ -1575,23 +1556,6 @@ describe("quest steps", () => {
       ["exam-tour", "Answer the proctor here."],
       ["exam-joined", "Answer the proctor here."],
       ["exam-claim", "Claim your reward here."],
-    ]);
-  });
-
-  it("marks the Quests tab less each time, the first claim and the first answer in full", () => {
-    expect(
-      TUTORIAL_STEPS.filter((step) => step.questsTab).map((step) => [
-        step.id,
-        step.questsTab!.marks,
-      ]),
-    ).toEqual([
-      ["tools-claim-jutsu", "all"],
-      ["mission-claim-pup", "tab"],
-      ["bond-return-pup", "all"],
-      ["genin-debrief", "none"],
-      ["exam-tour", "none"],
-      ["exam-joined", "none"],
-      ["exam-claim", "none"],
     ]);
   });
 
@@ -1642,28 +1606,6 @@ describe("quest steps", () => {
       questData: [{ id: questId, goals: [{ id: objectiveId, ...goal }] }],
     };
   };
-
-  it("starts the wait for the lesson's own button once it replaces the fight's close", () => {
-    vi.useFakeTimers();
-    const index = TUTORIAL_STEPS.findIndex((step) => step.id === "mission-claim-pup");
-    const quest = stepQuest(
-      index,
-      { task: "defeat_opponents", reward_exp: 1500 },
-      { done: true, collected: false },
-    );
-    const view = show(index, quest, "/combat");
-    expect(lesson(view, "Battle over")).toBeTruthy();
-    act(() => vi.advanceTimersByTime(idleWaitMs(index) * 2));
-    state.pathname = "/travel";
-    view.rerender(assistant());
-    expect(lesson(view, TUTORIAL_STEPS[index]!.title)).toBeTruthy();
-    expect(view.queryByRole("button", { name: "Claim 1,500 XP" })).toBeNull();
-    act(() => vi.advanceTimersByTime(idleWaitMs(index) - 1));
-    expect(view.queryByRole("button", { name: "Claim 1,500 XP" })).toBeNull();
-    act(() => vi.advanceTimersByTime(1));
-    expect(view.getByRole("button", { name: "Claim 1,500 XP" })).toBeTruthy();
-    vi.useRealTimers();
-  });
 
   it("floats the dock above a waiting shortcut, so the shortcut arrives without moving its tabs", () => {
     vi.useFakeTimers();
@@ -1826,27 +1768,6 @@ describe("quest steps", () => {
     expect(folded()).toBe(false);
     await act(async () => dialog.remove());
     expect(folded()).toBe(true);
-  });
-
-  it("gives a quoted objective its reading time before the lesson's own answer", () => {
-    vi.useFakeTimers();
-    const index = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-tour");
-    const step = TUTORIAL_STEPS[index]!;
-    expect(step.quoteObjective).toBe(true);
-    const quote = Array.from({ length: 40 }, (_, word) => `word${word}`).join(" ");
-    const quest = stepQuest(index, {
-      task: "dialog",
-      description: quote,
-      nextObjectiveId: [{ text: "Show me around", nextObjectiveId: "after" }],
-    });
-    const view = show(index, quest);
-    expect(lesson(view, step.title).textContent).toContain(quote);
-    const answer = () => view.queryByRole("button", { name: "Show me around" });
-    act(() => vi.advanceTimersByTime(idleWaitMs(index)));
-    expect(answer()).toBeNull();
-    act(() => vi.advanceTimersByTime(lessonReadingSeconds(step, quote) * 1000));
-    expect(answer()).toBeTruthy();
-    vi.useRealTimers();
   });
 
   it("points a player who took Express Trials at the Global tab on the way home", () => {

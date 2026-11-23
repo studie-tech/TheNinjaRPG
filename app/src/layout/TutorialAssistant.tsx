@@ -27,7 +27,6 @@ import { SortableList } from "@/components/ui/sortable-list";
 import type { QuestType } from "@/drizzle/constants";
 import {
   IMG_URL_ASSISTANT,
-  IMG_URL_HANDPOINTER,
   OrderedQuestTypesInTutorial,
   TUTORIAL_STEPS_COUNT,
 } from "@/drizzle/constants";
@@ -51,6 +50,7 @@ import {
   TutorialScreen,
 } from "@/layout/TutorialScreens";
 import { CoachCard } from "@/layout/tutorial/CoachCard";
+import { DockHighlight } from "@/layout/tutorial/DockHighlight";
 import {
   type GuidedLessonMark,
   type GuidedLessonStep,
@@ -811,7 +811,7 @@ const PlayerTutorialAssistant: React.FC<
   // player has had time to read it, quote included, and then done nothing for a few
   // seconds; any tap or key press shows they are acting, and restarts a plain wait. A
   // dialog over the page has the player's attention, so the wait does not end under it.
-  const teachesInGame = !!(currentStep?.teachOnPage || currentStep?.questsTab);
+  const teachesInGame = !!currentStep?.teachOnPage;
   const isOnTheWay = !!currentStep?.wayHref;
   const readingMs = currentStep
     ? lessonReadingSeconds(
@@ -1165,9 +1165,7 @@ const PlayerTutorialAssistant: React.FC<
   // the lesson answers has played.
   const isShortcutShown =
     !(
-      (currentTutorialStep.teachOnPage ||
-        currentTutorialStep.questsTab ||
-        currentTutorialStep.wayHref) &&
+      (currentTutorialStep.teachOnPage || currentTutorialStep.wayHref) &&
       idleKey !== lessonKey
     ) &&
     !isModalDialogOpen &&
@@ -1205,14 +1203,16 @@ const PlayerTutorialAssistant: React.FC<
 
   // The lesson's own trip, answer and claim, and its skip. Until they are offered they
   // are previewed unseen, so they arrive without moving the dock.
+  // A lesson on the Quests tab marks the tab, where its answer or reward waits.
   const hasShortcut =
-    (!!autoTravelHref && !!currentTutorialStep.autoTravelLabel) ||
-    (!!dialogOptions && !isVillageChoice) ||
-    !!claimable;
+    !currentTutorialStep.questsTab &&
+    ((!!autoTravelHref && !!currentTutorialStep.autoTravelLabel) ||
+      (!!dialogOptions && !isVillageChoice) ||
+      !!claimable);
   const renderShortcuts = (isPreview: boolean) => (
     <>
       {autoTravelHref && currentTutorialStep.autoTravelLabel && (
-        <ClaimHighlight
+        <DockHighlight
           // The trip button is the step's action until a page control takes over.
           active={
             !isPreview &&
@@ -1232,7 +1232,7 @@ const PlayerTutorialAssistant: React.FC<
             <MapPin className="mr-2 h-5 w-5" aria-hidden="true" />
             {currentTutorialStep.autoTravelLabel}
           </Button>
-        </ClaimHighlight>
+        </DockHighlight>
       )}
       {dialogOptions && !isVillageChoice && (
         <div>
@@ -1274,38 +1274,28 @@ const PlayerTutorialAssistant: React.FC<
       {claimable && (
         <div className="bg-muted/40 rounded-lg border p-3">
           {claimable.isReady ? (
-            <ClaimHighlight
-              // Without a logbook entry on the page, this is the only place to claim.
-              active={!isPreview && !currentTutorialStep.elementIds?.length}
+            <Button
+              size="lg"
+              decoration="gold"
+              // A claim names every reward, so a long one wraps inside the dock.
+              className="h-auto min-h-10 w-full px-4 py-2 text-left text-balance whitespace-normal"
+              disabled={isCheckingRewards}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                checkRewards({ questId: claimable.questId });
+              }}
             >
-              <Button
-                size="lg"
-                decoration="gold"
-                animation={
-                  currentTutorialStep.elementIds?.length || isCheckingRewards
-                    ? undefined
-                    : "pulse"
-                }
-                // A claim names every reward, so a long one wraps inside the dock.
-                className="h-auto min-h-10 w-full px-4 py-2 text-left text-balance whitespace-normal"
-                disabled={isCheckingRewards}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  checkRewards({ questId: claimable.questId });
-                }}
-              >
-                {isCheckingRewards ? (
-                  <Loader2
-                    className="mr-2 h-5 w-5 shrink-0 animate-spin"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <Gift className="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
-                )}
-                {isCheckingRewards ? "Claiming" : claimable.label}
-              </Button>
-            </ClaimHighlight>
+              {isCheckingRewards ? (
+                <Loader2
+                  className="mr-2 h-5 w-5 shrink-0 animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <Gift className="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
+              )}
+              {isCheckingRewards ? "Claiming" : claimable.label}
+            </Button>
           ) : (
             <p className="text-muted-foreground text-base">
               Objective: {parseHtml(claimable.objectiveText || "Complete the task.")}
@@ -1369,7 +1359,6 @@ const PlayerTutorialAssistant: React.FC<
           <Spotlight
             box={highlight}
             marks={marks}
-            dim={!currentTutorialStep.isPageLit}
             ping={showPointer}
             pointer={showPointer}
             holeClassName="pointer-events-none bg-transparent"
@@ -1405,7 +1394,7 @@ const PlayerTutorialAssistant: React.FC<
           showOrderingButton={showPostTutorialQuest}
           footer={
             <>
-              {isShortcutShown && renderShortcuts(false)}
+              {isShortcutShown && hasShortcut && renderShortcuts(false)}
               {retryQuestId && (
                 <Button
                   size="lg"
@@ -1959,42 +1948,6 @@ const PostTutorialQuestObjectives: React.FC<{
       )}
   </>
 );
-
-/**
- * Marks the lesson's own Claim button the way a page highlight marks its target:
- * the page dims behind the Activity dock, and the button gets the amber ring and
- * the hand. For claim steps with nothing to point at on the page, where the
- * lesson's button is the only place to claim.
- */
-const ClaimHighlight: React.FC<{ active: boolean; children: React.ReactNode }> = ({
-  active,
-  children,
-}) => {
-  if (!active) return children;
-  return (
-    <div className="relative" data-tutorial-claim-highlight="">
-      {createPortal(
-        // Below the open lesson's dock (z-[61]); page controls stay reachable.
-        <div
-          data-battle-focus-layer
-          aria-hidden="true"
-          className="pointer-events-none fixed inset-0 z-[60] bg-black/55"
-        />,
-        document.body,
-      )}
-      <span className="pointer-events-none absolute -inset-1.5 rounded-lg border-[3px] border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.8)]" />
-      {children}
-      <Image
-        src={IMG_URL_HANDPOINTER}
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-12 right-6 z-[1] h-12 w-12 rotate-180 animate-bounce drop-shadow-lg motion-reduce:animate-none"
-        width={80}
-        height={80}
-      />
-    </div>
-  );
-};
 
 /**
  * Turns the tutorial off for the player who asked, and keeps the confirmation open with an
@@ -2661,6 +2614,7 @@ const useGuidedMarks = (
             continue;
           const rect = element.getBoundingClientRect();
           if (!isUsableHighlightRect(rect)) continue;
+          if (window.getComputedStyle(element).visibility === "hidden") continue;
           if (!first) first = element;
           next.push({
             key: `${mark.selector}#${next.length}`,
@@ -2755,7 +2709,7 @@ const findElementToHighlight = (
   // Return the element reference along with its dimensions
   return {
     element,
-    isInScene: step.isPageLit,
+    isInScene: step.isInScene,
   };
 };
 

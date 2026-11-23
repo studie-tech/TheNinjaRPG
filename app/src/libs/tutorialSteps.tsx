@@ -7,7 +7,6 @@ import {
   TUTORIAL_STARTER_QUEST_ID,
 } from "@/drizzle/constants";
 import type { GuidedLessonMark } from "@/layout/tutorial/guidedLesson";
-import type { QuestsTabMarks } from "@/libs/questsTabLesson";
 import {
   GENIN_QUEST_OBJECTIVES,
   STARTER_QUEST_OBJECTIVES,
@@ -49,8 +48,8 @@ export interface TutorialStepConfig {
   marks?: GuidedLessonMark[];
   /** What Lemu says while the scene that opens the step still plays on the map. */
   sceneLead?: { description: string; action: string };
-  /** Marks the target without dimming the page, for a scene that plays around it. */
-  isPageLit?: boolean;
+  /** The target stands in a scene, which is scrolled no further than the target needs. */
+  isInScene?: boolean;
   /** Element brought into view, unmarked, while no target is on screen. */
   revealId?: string;
   /**
@@ -84,7 +83,7 @@ export interface TutorialStepConfig {
    * own buttons wait as with `teachOnPage`; `marks` sets how much of the tab points, and
    * `prompt` what the tab says to do there (by default, to answer or claim per `advanceOn`).
    */
-  questsTab?: QuestsTabMarks;
+  questsTab?: { prompt?: string };
   /** Game action that completes the step. */
   advanceOn?: TutorialTrigger;
   /**
@@ -153,7 +152,9 @@ const sectorTargetElements = ["tutorial-objective-marker", "tutorial-travel-sect
 const mapSceneTarget = {
   elementIds: ["tutorial-map-target"],
   revealId: "tutorial-travel-sector",
-  isPageLit: true,
+  isInScene: true,
+  // What is said on the map stays readable in the dimmed page.
+  marks: [{ selector: "[data-map-speech-line]", label: "" }],
 };
 // The trip's confirmation and arrival timer, ahead of the controls that lead to them.
 const globalTravelElements = [
@@ -448,7 +449,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "Learning a jutsu completed your first trial. Rewards can be claimed from the <b>Quests</b> tab here as well, without a trip to your profile.",
     action: "Open Quests and claim your reward there.",
-    questsTab: { marks: "all", prompt: "Claim your reward here. Then I'll go on." },
+    questsTab: { prompt: "Claim your reward here. Then I'll go on." },
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.jutsu,
@@ -655,7 +656,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "The masked courier hurls a smoke pellet and vanishes. Where they stood lies a sliver of <b>dark metal</b>, threaded with violet veins, and the pup's collar is scorched the same violet. Strange... Let's get it home first.",
     action: "Open Quests and claim your reward there.",
-    questsTab: { marks: "tab" },
+    questsTab: {},
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.pup,
@@ -721,7 +722,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "The Bondkeepers rush out to meet you, the pup wriggling in your arms at the sight of them, and their elder bows low to thank you for bringing it home.",
     action: "Open Quests and hand over the pup there.",
-    questsTab: { marks: "all", prompt: "Answer to hand over the pup." },
+    questsTab: { prompt: "Answer to hand over the pup." },
     page: "/pets",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.sanctuary,
@@ -746,7 +747,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "You did well out there, better than most graduates. That metal the courier left behind... show it to no one; I'll take it to the academy archives myself. Now, you have earned your graduation.",
     action: "Open Quests and answer me there to complete the Academy Trials.",
-    questsTab: { marks: "none", prompt: "Answer here to complete the Academy Trials." },
+    questsTab: { prompt: "Answer here to complete the Academy Trials." },
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.debrief,
@@ -817,7 +818,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Exam passed",
     description: "You passed! The proctor has one last question for you.",
     action: "Open Quests and answer the proctor there.",
-    questsTab: { marks: "none", prompt: "Answer the proctor here." },
+    questsTab: { prompt: "Answer the proctor here." },
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.tour,
@@ -842,7 +843,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "A new home",
     description: "Answer <b>Travel home</b> in Quests, and I'll show you the way.",
     action: "Open Quests and answer the proctor there.",
-    questsTab: { marks: "none", prompt: "Answer the proctor here." },
+    questsTab: { prompt: "Answer the proctor here." },
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.join,
@@ -887,7 +888,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "You made it. Claim your reward to receive the Genin rank and your headband.",
     action: "Open Quests and tap Claim there.",
-    questsTab: { marks: "none" },
+    questsTab: {},
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.win,

@@ -40,7 +40,7 @@ export const Spotlight = ({
   children,
 }: {
   box: SpotlightBox;
-  /** Further elements the step refers to: uncovered and marked with a dashed ring. */
+  /** Further elements the step refers to: uncovered, and named ones ringed with dashes. */
   marks?: SpotlightMark[];
   /** Dims the page around the hole; off for a scene the player must see whole. */
   dim?: boolean;
@@ -181,6 +181,7 @@ export const SpotlightMarks = ({ marks }: { marks: SpotlightMark[] }) => (
  */
 const SpotlightMarkRing = ({ mark }: { mark: SpotlightMark }) => {
   const { box, label } = mark;
+  if (!label) return null;
   return (
     <div
       data-spotlight-keep
@@ -647,5 +648,6 @@ export type SpotlightBox = TutorialScreenBox;
 export interface SpotlightMark {
   key: string;
   box: SpotlightBox;
+  /** Shown on the dashed ring; an unnamed ("") element is uncovered alone. */
   label: string;
 }

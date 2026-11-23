@@ -25,6 +25,7 @@ let user: {
   rank?: string;
   tutorialOn: boolean;
   tutorialStep: number;
+  status?: string;
   userQuests: unknown[];
   questData: unknown[];
 };
@@ -43,7 +44,7 @@ beforeEach(() => {
     (select) => ({ data: select(user as never) }) as never,
   );
   vi.spyOn(logbook, "LogbookEntry").mockImplementation(({ userQuest }) => (
-    <p>Progress for {userQuest.quest.name}</p>
+    <p id="tutorial-objective-claim">Progress for {userQuest.quest.name}</p>
   ));
 });
 
@@ -330,9 +331,10 @@ it("pins active quest attempts, restores pins, and removes completed attempts fr
   expect(reopened.queryByRole("button", { name: "Unpin Second mission" })).toBeNull();
 });
 
-/** Puts the player on the first lesson with these Quests-tab marks; returns its quest id. */
-const onQuestsTabLesson = (marks: "all" | "tab" | "none") => {
-  const index = TUTORIAL_STEPS.findIndex((step) => step.questsTab?.marks === marks);
+/** Puts the player on a Quests-tab lesson, the first by default; returns its quest id. */
+const onQuestsTabLesson = (
+  index = TUTORIAL_STEPS.findIndex((step) => step.questsTab),
+) => {
   const questId = String(TUTORIAL_STEPS[index]!.relatedValue);
   user.tutorialStep = index;
   user.userQuests = [
@@ -353,19 +355,15 @@ const lessonQuest = (id: string, name: string) => ({
 });
 
 it("leads a lesson's answer or claim through the Quests tab and hands back after it", () => {
-  const questId = onQuestsTabLesson("all");
-  const step = TUTORIAL_STEPS[user.tutorialStep]!;
+  const questId = onQuestsTabLesson();
   const view = render(<ActivityDock>Lesson</ActivityDock>);
   const questsTab = view.getByRole("tab", { name: "Quests" });
-  expect(questsTab.className).toContain("ring-amber-500");
+  expect(questsTab.closest("[data-tutorial-dock-highlight]")).toBeTruthy();
   fireEvent.mouseDown(questsTab, { button: 0, ctrlKey: false });
-  expect(
-    view.getByText(step.questsTab?.marks === "all" ? step.questsTab.prompt : ""),
-  ).toBeTruthy();
-  // The lesson's quest comes first, already open and outlined.
+  expect(view.getByText(getQuestsTabLesson(user)!.prompt)).toBeTruthy();
+  // The lesson's quest comes first, already open.
   const first = view.container.querySelector("article");
   expect(first?.textContent).toContain("The Trials");
-  expect(first?.className).toContain("ring-amber-500/40");
   expect(view.getByText("Progress for The Trials")).toBeTruthy();
   // Claiming moves the quest on, and the dock returns to the lesson.
   user.questData = [
@@ -376,47 +374,74 @@ it("leads a lesson's answer or claim through the Quests tab and hands back after
   expect(view.getByText("Lesson")).toBeTruthy();
 });
 
-it.each([
-  ["tab", true],
-  ["none", false],
-] as const)(
-  "marks %s of the Quests tab for a later lesson and still hands back after it",
-  (marks, ringsTab) => {
-    const questId = onQuestsTabLesson(marks);
+it.each(
+  TUTORIAL_STEPS.flatMap((step, index) => (step.questsTab ? [[step.id, index]] : [])),
+)("dims the page and points at the Quests tab for %s", (_, index) => {
+  const step = TUTORIAL_STEPS[Number(index)]!;
+  onQuestsTabLesson(Number(index));
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue(
+    step.page === "*" ? "/profile" : step.page,
+  );
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  const dim = () =>
+    document.querySelector("body > [data-battle-focus-layer][aria-hidden]");
+  const questsTab = view.getByRole("tab", { name: "Quests" });
+  expect(questsTab.closest("[data-tutorial-dock-highlight]")).toBeTruthy();
+  expect(dim()).toBeTruthy();
+  fireEvent.mouseDown(questsTab, { button: 0, ctrlKey: false });
+  expect(document.querySelector("[data-tutorial-dock-highlight]")).toBeNull();
+  expect(dim()).toBeNull();
+  expect(view.getByText(getQuestsTabLesson(user)!.prompt)).toBeTruthy();
+});
+
+it("leaves the Quests tab unmarked where the lesson points elsewhere", () => {
+  const index = TUTORIAL_STEPS.findIndex(
+    (step) => step.questsTab && step.page === "/pets",
+  );
+  for (const [path, status] of [
+    ["/village", "AWAKE"],
+    ["/combat", "AWAKE"],
+    ["/pets", "HOSPITALIZED"],
+  ]) {
+    onQuestsTabLesson(index);
+    vi.spyOn(routing, "usePublicPathname").mockReturnValue(path!);
+    user.status = status!;
     const view = render(<ActivityDock>Lesson</ActivityDock>);
-    const questsTab = view.getByRole("tab", { name: "Quests" });
-    expect(questsTab.className.includes("ring-amber-500")).toBe(ringsTab);
-    fireEvent.mouseDown(questsTab, { button: 0, ctrlKey: false });
-    // The prompt as plain text, with no outline, and the lesson's quest still leads, open.
-    const prompt = getQuestsTabLesson(user)!.prompt;
-    expect(view.getByText(prompt).closest("p")?.querySelector("svg")).toBeNull();
-    expect(
-      view.queryByText("Pin the objectives you want to keep at the top."),
-    ).toBeNull();
-    const first = view.container.querySelector("article");
-    expect(first?.textContent).toContain("The Trials");
-    expect(first?.className).not.toContain("ring-amber-500/40");
-    expect(view.getByText("Progress for The Trials")).toBeTruthy();
-    // The lesson's own action moves on: a claim the quest, an answer the step.
-    if (TUTORIAL_STEPS[user.tutorialStep]?.advanceOn === "questDialog") {
-      user.tutorialStep += 1;
-    } else {
-      user.questData = [
-        { id: "other", goals: [] },
-        { id: questId, goals: [{ id: "a", done: true, collected: true }] },
-      ];
-    }
-    view.rerender(<ActivityDock>Lesson</ActivityDock>);
     expect(view.getByText("Lesson")).toBeTruthy();
-  },
-);
+    expect(document.querySelector("[data-tutorial-dock-highlight]")).toBeNull();
+    view.unmount();
+  }
+});
+
+it("spotlights the claim and its callout in the Quests tab", () => {
+  onQuestsTabLesson();
+  const rect = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "getBoundingClientRect",
+  );
+  HTMLElement.prototype.getBoundingClientRect = () => new DOMRect(10, 20, 200, 40);
+  try {
+    const view = render(<ActivityDock>Lesson</ActivityDock>);
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(document.querySelector("[data-spotlight-keep]")).toBeTruthy();
+    // The callout is uncovered beside the claim, and wears no ring of its own.
+    expect(document.querySelectorAll('mask rect[fill="black"]').length).toBe(2);
+    expect(document.querySelectorAll(".border-dashed").length).toBe(0);
+  } finally {
+    if (rect)
+      Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", rect);
+    else Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
+  }
+});
 
 it("keeps Quests open for the answer after claiming an older reward there", () => {
   const index = TUTORIAL_STEPS.findIndex(
     (step) => step.questsTab && step.advanceOn === "questDialog",
   );
-  const questId = onQuestsTabLesson(TUTORIAL_STEPS[index]!.questsTab!.marks);
-  user.tutorialStep = index;
+  const questId = onQuestsTabLesson(index);
   const view = render(<ActivityDock>Lesson</ActivityDock>);
   fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
     button: 0,
@@ -483,6 +508,7 @@ it("keeps Quests open for the proctor's answer after claiming the level reward",
 });
 
 it("brings the proctor's answer into view when Quests opens", () => {
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
   const index = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-tour");
   const questId = String(TUTORIAL_STEPS[index]!.relatedValue);
   user.tutorialStep = index;
@@ -492,7 +518,7 @@ it("brings the proctor's answer into view when Quests opens", () => {
     <div id="tutorial-dialog-options">Choose my village</div>
   ));
   // The answer sits 120px below the bottom of the scrolling list.
-  const rect = (top: number, bottom: number) => ({ top, bottom }) as DOMRect;
+  const rect = (top: number, bottom: number) => new DOMRect(0, top, 200, bottom - top);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
@@ -504,7 +530,8 @@ it("brings the proctor's answer into view when Quests opens", () => {
     ctrlKey: false,
   });
   const panel = view.getByRole("tabpanel");
-  expect(panel.scrollTop).toBe(120);
+  // Its ring has room under it.
+  expect(panel.scrollTop).toBe(132);
   // Later updates leave the player's own scrolling alone.
   panel.scrollTop = 0;
   view.rerender(<ActivityDock>Lesson</ActivityDock>);
@@ -626,9 +653,8 @@ it("returns from Quests to the lesson when the step moves on there", () => {
 });
 
 it("keeps Quests open on a new step answered there, showing that step's prompt", () => {
-  const index = TUTORIAL_STEPS.findIndex((step) => step.questsTab?.marks === "all");
-  const step = TUTORIAL_STEPS[index]!;
-  onQuestsTabLesson("all");
+  const index = TUTORIAL_STEPS.findIndex((step) => step.questsTab);
+  onQuestsTabLesson();
   user.tutorialStep = index - 1;
   const view = render(<ActivityDock>Lesson</ActivityDock>);
   fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
@@ -638,7 +664,5 @@ it("keeps Quests open on a new step answered there, showing that step's prompt",
   user.tutorialStep = index;
   view.rerender(<ActivityDock>Lesson</ActivityDock>);
   expect(view.queryByText("Lesson")).toBeNull();
-  expect(
-    view.getByText(step.questsTab?.marks === "all" ? step.questsTab.prompt : ""),
-  ).toBeTruthy();
+  expect(view.getByText(getQuestsTabLesson(user)!.prompt)).toBeTruthy();
 });

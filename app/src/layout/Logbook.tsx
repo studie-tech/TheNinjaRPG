@@ -724,6 +724,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     <div className={cn("w-full", showScene ? "p-3" : "", !props.compact && "grow")}>
       <Button
         id="return"
+        data-quest-claim=""
         onClick={() => checkRewards({ questId: quest.id })}
         // A claim names every reward, so a long one wraps in a narrow column.
         className="h-auto min-h-9 w-full text-left text-balance whitespace-normal"

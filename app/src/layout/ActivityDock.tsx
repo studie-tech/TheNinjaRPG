@@ -33,12 +33,24 @@ import { storyDockPulseAtom, useStoryGuidance } from "@/hooks/useStoryGuidance";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import { LogbookEntry } from "@/layout/Logbook";
-import { activityDockRequestAtom, activityDockStateAtom } from "@/libs/activityDock";
+import { DockHighlight } from "@/layout/tutorial/DockHighlight";
+import {
+  isSameBox,
+  Spotlight,
+  type SpotlightBox,
+  type SpotlightMark,
+  trackLayout,
+} from "@/layout/tutorial/Spotlight";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { getQuestsTabLesson, type QuestsTabLesson } from "@/libs/questsTabLesson";
 import { cn } from "@/libs/shadui";
 import { getDockAttentionKey } from "@/libs/storyGuidance";
-import { isTutorialActive } from "@/libs/tutorial";
+import {
+  isTutorialActive,
+  isUsableHighlightRect,
+  TUTORIAL_ANY_PAGE,
+  TUTORIAL_LAYOUT_EVENT,
+} from "@/libs/tutorial";
 import { TUTORIAL_STEPS } from "@/libs/tutorialSteps";
 import type { UserWithRelations } from "@/routers/profile";
 import { usePublicPathname } from "@/utils/routing";
@@ -201,14 +213,24 @@ export function ActivityDock({
   // A lesson sits above the page's dim and the dialogs it teaches, but below any other
   // modal; the Story tab after the tutorial stays with the page.
   const dockRef = useRef<HTMLElement>(null);
-  // On the fight page a lesson points at the battle alone (Continue once it is won).
-  const isOnCombatPage = usePublicPathname() === "/combat";
+  const pathname = usePublicPathname();
   const isLessonRaised = lessonShown && (!!guided || isTutorialRunning);
+  // A lesson on the Quests tab leads there from its own page: a fight's close, the
+  // hospital and the way to that page each point at controls of their own.
+  const leadsToQuests =
+    open &&
+    !guided &&
+    !!questsLesson &&
+    !!lessonQuest &&
+    pathname !== "/combat" &&
+    user?.status !== "HOSPITALIZED" &&
+    (lessonStep?.page === TUTORIAL_ANY_PAGE || lessonStep?.page === pathname);
   const isUnderModal = useUntaughtModalOpen(
     dockRef,
-    isLessonRaised && !guided,
+    (isLessonRaised && !guided) || leadsToQuests,
     lessonStep?.elementIds,
   );
+  const isQuestsTabMarked = leadsToQuests && lessonShown && !isUnderModal;
   const fitWidth = useActivityDockFitWidth(dockRef, open, swapSides);
   // During a lesson the Quests tab takes the lesson's height on a phone, so switching
   // tabs leaves the bottom-anchored dock's tab bar where it was.
@@ -265,34 +287,31 @@ export function ActivityDock({
           <header className="bg-card relative z-10 flex items-center gap-1 rounded-t-[calc(var(--radius)-2px)] border-b px-2 py-1.5">
             <TabsList
               aria-label="Activity"
-              className="h-auto w-auto flex-1 justify-start bg-transparent p-0"
+              className="h-auto w-auto flex-1 justify-start gap-2 bg-transparent p-0"
             >
               {(user ? DOCK_TABS : GUEST_TABS).map((value) => (
-                <TabsTrigger
+                <DockHighlight
                   key={value}
-                  value={value}
-                  id={value === "quests" ? "tutorial-activity-quests" : undefined}
-                  className={cn(
-                    "flex h-9 items-center gap-1.5 px-2 data-[state=active]:font-semibold",
-                    value === "quests" &&
-                      questsLesson &&
-                      questsLesson.marks !== "none" &&
-                      tab === "tutorial" &&
-                      !isOnCombatPage &&
-                      "animate-pulse bg-amber-500/20 ring-2 ring-amber-500",
-                  )}
+                  active={value === "quests" && isQuestsTabMarked}
+                  pointerClassName="left-1/2 -ml-6"
                 >
-                  {value === "tutorial" ? (
-                    <BookOpen className="h-4 w-4" />
-                  ) : (
-                    <ListChecks className="h-4 w-4" />
-                  )}
-                  <span className="@max-[17rem]/dock:sr-only">
-                    {value === "tutorial" && !isTutorialActive(user)
-                      ? "Story"
-                      : capitalizeFirstLetter(value)}
-                  </span>
-                </TabsTrigger>
+                  <TabsTrigger
+                    value={value}
+                    id={value === "quests" ? "tutorial-activity-quests" : undefined}
+                    className="flex h-9 items-center gap-1.5 px-2 data-[state=active]:font-semibold"
+                  >
+                    {value === "tutorial" ? (
+                      <BookOpen className="h-4 w-4" />
+                    ) : (
+                      <ListChecks className="h-4 w-4" />
+                    )}
+                    <span className="@max-[17rem]/dock:sr-only">
+                      {value === "tutorial" && !isTutorialActive(user)
+                        ? "Story"
+                        : capitalizeFirstLetter(value)}
+                    </span>
+                  </TabsTrigger>
+                </DockHighlight>
               ))}
             </TabsList>
             {!isSideFixed && (
@@ -349,7 +368,7 @@ export function ActivityDock({
                 key={user.userId}
                 user={user}
                 lesson={questsLesson}
-                awaitsAnswer={awaitsQuestsAnswer}
+                isControlMarked={leadsToQuests && tab === "quests" && !isUnderModal}
                 scrollerRef={questsPanelRef}
               />
             </TabsContent>
@@ -408,29 +427,16 @@ const PHONE_QUERY = "(max-width: 767px)";
 function ActivityQuests({
   user,
   lesson,
-  awaitsAnswer,
+  isControlMarked,
   scrollerRef,
 }: {
   user: ActivityUser;
   lesson: QuestsTabLesson | null;
-  /** The lesson waits for an answer here, which is scrolled into view once shown. */
-  awaitsAnswer: boolean;
+  /** The lesson's answers or claim take the spotlight, scrolled into view once shown. */
+  isControlMarked: boolean;
   scrollerRef: RefObject<HTMLDivElement | null>;
 }) {
-  // Each answer the lesson waits for is brought into view once, when it appears; the
-  // player's own scrolling is left alone after that.
-  const shownAnswers = useRef<Element | null>(null);
-  useEffect(() => {
-    const scroller = scrollerRef.current;
-    const answers = awaitsAnswer
-      ? scroller?.querySelector("#tutorial-dialog-options")
-      : null;
-    if (!scroller || !answers || answers === shownAnswers.current) return;
-    shownAnswers.current = answers;
-    const overflow =
-      answers.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom;
-    if (overflow > 0) scroller.scrollTop += overflow;
-  });
+  const spotlight = useQuestControlBox(scrollerRef, isControlMarked);
   const [storedPins, setPins] = useLocalStorage<string[]>(
     characterStorageKey("activityPinnedQuests", user.userId),
     [],
@@ -445,19 +451,20 @@ function ActivityQuests({
   const rank = (entry: (typeof quests)[number]) =>
     (entry.questId === lesson?.questId ? 2 : 0) + Number(pins.includes(entry.id));
   const ordered = [...quests].sort((a, b) => rank(b) - rank(a));
-  // A lesson that sends the player here says what to do, as a callout only the first time.
   return (
     <div className="space-y-2 p-3">
-      {lesson?.marks === "all" ? (
-        <p className="flex items-start gap-2 rounded-lg border border-amber-500/70 bg-amber-500/15 px-3 py-2 text-sm font-semibold">
+      {spotlight && <Spotlight box={spotlight.control} marks={spotlight.lit} />}
+      {lesson ? (
+        <p
+          data-quests-prompt=""
+          className="flex items-start gap-2 rounded-lg border border-amber-500/70 bg-amber-500/15 px-3 py-2 text-sm font-semibold"
+        >
           <MousePointerClick
             className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
             aria-hidden="true"
           />
           <span>{lesson.prompt}</span>
         </p>
-      ) : lesson ? (
-        <p className="text-sm font-semibold">{lesson.prompt}</p>
       ) : (
         <p className="text-muted-foreground text-xs">
           Pin the objectives you want to keep at the top.
@@ -474,7 +481,6 @@ function ActivityQuests({
               tracker={tracker}
               pinned={pinned}
               featured={entry.questId === lesson?.questId}
-              outlined={entry.questId === lesson?.questId && lesson.marks === "all"}
               onPin={() =>
                 setPins(
                   pinned
@@ -504,12 +510,91 @@ function ActivityQuests({
   );
 }
 
+/**
+ * Where the lesson's answers or claim stand in the Quests tab, and the callout that stays
+ * lit with them. Each is brought into view once, when it appears; the player's own
+ * scrolling is left alone after that, and a control scrolled out of the tab has no box.
+ */
+const useQuestControlBox = (
+  scrollerRef: RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+) => {
+  const [spotlight, setSpotlight] = useState<{
+    control: SpotlightBox;
+    lit: SpotlightMark[];
+  } | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let shown: Element | null = null;
+    const stop = trackLayout(() => {
+      const scroller = scrollerRef.current;
+      const control = scroller?.querySelector(QUEST_CONTROL_SELECTOR) ?? null;
+      if (
+        !scroller ||
+        !control ||
+        !isUsableHighlightRect(control.getBoundingClientRect())
+      ) {
+        setSpotlight(null);
+        return null;
+      }
+      const view = scroller.getBoundingClientRect();
+      if (control !== shown) {
+        shown = control;
+        const overflow =
+          control.getBoundingClientRect().bottom + CONTROL_MARGIN_PX - view.bottom;
+        if (overflow > 0) scroller.scrollTop += overflow;
+      }
+      const prompt = scroller.querySelector("[data-quests-prompt]");
+      const box = getVisibleBox(control, view);
+      const promptBox = prompt && getVisibleBox(prompt, view);
+      setSpotlight((prev) => {
+        const lit = promptBox ? [{ key: "prompt", label: "", box: promptBox }] : [];
+        if (!box) return null;
+        const isUnmoved =
+          prev &&
+          isSameBox(prev.control, box) &&
+          prev.lit.length === lit.length &&
+          prev.lit.every((mark, i) => {
+            const other = lit[i];
+            return !!other && isSameBox(mark.box, other.box);
+          });
+        return isUnmoved ? prev : { control: box, lit };
+      });
+      return control;
+    });
+    const scroller = scrollerRef.current;
+    const onScroll = () => window.dispatchEvent(new Event(TUTORIAL_LAYOUT_EVENT));
+    scroller?.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      scroller?.removeEventListener("scroll", onScroll);
+      stop();
+      setSpotlight(null);
+    };
+  }, [enabled, scrollerRef]);
+  return spotlight;
+};
+
+/** The part of an element inside `view`, or null when hardly any of it is. */
+const getVisibleBox = (element: Element, view: DOMRect): SpotlightBox | null => {
+  const rect = element.getBoundingClientRect();
+  const top = Math.max(rect.top, view.top);
+  const height = Math.min(rect.bottom, view.bottom) - top;
+  return height < Math.min(16, rect.height)
+    ? null
+    : { top, left: rect.left, width: rect.width, height };
+};
+
+/** The answers or claim of the lesson's quest. */
+const QUEST_CONTROL_SELECTOR =
+  "[data-lesson-quest] :is(#tutorial-dialog-options, #tutorial-objective-claim, [data-quest-claim])";
+/** Room under the control for the spotlight's ring. */
+const CONTROL_MARGIN_PX = 12;
+
 function ActivityQuest({
   entry,
   tracker,
   pinned,
   featured = false,
-  outlined = false,
   onPin,
 }: {
   entry: NonNullable<UserWithRelations>["userQuests"][number];
@@ -517,19 +602,14 @@ function ActivityQuest({
   pinned: boolean;
   /** The quest a lesson sends the player to: open. */
   featured?: boolean;
-  /** Ringed, for the first lesson on this tab. */
-  outlined?: boolean;
   onPin: () => void;
 }) {
   const [expanded, setExpanded] = useState(pinned || featured);
   const id = useId();
   return (
     <article
-      className={cn(
-        "rounded-lg border",
-        pinned && "border-primary/50",
-        outlined && "border-amber-500 ring-2 ring-amber-500/40",
-      )}
+      data-lesson-quest={featured ? "" : undefined}
+      className={cn("rounded-lg border", pinned && "border-primary/50")}
     >
       <div className="flex items-center p-1">
         <button
@@ -583,6 +663,7 @@ const selectActivityUser = (user: NonNullable<UserWithRelations>) => ({
   tutorialOn: user.tutorialOn,
   tutorialStep: user.tutorialStep,
   rank: user.rank,
+  status: user.status,
   userQuests: user.userQuests,
   questData: user.questData,
 });

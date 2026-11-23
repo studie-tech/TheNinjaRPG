@@ -45,7 +45,7 @@ export interface GuidedLessonStep {
   blocking?: boolean;
 }
 
-/** An element a step refers to, and the name shown on its mark. */
+/** An element a step refers to, with the name on its mark. Unnamed (""), it only stays lit. */
 export interface GuidedLessonMark {
   selector: string;
   label: string;
