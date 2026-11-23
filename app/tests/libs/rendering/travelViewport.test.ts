@@ -7,6 +7,7 @@ describe("travel map viewport height", () => {
     rem: 12,
     isPhone: true,
     minimum: 238,
+    wideMaximum: 487,
     hasRowBelow: true,
   };
   it("stops a phone map above an open lesson dock", () => {
@@ -17,18 +18,21 @@ describe("travel map viewport height", () => {
       812 - 84 - 54 - 55,
     );
   });
-  it("fills a wider layout's view of the map, its title and the row under it kept", () => {
-    expect(
-      fillHeight({
-        pageTop: 316,
-        viewportHeight: 900,
-        dockTop: null,
-        rem: 12,
-        isPhone: false,
-        minimum: 483,
-        hasRowBelow: true,
-      }),
-    ).toBe(900 - 12 - 54 - 96);
+  const wide = {
+    pageTop: 316,
+    viewportHeight: 1400,
+    dockTop: null,
+    rem: 12,
+    isPhone: false,
+    minimum: 483,
+    wideMaximum: 600,
+    hasRowBelow: true,
+  };
+  it("keeps a wider layout's map at its own height however tall the window is", () => {
+    expect(fillHeight(wide)).toBe(600);
+  });
+  it("keeps a wider layout's map, its title and the row under it above a dock", () => {
+    expect(fillHeight({ ...wide, dockTop: 700 })).toBe(700 - 54 - 96);
   });
   it("lets a map with nothing under it reach the dock", () => {
     expect(

@@ -1,12 +1,15 @@
 /**
- * Height that lets a travel map, and any loadout row under it, reach down to the first
- * thing covering the foot of the screen: the fixed activity dock when it overlaps the
- * map's column, otherwise the phone navigation bar or the window's edge. Measured against the page's own position rather than the scroll, so
- * scrolling never resizes the map; never below `minimum`.
+ * Height of a travel map. A phone's map, and any loadout row under it, reaches down to the
+ * first thing covering the foot of the screen: the fixed activity dock when it overlaps the
+ * map's column, otherwise the navigation bar. Wider layouts keep the map in a column narrower
+ * than the window, so it stands at most `wideMaximum` tall there. Measured against the page's
+ * own position rather than the scroll, so scrolling never resizes the map; never below
+ * `minimum`.
  */
 export const travelViewportHeight = (
   mount: HTMLElement,
   minimum: number,
+  wideMaximum: number,
   { hasRowBelow = false } = {},
 ) => {
   if (typeof window === "undefined") return minimum;
@@ -32,6 +35,7 @@ export const travelViewportHeight = (
     rem: Number.isFinite(rem) ? rem : 12,
     isPhone,
     minimum,
+    wideMaximum,
     hasRowBelow,
   });
 };
@@ -44,6 +48,7 @@ export const fillHeight = ({
   rem,
   isPhone,
   minimum,
+  wideMaximum,
   hasRowBelow,
 }: {
   pageTop: number;
@@ -52,6 +57,8 @@ export const fillHeight = ({
   rem: number;
   isPhone: boolean;
   minimum: number;
+  /** The tallest the map stands outside the phone layout. */
+  wideMaximum: number;
   /** Whether the loadout row under the sector map should stay in view too. */
   hasRowBelow: boolean;
 }) => {
@@ -60,9 +67,10 @@ export const fillHeight = ({
     Math.min(layoutBottom, dockTop ?? layoutBottom) -
     (hasRowBelow ? LOADOUT_ROW_REM : GAP_REM) * rem;
   // A phone opens with the map in its first screen. Wider layouts open under a tall
-  // banner and are scrolled to the map, its title row kept, so they fill that view.
+  // banner and are scrolled to the map, its title row kept, so they measure that view.
   const top = isPhone ? pageTop : Math.min(pageTop, WIDE_TITLE_REM * rem);
-  return Math.max(minimum, Math.floor(bottom - top));
+  const maximum = isPhone ? Number.POSITIVE_INFINITY : wideMaximum;
+  return Math.max(minimum, Math.floor(Math.min(maximum, bottom - top)));
 };
 
 /**

@@ -121,9 +121,12 @@ export const createTravelScene = async (options: {
       options.mount.closest<HTMLElement>("[data-travel-viewport]")?.clientHeight ||
       (options.mount.closest('[data-world-expanded="true"]')
         ? window.innerHeight
-        : travelViewportHeight(options.mount, width * displayRatio(), {
-            hasRowBelow: true,
-          })),
+        : travelViewportHeight(
+            options.mount,
+            width * displayRatio(),
+            Math.min(window.innerHeight * 0.6, 600),
+            { hasRowBelow: true },
+          )),
   });
   game.own(watchTravelViewport(game.fit));
   game.canvas.style.filter = "none";

@@ -74,7 +74,7 @@ export const createGlobeScene = async (options: {
    * same units as `onHover`, or null while it faces away. Called when it moves.
    */
   onFocusPoint?: (at: GlobeHoverPoint | null) => void;
-  /** Grow the square canvas down to the foot of the first screen (the travel page). */
+  /** Fit the canvas to the foot of the first screen (the travel page): taller than it is wide on phones only. */
   fillViewport?: boolean;
 }) => {
   const game = await createGameRenderer({
@@ -82,7 +82,7 @@ export const createGlobeScene = async (options: {
     surface: "globe",
     height: (width) =>
       options.fillViewport
-        ? travelViewportHeight(options.mount, width * MIN_FILL_ASPECT)
+        ? travelViewportHeight(options.mount, width * MIN_FILL_ASPECT, width)
         : width,
   });
   if (options.fillViewport) game.own(watchTravelViewport(game.fit));
