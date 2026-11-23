@@ -241,6 +241,8 @@ export function ActivityDock({
         "pointer-events-none fixed bottom-24 z-40 max-w-[calc(100vw-2rem)] has-[[data-dodge-highlight=true]]:top-[var(--activity-dock-dodge-top,5rem)] has-[[data-dodge-highlight=true]]:bottom-auto md:bottom-5",
         isLessonRaised && !isUnderModal && "z-[61]",
         swapSides ? "right-4 md:right-5" : "left-4 md:left-5",
+        // A dock over a dialog moves to the side where it covers none of its controls.
+        "has-[[data-dodge-side=left]]:right-auto has-[[data-dodge-side=left]]:left-4 has-[[data-dodge-side=right]]:right-4 has-[[data-dodge-side=right]]:left-auto md:has-[[data-dodge-side=left]]:left-5 md:has-[[data-dodge-side=right]]:right-5",
       )}
     >
       {open ? (

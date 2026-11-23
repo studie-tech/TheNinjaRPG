@@ -95,8 +95,8 @@ export interface TutorialStepConfig {
   gameMenuLead?: string;
   /** The page the step's game-menu entry opens; there the step needs no menu. */
   gameMenuEntryPage?: string;
-  /** The call to action on `gameMenuEntryPage`, where the entry is already open. */
-  gameMenuEntryAction?: string;
+  /** What Lemu says on `gameMenuEntryPage`, where the entry is already open. */
+  onEntryPage?: { description: string; action: string };
   /**
    * What Lemu says once the player stands in the sector a trip-and-walk step sends them
    * to: only the walk is left, under its own shortcut label.
@@ -146,6 +146,7 @@ const globalTravelElements = [
 ];
 const assignElements = [
   "tutorial-specialization-confirm-content",
+  "tutorial-specialization-options",
   "tutorial-unassigned-stats-contentbox",
 ];
 const levelUpElements = [
@@ -395,8 +396,12 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     requiresGameMenu: true,
     gameMenuLead: "Your new experience waits under Assign XP in the game menu.",
     gameMenuEntryPage: "/profile/experience",
-    gameMenuEntryAction:
-      "Pick a specialization, or open Advanced and place each point.",
+    onEntryPage: {
+      description:
+        "This time the choice is yours: pick a specialization again, or open <b>Advanced</b> and place each point where you want it.",
+      action: "Pick a specialization, or open Advanced.",
+    },
+    revealId: "tutorial-specialization-options",
     advanceOn: "assignStats",
     needsUnassignedExperience: true,
   },
@@ -584,6 +589,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     action: "Travel to Wake Island on the Global map.",
     // The second trip points at its entry alone; the lesson's own trip keeps its ring.
     elementIds: ["tutorial-auto-travel-proceed", "tutorial-Global"],
+    revealId: "tutorial-global-map",
     teachOnPage: true,
     page: "/travel",
     relatedValue: TUTORIAL_WAKE_SECTOR,

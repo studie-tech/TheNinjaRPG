@@ -62,6 +62,7 @@ import {
 } from "@/layout/tutorial/guidedLesson";
 import {
   getDodgedPanelTop,
+  getPanelPlaceOverDialog,
   getUsableHighlightElement,
   isSameBox,
   Spotlight,
@@ -122,12 +123,19 @@ const DODGED_PANEL_TOP_REM = 5;
 /** The dock's top while it dodges a highlight inside a dialog, read by `ActivityDock`. */
 const DODGE_TOP_PROPERTY = "--activity-dock-dodge-top";
 
-/** Width the Activity dock narrows to in a fight (`--activity-dock-width`), set on the root. */
+/** Width the Activity dock takes in a fight (`--activity-dock-width`), set on the root. */
 const ACTIVITY_DOCK_WIDTH_PROPERTY = "--activity-dock-width";
-/** The Activity dock's own width, which a fight narrows but never widens. */
+/** The Activity dock's own width. */
 const ACTIVITY_DOCK_FULL_WIDTH_PX = 420;
-/** Narrowest dock that still fits its tabs; below it the dock keeps its width instead. */
+/** Narrowest dock beside a fight whose lesson still reads in comfortable lines. */
+const ACTIVITY_DOCK_READABLE_WIDTH_PX = 240;
+/** Narrowest dock that still fits its tabs, for a screen too short for anything else. */
 const ACTIVITY_DOCK_MIN_WIDTH_PX = 176;
+/** Widest strip the dock becomes under a fight, and the height its lessons take there. */
+const ACTIVITY_DOCK_STRIP_WIDTH_PX = 760;
+const ACTIVITY_DOCK_STRIP_HEIGHT_PX = 190;
+/** The button that leaves a finished fight, after which its action tiles do nothing. */
+const COMBAT_RETURN_ID = "return";
 /** Space kept between the battlefield's highlight ring and the narrowed dock. */
 const ACTIVITY_DOCK_FIELD_GAP_PX = 16;
 
@@ -519,18 +527,27 @@ const PlayerTutorialAssistant: React.FC<
   // The hospital step overrides every other step's target.
   const placedStep =
     userData?.status === "HOSPITALIZED" ? TUTORIAL_HOSPITALIZED_STEP : currentStep;
-  const { highlight, panelDodgesHighlight } = useHighlightPlacement({
-    step: placedStep,
-    // A switched-off tutorial, a hidden lesson and a step on another page place nothing.
-    enabled:
-      userData?.tutorialOn !== false &&
-      isAssistantVisible &&
-      (!placedStep || isTutorialPageMatch(placedStep.page, pathname)),
-    find: (step) => findElementToHighlight(step, rightSideBarRef, rightSideBarOpen),
-    // In a fight the field and the action bar must stay in view together.
-    revealOnly: pathname === "/combat",
-    pathname,
-  });
+  const { highlight, panelDodgesHighlight, panelCrowdsHighlight } =
+    useHighlightPlacement({
+      step: placedStep,
+      // A switched-off tutorial, a hidden lesson and a step on another page place nothing.
+      enabled:
+        userData?.tutorialOn !== false &&
+        isAssistantVisible &&
+        (!placedStep || isTutorialPageMatch(placedStep.page, pathname)),
+      find: (step) =>
+        findElementToHighlight(
+          step,
+          rightSideBarRef,
+          rightSideBarOpen,
+          // A fight's field and action tiles stay in view also while nothing is pointed at.
+          step.revealId ??
+            (pathname === "/combat" ? "tutorial-combat-field" : undefined),
+        ),
+      // In a fight the field and the action bar must stay in view together.
+      revealOnly: pathname === "/combat",
+      pathname,
+    });
 
   // Update game menu highlight position when showing game menu tutorial
   useEffect(() => {
@@ -1351,11 +1368,13 @@ const PlayerTutorialAssistant: React.FC<
           eyebrow={isQuestOverlay ? "Active quest" : chapterEyebrow}
           progress={isQuestOverlay ? undefined : chapterProgress}
           stepId={currentTutorialStep.id}
-          // A fight's instructions are short and change with every action, so they stay open.
+          // A fight's instructions are short and change with every action, so they stay
+          // open; a rematch's advice is longer, and folds once the player turns to the fight.
           // A dialog moves what the lesson could stand in front of, so the text folds for
           // the page and for a dialog separately, each on a tap made there.
           foldKey={
-            pathname === "/combat"
+            pathname === "/combat" &&
+            currentTutorialStep.title !== TUTORIAL_REMATCH_TITLE
               ? undefined
               : `${currentTutorialStep.id}:${isModalDialogOpen ? "dialog" : "page"}`
           }
@@ -1370,6 +1389,7 @@ const PlayerTutorialAssistant: React.FC<
           disableLabel={disableLabel}
           characterImage={characterImage}
           dodgeHighlight={panelDodgesHighlight}
+          startFolded={panelCrowdsHighlight}
           onOpenOrderingDialog={() => setShowOrderingDialog(true)}
           showOrderingButton={showPostTutorialQuest}
           footer={
@@ -1523,13 +1543,14 @@ const GuidedLessonAssistant: React.FC<{ step: GuidedLessonStep }> = ({ step }) =
     () => (step.target ? { id: step.id, selector: step.target } : null),
     [step.id, step.target],
   );
-  const { highlight, panelDodgesHighlight } = useHighlightPlacement({
-    step: placedTarget,
-    enabled: true,
-    find: (target) => findGuidedTarget(target.selector),
-    revealOnly: true,
-    pathname,
-  });
+  const { highlight, panelDodgesHighlight, panelCrowdsHighlight } =
+    useHighlightPlacement({
+      step: placedTarget,
+      enabled: true,
+      find: (target) => findGuidedTarget(target.selector),
+      revealOnly: true,
+      pathname,
+    });
   // A blocking step takes the keyboard focus, so its answers are one Tab away.
   React.useEffect(() => {
     if (!step.blocking) return;
@@ -1577,6 +1598,7 @@ const GuidedLessonAssistant: React.FC<{ step: GuidedLessonStep }> = ({ step }) =
         action={step.action}
         lead={step.lead}
         dodgeHighlight={panelDodgesHighlight}
+        startFolded={panelCrowdsHighlight}
         footer={
           step.footer ? <div data-guided-footer="">{step.footer}</div> : undefined
         }
@@ -1608,7 +1630,8 @@ const AssistantPortrait: React.FC<{ image: string }> = ({ image }) => (
   <div
     aria-hidden="true"
     data-tutorial-portrait
-    className="from-primary/10 relative w-1/5 max-w-36 min-w-[4.5rem] shrink-0 rounded-bl-xl bg-linear-to-r to-transparent"
+    // A dock squeezed beside a fight gives its whole width to the words.
+    className="from-primary/10 relative w-1/5 max-w-36 min-w-[4.5rem] shrink-0 rounded-bl-xl bg-linear-to-r to-transparent @max-[18rem]/dock:hidden"
   >
     <span className="via-primary/50 absolute inset-y-4 right-0 w-px bg-linear-to-b from-transparent to-transparent" />
     <Image
@@ -1654,7 +1677,9 @@ const AssistantDialog: React.FC<{
   onOpenOrderingDialog?: () => void;
   showOrderingButton?: boolean;
   /** Anchor to the top instead, to uncover a highlight it would otherwise sit on. */
-  dodgeHighlight?: boolean;
+  dodgeHighlight?: PanelDodge;
+  /** Open with the text folded, where the whole lesson would cover its highlight. */
+  startFolded?: boolean;
   isBusy?: boolean;
   errorMessage?: string;
   /** Folds the lead on a narrow dock once the player turns to the page; see `CoachCard`. */
@@ -1675,6 +1700,7 @@ const AssistantDialog: React.FC<{
   onOpenOrderingDialog,
   showOrderingButton,
   dodgeHighlight,
+  startFolded,
   isBusy = false,
   errorMessage,
   foldKey,
@@ -1737,7 +1763,8 @@ const AssistantDialog: React.FC<{
       ref={sectionRef}
       id={TUTORIAL_ASSISTANT_PANEL_ID}
       data-tutorial-step={stepId}
-      data-dodge-highlight={dodgeHighlight || undefined}
+      data-dodge-highlight={!!dodgeHighlight || undefined}
+      data-dodge-side={typeof dodgeHighlight === "string" ? dodgeHighlight : undefined}
       aria-label={`Tutorial: ${title}`}
       aria-live="polite"
       className="pointer-events-auto"
@@ -1777,6 +1804,7 @@ const AssistantDialog: React.FC<{
         isBusy={isBusy}
         errorMessage={errorMessage}
         foldKey={foldKey}
+        startFolded={startFolded}
       >
         {children}
         {showOrderingButton && onOpenOrderingDialog && (
@@ -2058,7 +2086,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
     width: number;
     height: number;
   } | null>(null);
-  // Placement of the current highlight, keyed by step and element. One owner
+  // Placement of the current highlight, keyed by step, element and width. One owner
   // decides where a highlight belongs, so scrolling never fights itself.
   const placementRef = React.useRef<{
     key: string;
@@ -2066,11 +2094,41 @@ const useHighlightPlacement = <Step extends { id: string }>({
     settled: boolean;
     /** Page scroll when the placement latched, to tell layout shifts from the player. */
     settledScrollY: number;
-  }>({ key: "", attempts: 0, settled: false, settledScrollY: 0 });
+    /** The dock stepped aside for this target. */
+    gaveWay: boolean;
+  }>({ key: "", attempts: 0, settled: false, settledScrollY: 0, gaveWay: false });
   // Set while the panel would otherwise be sitting on top of the highlight, so
   // it can step aside. Latched per target: recomputing it from the moved panel
   // would say "no longer covered" and send it straight back.
-  const [panelDodgesHighlight, setPanelDodgesHighlight] = useState(false);
+  const [panelDodgesHighlight, setPanelDodgesHighlight] = useState<PanelDodge>(false);
+  // Set while the open lesson leaves no room for the highlight above it, so its text folds.
+  // Latched per target like the dodge.
+  const [panelCrowdsHighlight, setPanelCrowdsHighlight] = useState(false);
+
+  /** Moves the dock off a target it covers, which scrolling could not uncover. */
+  const giveWay = (element: HTMLElement) => {
+    const after = element.getBoundingClientRect();
+    const panel = getAssistantPanelRect();
+    if (!panel || !rectsOverlap(after, panel)) return;
+    const minTop =
+      DODGED_PANEL_TOP_REM *
+      Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const root = document.documentElement;
+    const dialogTop = getDodgedPanelTop(element, panel, minTop);
+    if (dialogTop !== null) {
+      root.style.setProperty(DODGE_TOP_PROPERTY, `${dialogTop}px`);
+      setPanelDodgesHighlight(true);
+    } else if (after.top > minTop + panel.height) {
+      root.style.removeProperty(DODGE_TOP_PROPERTY);
+      setPanelDodgesHighlight(true);
+    } else {
+      const place = getPanelPlaceOverDialog(element, panel, minTop);
+      if (!place) return;
+      root.style.setProperty(DODGE_TOP_PROPERTY, `${place.top}px`);
+      setPanelDodgesHighlight(place.side);
+    }
+    placementRef.current.gaveWay = true;
+  };
 
   // Helper function to update the highlight position
   const updateHighlightPosition = (currentStepConfig: Step) => {
@@ -2088,16 +2146,20 @@ const useHighlightPlacement = <Step extends { id: string }>({
       // placement is good it latches, so a player who then scrolls the highlight
       // away is never fought. The attempt cap stops a target that can never be
       // placed well from scrolling on every tick.
-      const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
+      // A rotated phone or a resized window is a new layout, placed afresh. Height is left
+      // out: a phone's address bar changes it as the player scrolls.
+      const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}:${window.innerWidth}`;
       if (placementRef.current.key !== targetKey) {
         placementRef.current = {
           key: targetKey,
           attempts: 0,
           settled: false,
           settledScrollY: 0,
+          gaveWay: false,
         };
         document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
         setPanelDodgesHighlight(false);
+        setPanelCrowdsHighlight(false);
       }
       const placement = placementRef.current;
       const isCombat = pathname === "/combat";
@@ -2108,7 +2170,10 @@ const useHighlightPlacement = <Step extends { id: string }>({
       const before = highlightInfo.element.getBoundingClientRect();
       // In a fight the action tiles under the field have to stay in view and clear of
       // the panel together with the target.
-      const clear = isCombat ? withCombatActions(before) : before;
+      const clear =
+        isCombat && highlightInfo.element.id !== COMBAT_RETURN_ID
+          ? withCombatActions(before)
+          : before;
       const panel = getAssistantPanelRect();
       // In a fight the AP bar must stay in view with the target.
       const timerTop = isCombat
@@ -2135,9 +2200,28 @@ const useHighlightPlacement = <Step extends { id: string }>({
       ) {
         placement.settled = false;
       }
+      // A target with no room above the lesson at the foot of the screen starts at the top,
+      // and the lesson folds.
+      const isCrowded =
+        !isCombat &&
+        !!panel &&
+        panel.bottom > window.innerHeight / 2 &&
+        // A lesson beside the target, over its edge at most, leaves it readable.
+        Math.min(panel.right, before.right) - Math.max(panel.left, before.left) >
+          before.width / 4 &&
+        before.height + 32 > panel.top;
+      if (isCrowded && rectsOverlap(before, panel)) setPanelCrowdsHighlight(true);
+      if (isCrowded && placement.attempts === 0) {
+        placement.attempts = 1;
+        highlightInfo.element.ownerDocument.scrollingElement?.scrollBy({
+          top: before.top - 16,
+          behavior: "auto",
+        });
+      }
       if (
         !placement.settled &&
         placement.attempts < 5 &&
+        !isCrowded &&
         !isFieldPending &&
         // A fight's offset is capped by its AP bar, so even a field taller than the
         // screen is placed there.
@@ -2166,7 +2250,6 @@ const useHighlightPlacement = <Step extends { id: string }>({
           placement.settled = true;
           placement.settledScrollY = window.scrollY;
         } else {
-          placement.attempts += 1;
           const scroller = highlightInfo.element.ownerDocument.scrollingElement;
           // There a target only moves far enough to come into view clear of the
           // panel, so as much of the scene as possible stays visible with it, and in a
@@ -2186,8 +2269,13 @@ const useHighlightPlacement = <Step extends { id: string }>({
             : Math.min(
                 revealOffset,
                 timerTop === undefined ? revealOffset : timerTop - 16,
+                // Where not everything fits, the target itself stays on screen.
+                Math.max(0, before.top - 16),
               );
+          const scrolledFrom = window.scrollY;
           scroller?.scrollBy({ top: offset, behavior: "auto" });
+          // A page still laying out may have nowhere to scroll yet; that is no attempt.
+          if (window.scrollY !== scrolledFrom) placement.attempts += 1;
           // Scrolling cannot always win: on a short page the document may already
           // be as far down as it goes, leaving the target stuck under the panel
           // with nothing left to scroll. Rather than stretch the page to make
@@ -2196,30 +2284,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
           // target is clear of where it lands, or it would cover it from above.
           // Inside a dialog it takes the band that hides the least of the dialog's
           // header and controls instead of the top of the screen.
-          if (isCovered) {
-            const after = highlightInfo.element.getBoundingClientRect();
-            const panelAfter = getAssistantPanelRect();
-            const minTop =
-              DODGED_PANEL_TOP_REM *
-              Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
-            if (panelAfter && rectsOverlap(after, panelAfter)) {
-              const dialogTop = getDodgedPanelTop(
-                highlightInfo.element,
-                panelAfter,
-                minTop,
-              );
-              if (dialogTop !== null) {
-                document.documentElement.style.setProperty(
-                  DODGE_TOP_PROPERTY,
-                  `${dialogTop}px`,
-                );
-                setPanelDodgesHighlight(true);
-              } else if (after.top > minTop + panelAfter.height) {
-                document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
-                setPanelDodgesHighlight(true);
-              }
-            }
-          }
+          if (isCovered && !placement.gaveWay) giveWay(highlightInfo.element);
         }
       }
       const rect = highlightInfo.element.getBoundingClientRect();
@@ -2243,11 +2308,10 @@ const useHighlightPlacement = <Step extends { id: string }>({
       );
       return highlightInfo.element;
     }
-    // Coached turns and rematches point at nothing, yet the dock still keeps beside the field.
-    if (pathname === "/combat") fitActivityDockBesideField();
     setHighlight(null);
     document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
     setPanelDodgesHighlight(false);
+    setPanelCrowdsHighlight(false);
     return null;
   };
 
@@ -2267,7 +2331,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
     };
   }, [step, enabled, pathname, revealOnly]);
 
-  return { highlight, panelDodgesHighlight };
+  return { highlight, panelDodgesHighlight, panelCrowdsHighlight };
 };
 
 /**
@@ -2396,8 +2460,8 @@ const placeLesson = (
       autoTravelLabel: step.onArrival.autoTravelLabel ?? step.autoTravelLabel,
     };
   }
-  if (step.gameMenuEntryAction && pathname === step.gameMenuEntryPage) {
-    return { ...step, action: step.gameMenuEntryAction };
+  if (step.onEntryPage && pathname === step.gameMenuEntryPage) {
+    return { ...step, ...step.onEntryPage };
   }
   return step;
 };
@@ -2480,10 +2544,12 @@ const getAssistantPanelRect = (): DOMRect | null => {
 };
 
 /**
- * In a fight the dock keeps to the space beside the battlefield, where it covers neither
- * the field nor the action tiles under it. Where that space is too narrow for the dock
- * (phones), it keeps its width and the placement scrolls the controls clear of it instead.
- * Measured from the dock's fixed right edge, so narrowing it never changes the answer.
+ * Sizes the dock for a fight so it covers neither the field nor the action tiles under it.
+ * It narrows into the space beside the battlefield while a lesson reads well there. On a
+ * slimmer screen it becomes a strip along the foot, which the placement scrolls the fight
+ * clear of; a screen too short for the strip keeps it beside the field, however narrow,
+ * or at its own width where a field spans the screen.
+ * Measured from the dock's fixed right edge, so resizing it never changes the answer.
  * Returns false while the field has not laid out yet.
  */
 const fitActivityDockBesideField = () => {
@@ -2494,14 +2560,30 @@ const fitActivityDockBesideField = () => {
     .getElementById(TUTORIAL_ASSISTANT_PANEL_ID)
     ?.closest("[data-activity-dock]")
     ?.getBoundingClientRect();
-  if (!field || !dock || !isUsableHighlightRect(field)) return false;
+  if (!field || !dock || !isUsableHighlightRect(field) || !isUsableHighlightRect(dock))
+    return false;
   const room = dock.right - field.right - ACTIVITY_DOCK_FIELD_GAP_PX;
-  const root = document.documentElement;
-  if (room >= ACTIVITY_DOCK_MIN_WIDTH_PX && room < ACTIVITY_DOCK_FULL_WIDTH_PX) {
-    root.style.setProperty(ACTIVITY_DOCK_WIDTH_PROPERTY, `${Math.floor(room)}px`);
-  } else {
-    root.style.removeProperty(ACTIVITY_DOCK_WIDTH_PROPERTY);
-  }
+  const fight = withCombatActions(field);
+  const timer = document
+    .getElementById("tutorial-combat-action-timer")
+    ?.getBoundingClientRect();
+  const fightHeight = fight.bottom - Math.min(fight.top, timer?.top ?? fight.top);
+  const fitsStrip =
+    fightHeight + ACTIVITY_DOCK_STRIP_HEIGHT_PX + 2 * ACTIVITY_DOCK_FIELD_GAP_PX <=
+    window.innerHeight;
+  const isBeside =
+    room >= ACTIVITY_DOCK_READABLE_WIDTH_PX ||
+    (room >= ACTIVITY_DOCK_MIN_WIDTH_PX && !fitsStrip);
+  const width = isBeside
+    ? Math.min(room, ACTIVITY_DOCK_FULL_WIDTH_PX)
+    : Math.min(
+        dock.right - ACTIVITY_DOCK_FIELD_GAP_PX,
+        fitsStrip ? ACTIVITY_DOCK_STRIP_WIDTH_PX : ACTIVITY_DOCK_FULL_WIDTH_PX,
+      );
+  document.documentElement.style.setProperty(
+    ACTIVITY_DOCK_WIDTH_PROPERTY,
+    `${Math.floor(width)}px`,
+  );
   return true;
 };
 
@@ -2530,11 +2612,12 @@ const rectsOverlap = (a: ScreenEdges, b: ScreenEdges) =>
  * so on a short viewport the middle is underneath it.
  */
 const getPreferredHighlightCentre = (targetHeight: number) => {
-  const safeTop = 80;
   const panel = getAssistantPanelRect();
-  const safeBottom =
-    panel && panel.top > safeTop + targetHeight ? panel.top : window.innerHeight;
-  return (safeTop + safeBottom) / 2;
+  // Where the usual margin leaves no room above the panel, a narrow one may.
+  const top = [80, 16].find((margin) => panel && panel.top > margin + targetHeight);
+  return panel && top !== undefined
+    ? (top + panel.top) / 2
+    : (80 + window.innerHeight) / 2;
 };
 
 /**
@@ -2608,15 +2691,14 @@ const findGuidedTarget = (selector: string): HighlightTarget | null => {
 /**
  * The element a main-tutorial step highlights: the first usable of its ids,
  * or a match in the open game menu for a step that needs it. `isPrimaryElement` tells
- * whether it is the step's first id.
+ * whether it is the step's first id. With none on screen, `revealId` is brought into view.
  */
 const findElementToHighlight = (
   step: TutorialStepConfig,
   rightSideBarRef: React.RefObject<HTMLDivElement | null>,
   rightSideBarOpen: boolean,
+  revealId: string | undefined,
 ): HighlightTarget | null => {
-  if (!step?.elementIds || step.elementIds.length === 0) return null;
-
   let element: HTMLElement | null =
     step.elementIds?.map((id) => getUsableHighlightElement(id)).find(Boolean) || null;
   const primaryElement = getUsableHighlightElement(step.elementIds?.[0]);
@@ -2651,7 +2733,7 @@ const findElementToHighlight = (
   }
 
   if (!element) {
-    const revealed = getUsableHighlightElement(step.revealId);
+    const revealed = getUsableHighlightElement(revealId);
     return revealed && { element: revealed, isPrimaryElement: false, isRevealed: true };
   }
 
@@ -2693,6 +2775,9 @@ type TutorialIdentityRef = React.RefObject<{
 }>;
 
 /** The element a step points at; a fallback target is not the step's primary one. */
+/** Whether the dock gives way to its highlight, and at which side of the screen if it moves. */
+type PanelDodge = boolean | "left" | "right";
+
 type HighlightTarget = {
   element: HTMLElement;
   isPrimaryElement: boolean;

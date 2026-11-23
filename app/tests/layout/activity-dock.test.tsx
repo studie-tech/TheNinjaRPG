@@ -151,8 +151,8 @@ it("sits on the right in a tutorial fight, beside the free end of the action bar
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/combat");
   const view = render(<ActivityDock>Fight lesson</ActivityDock>);
   const dock = view.getByRole("complementary", { name: "Activity" });
-  expect(dock.className).toContain("right-4");
-  expect(dock.className).not.toContain("left-4");
+  expect([...dock.classList]).toContain("right-4");
+  expect([...dock.classList]).not.toContain("left-4");
   expect(
     view.queryByRole("button", { name: "Swap Chat and Activity sides" }),
   ).toBeNull();
@@ -163,10 +163,10 @@ it("keeps the player's own side in a fight outside the tutorial", () => {
   user.tutorialOn = false;
   const view = render(<ActivityDock>Fight lesson</ActivityDock>);
   const dock = view.getByRole("complementary", { name: "Activity" });
-  expect(dock.className).toContain("left-4");
+  expect([...dock.classList]).toContain("left-4");
   fireEvent.click(view.getByRole("button", { name: "Open Activity" }));
   fireEvent.click(view.getByRole("button", { name: "Swap Chat and Activity sides" }));
-  expect(dock.className).toContain("right-4");
+  expect([...dock.classList]).toContain("right-4");
 });
 
 it("keeps a reachable Activity launcher while chatting and can return to the lesson", () => {

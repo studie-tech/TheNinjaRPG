@@ -373,7 +373,11 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   };
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4" aria-busy={isPending}>
+    <div
+      id="tutorial-specialization-options"
+      className="grid grid-cols-2 sm:grid-cols-4"
+      aria-busy={isPending}
+    >
       {specializationOptions.map((option) => {
         const cappedStats = option.stats.filter(isCapped);
         // Disabled only when every stat is capped: all combat presets share offence/defence.

@@ -3,6 +3,7 @@ import { cleanup, render } from "@testing-library/react";
 import * as image from "@/layout/Image";
 import {
   getDodgedPanelTop,
+  getPanelPlaceOverDialog,
   getToastClearance,
   Spotlight,
   SpotlightPointer,
@@ -203,6 +204,27 @@ describe("dodged lesson dock placement", () => {
   it("finds no place when the dock cannot fit clear of the target", () => {
     const { buy } = shopDialog();
     expect(getDodgedPanelTop(buy, { ...panel, height: 700 }, 60)).toBeNull();
+  });
+
+  it("stands over a dialog's blank space, on the side clear of its buttons", () => {
+    const dialog = document.body.appendChild(document.createElement("div"));
+    dialog.setAttribute("role", "dialog");
+    // The whole dialog is the target, its buttons at the right of its foot.
+    const height = window.innerHeight;
+    const width = document.documentElement.clientWidth || window.innerWidth;
+    place(dialog, { top: 200, left: 100, width: width - 200, height: height - 400 });
+    place(dialog.appendChild(document.createElement("button")), {
+      top: height - 260,
+      left: width - 200,
+      width: 80,
+      height: 40,
+    });
+    const dock = { left: width - 440, right: width - 20, height: 300 };
+    expect(getPanelPlaceOverDialog(dialog, dock, 60)).toEqual({
+      side: "left",
+      top: height - 12 - 300,
+    });
+    expect(getPanelPlaceOverDialog(document.body, dock, 60)).toBeNull();
   });
 });
 

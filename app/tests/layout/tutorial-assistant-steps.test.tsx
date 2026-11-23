@@ -825,6 +825,31 @@ describe("fight placement", () => {
     expect(root.style.getPropertyValue("--activity-dock-width")).toBe("");
   });
 
+  it("becomes a strip under the fight where too little room is left beside it", async () => {
+    const root = document.documentElement;
+    const expectWidth = async (field: DOMRect, width: string) => {
+      const view = show(
+        fight,
+        {},
+        "/combat",
+        <Target id="tutorial-combat-field" box={field} />,
+      );
+      const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+      dock.getBoundingClientRect = () => new DOMRect(333, 350, 420, 300);
+      await waitFor(
+        () => expect(root.style.getPropertyValue("--activity-dock-width")).toBe(width),
+        { timeout: 3000 },
+      );
+      view.unmount();
+    };
+    // 179px beside the field wrap every word; the screen's foot has room for the strip...
+    await expectWidth(new DOMRect(210, 92, 348, 250), "737px");
+    // ...which a taller fight does not leave, so the dock squeezes beside it.
+    await expectWidth(new DOMRect(210, 92, 348, window.innerHeight), "179px");
+    // A tall field across the whole screen has neither, and the dock keeps its width.
+    await expectWidth(new DOMRect(10, 92, 740, window.innerHeight), "420px");
+  });
+
   it("keeps the lesson text on a phone unless the step has an instruction to show", () => {
     const explained = show(fight, {}, "/combat");
     const battlefield = TUTORIAL_STEPS[fight]!;
@@ -1031,10 +1056,12 @@ describe("mobile game menu", () => {
     );
     const region = await waitFor(() => lesson(page, step.title));
     expect(region.getAttribute("data-tutorial-step")).toBe("tools-assign");
-    expect(region.textContent).toContain(textOf(parseHtml(String(step.description))));
+    expect(region.textContent).toContain(
+      textOf(parseHtml(step.onEntryPage!.description)),
+    );
     expect(region.textContent).not.toContain("Tap the highlighted menu button.");
     // The page is already open, so the lesson asks only for the spending.
-    expect(region.textContent).toContain(step.gameMenuEntryAction!);
+    expect(region.textContent).toContain(step.onEntryPage!.action);
     expect(region.textContent).not.toContain(step.action!);
   });
 });

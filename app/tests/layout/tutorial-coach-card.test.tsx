@@ -123,3 +123,30 @@ describe("coach card folding", () => {
     expect(isFolded()).toBe(false);
   });
 });
+
+it("opens folded where the whole lesson would cover its target, until asked to show all", () => {
+  const view = render(
+    <CoachCard
+      title="Choose your strengths"
+      action="Tap Mind, Body, Resolve or Tactics."
+      lead={<p>Each specialization raises two stats.</p>}
+      foldKey="strengths"
+      startFolded
+    />,
+  );
+  const folded = () => view.container.querySelector("[data-lead-folded]");
+  expect(folded()).toBeTruthy();
+  fireEvent.click(view.getByRole("button", { name: "Show all" }));
+  expect(folded()).toBeNull();
+  // The next lesson folds by itself again.
+  view.rerender(
+    <CoachCard
+      title="Grow stronger"
+      action="Pick a specialization."
+      lead={<p>This time the choice is yours.</p>}
+      foldKey="stronger"
+      startFolded
+    />,
+  );
+  expect(folded()).toBeTruthy();
+});

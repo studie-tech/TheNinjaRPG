@@ -71,20 +71,23 @@ export const MapSpeech = ({
   const obstaclesFor = (lineId: string): SpeechObstacle[] => {
     const layer = ref.current;
     const origin = layer?.getBoundingClientRect();
+    const onLayer = (element: Element): SpeechRect => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left - (origin?.left ?? 0),
+        top: rect.top - (origin?.top ?? 0),
+        width: rect.width,
+        height: rect.height,
+      };
+    };
     const panels =
       layer?.parentElement?.querySelectorAll<HTMLElement>(`[${MAP_HUD_ATTRIBUTE}]`) ??
       [];
+    // The Activity dock floats over the map on a short screen and would hide the words.
+    const dock = document.querySelector("[data-activity-dock]");
     return [
-      ...Array.from(panels, (panel) => {
-        const rect = panel.getBoundingClientRect();
-        return {
-          kind: "panel" as const,
-          left: rect.left - (origin?.left ?? 0),
-          top: rect.top - (origin?.top ?? 0),
-          width: rect.width,
-          height: rect.height,
-        };
-      }),
+      ...Array.from(panels, (panel) => ({ ...onLayer(panel), kind: "panel" as const })),
+      ...(dock ? [{ ...onLayer(dock), kind: "speech" as const }] : []),
       ...[...avoided.current.values()].map((rect) => ({
         ...rect,
         kind: "subject" as const,

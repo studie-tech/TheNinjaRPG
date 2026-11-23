@@ -209,7 +209,7 @@ const CHOICE_LAYOUTS: Record<ChoiceCount, { grid: string; art: string }> = {
   3: { grid: "@2xl:grid-cols-2 @5xl:grid-cols-3", art: "@5xl:aspect-[4/3]" },
   4: { grid: "@2xl:grid-cols-2 @7xl:grid-cols-4", art: "@7xl:aspect-[4/3]" },
   5: {
-    grid: "@2xl:grid-cols-2 @5xl:grid-cols-3 @7xl:grid-cols-5",
+    grid: "@2xl:grid-cols-2 @4xl:grid-cols-3 @7xl:grid-cols-5",
     art: "@7xl:aspect-[3/4]",
   },
 };

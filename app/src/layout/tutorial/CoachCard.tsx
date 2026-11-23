@@ -29,6 +29,7 @@ export const CoachCard = ({
   isBusy = false,
   errorMessage,
   foldKey,
+  startFolded = false,
 }: {
   title: string;
   eyebrow?: string;
@@ -54,15 +55,20 @@ export const CoachCard = ({
    * changes. Omit it to keep the lead open.
    */
   foldKey?: string;
+  /** Opens with the lead folded, for a target the open lesson would cover. */
+  startFolded?: boolean;
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const leadRef = useRef<HTMLDivElement>(null);
   const [foldedKey, setFoldedKey] = useState<string | null>(null);
   // Only a card whose callout keeps the instruction in view may fold its text.
   const canFold = foldKey !== undefined && !!action && !!lead;
-  const isFolded = canFold && foldedKey === foldKey;
+  // The lesson whose lead the player unfolded again.
+  const [openedKey, setOpenedKey] = useState<string | null>(null);
+  const isFolded =
+    canFold && (foldedKey === foldKey || (startFolded && openedKey !== foldKey));
   useEffect(() => {
-    if (!canFold || foldedKey === foldKey) return;
+    if (!canFold || isFolded) return;
     const fold = (event: Event) => {
       const dock = cardRef.current?.closest("[data-activity-dock]") ?? cardRef.current;
       if (!dock || !leadRef.current) return;
@@ -72,7 +78,7 @@ export const CoachCard = ({
     };
     document.addEventListener("pointerdown", fold, true);
     return () => document.removeEventListener("pointerdown", fold, true);
-  }, [canFold, foldKey, foldedKey]);
+  }, [canFold, foldKey, isFolded]);
   return (
     <div
       ref={cardRef}
@@ -87,7 +93,7 @@ export const CoachCard = ({
             {eyebrow && (
               <p
                 className={cn(
-                  "text-muted-foreground truncate text-xs font-semibold tracking-wider uppercase @max-[34rem]/dock:text-sm @max-[34rem]/dock:tracking-normal @max-[34rem]/dock:whitespace-normal",
+                  "text-muted-foreground truncate text-xs font-semibold tracking-wider uppercase @max-[34rem]/dock:text-sm @max-[34rem]/dock:tracking-normal @max-[34rem]/dock:whitespace-normal @max-[18rem]/dock:hidden",
                   isFolded && "@max-[34rem]/dock:hidden",
                 )}
               >
@@ -144,75 +150,82 @@ export const CoachCard = ({
             ))}
           </div>
         )}
-        {/* Lesson text arrives styled for the wide dock (text-base, text-sm); a narrow
+        {/* A strip along the foot of the screen (from 44rem, 528px) keeps the controls
+        beside the text, so it stays low. */}
+        <div className="@min-[44rem]/dock:flex">
+          {/* Lesson text arrives styled for the wide dock (text-base, text-sm); a narrow
         dock is a phone held at reading distance, where it reads a step larger. */}
-        <div
-          className={cn(
-            "max-h-[min(40dvh,420px,calc(100dvh-22rem))] space-y-3 overflow-y-auto overscroll-contain px-4 py-3 md:px-5 @max-[34rem]/dock:max-h-[min(30dvh,420px,calc(100dvh-22rem))] @max-[34rem]/dock:space-y-2 @max-[34rem]/dock:py-2",
-            "@max-[34rem]/dock:[&_.text-base]:text-lg @max-[34rem]/dock:[&_.text-base]:leading-normal @max-[34rem]/dock:[&_.text-sm]:text-base",
-          )}
-        >
-          {isBusy && (
-            <div
-              role="status"
-              aria-live="polite"
-              className="text-muted-foreground flex items-center gap-2 text-base font-medium"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              Disabling
-            </div>
-          )}
-          {errorMessage && !isBusy && (
-            <p role="alert" className="text-destructive text-base">
-              {errorMessage}
-            </p>
-          )}
-          <fieldset disabled={isBusy} className="contents">
-            {lead && (
+          <div
+            className={cn(
+              "min-w-0 flex-1 max-h-[min(40dvh,420px,calc(100dvh-22rem))] space-y-3 overflow-y-auto overscroll-contain px-4 py-3 md:px-5 @max-[34rem]/dock:max-h-[min(30dvh,420px,calc(100dvh-22rem))] @max-[34rem]/dock:space-y-2 @max-[34rem]/dock:py-2",
+              "@max-[34rem]/dock:[&_.text-base]:text-lg @max-[34rem]/dock:[&_.text-base]:leading-normal @max-[34rem]/dock:[&_.text-sm]:text-base",
+            )}
+          >
+            {isBusy && (
               <div
-                ref={leadRef}
-                data-lead-folded={isFolded || undefined}
-                className={cn(
-                  // Two lines of the narrow dock's text-lg leading-normal lead, fading out
-                  // (FOLDED_LEAD_REM).
-                  isFolded &&
-                    "@max-[34rem]/dock:max-h-[3.375rem] @max-[34rem]/dock:overflow-hidden @max-[34rem]/dock:[mask-image:linear-gradient(to_bottom,black_55%,transparent)]",
-                )}
+                role="status"
+                aria-live="polite"
+                className="text-muted-foreground flex items-center gap-2 text-base font-medium"
               >
-                {lead}
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Disabling
               </div>
             )}
-            {isFolded && (
-              <button
-                type="button"
-                aria-expanded={false}
-                onClick={() => setFoldedKey(null)}
-                className="text-primary hidden items-center gap-1 text-sm font-semibold @max-[34rem]/dock:inline-flex dark:text-amber-300"
-              >
-                <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                Show all
-              </button>
-            )}
-            {children}
-          </fieldset>
-        </div>
-        {(action || footer) && (
-          <fieldset
-            disabled={isBusy}
-            className="border-border bg-card space-y-3 rounded-b-xl border-t px-4 py-3 md:px-5 @max-[34rem]/dock:space-y-2 @max-[34rem]/dock:py-2"
-          >
-            {action && (
-              <p className="flex items-start gap-2 rounded-lg border border-amber-500/70 bg-amber-500/15 px-3 py-2 text-base font-semibold @max-[34rem]/dock:py-1.5 @max-[34rem]/dock:text-lg @max-[34rem]/dock:leading-snug">
-                <MousePointerClick
-                  className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
-                  aria-hidden="true"
-                />
-                <span>{action}</span>
+            {errorMessage && !isBusy && (
+              <p role="alert" className="text-destructive text-base">
+                {errorMessage}
               </p>
             )}
-            {footer}
-          </fieldset>
-        )}
+            <fieldset disabled={isBusy} className="contents">
+              {lead && (
+                <div
+                  ref={leadRef}
+                  data-lead-folded={isFolded || undefined}
+                  className={cn(
+                    // Two lines of the narrow dock's text-lg leading-normal lead, fading out
+                    // (FOLDED_LEAD_REM).
+                    isFolded &&
+                      "@max-[34rem]/dock:max-h-[3.375rem] @max-[34rem]/dock:overflow-hidden @max-[34rem]/dock:[mask-image:linear-gradient(to_bottom,black_55%,transparent)]",
+                  )}
+                >
+                  {lead}
+                </div>
+              )}
+              {isFolded && (
+                <button
+                  type="button"
+                  aria-expanded={false}
+                  onClick={() => {
+                    setFoldedKey(null);
+                    setOpenedKey(foldKey ?? null);
+                  }}
+                  className="text-primary hidden items-center gap-1 text-sm font-semibold @max-[34rem]/dock:inline-flex dark:text-amber-300"
+                >
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                  Show all
+                </button>
+              )}
+              {children}
+            </fieldset>
+          </div>
+          {(action || footer) && (
+            <fieldset
+              disabled={isBusy}
+              className="border-border bg-card space-y-3 rounded-b-xl border-t px-4 py-3 md:px-5 @max-[34rem]/dock:space-y-2 @max-[34rem]/dock:py-2 @min-[44rem]/dock:max-w-72 @min-[44rem]/dock:shrink-0 @min-[44rem]/dock:self-end @min-[44rem]/dock:border-t-0"
+            >
+              {action && (
+                <p className="flex items-start gap-2 rounded-lg border border-amber-500/70 bg-amber-500/15 px-3 py-2 text-base font-semibold @max-[34rem]/dock:py-1.5 @max-[34rem]/dock:text-lg @max-[34rem]/dock:leading-snug">
+                  <MousePointerClick
+                    className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+                    aria-hidden="true"
+                  />
+                  <span>{action}</span>
+                </p>
+              )}
+              {footer}
+            </fieldset>
+          )}
+        </div>
       </div>
     </div>
   );

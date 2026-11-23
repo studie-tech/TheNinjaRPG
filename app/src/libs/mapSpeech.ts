@@ -24,8 +24,8 @@ export type SpeechRect = { left: number; top: number; width: number; height: num
 
 /**
  * What a bubble should not cover, by how much it matters: a `subject` is a character or a
- * target the player needs to see, `speech` another bubble, and a `panel` one of the map's
- * own, which can be spared for a moment.
+ * target the player needs to see, `speech` another bubble or a panel over the map that
+ * would hide the words, and a `panel` one of the map's own, which can be spared for a moment.
  */
 export type SpeechObstacle = SpeechRect & { kind: "subject" | "speech" | "panel" };
 

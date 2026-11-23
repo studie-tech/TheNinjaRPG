@@ -465,6 +465,47 @@ export const getDodgedPanelTop = (
 };
 
 /**
+ * Where the dock stands when no band of a dialog is clear of its `target` (see
+ * `getDodgedPanelTop`): over the dialog's blank space rather than any of its controls, on
+ * either side of the screen, as low as that allows. Null for a target outside a dialog.
+ */
+export const getPanelPlaceOverDialog = (
+  target: Element,
+  panel: { left: number; right: number; height: number },
+  minTop: number,
+): { top: number; side: "left" | "right" } | null => {
+  const dialog = target.closest('[role="dialog"], [role="alertdialog"]');
+  if (!dialog) return null;
+  const width = panel.right - panel.left;
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const edge = Math.min(panel.left, viewportWidth - panel.right);
+  const boxes = Array.from(
+    dialog.querySelectorAll(DIALOG_KEEP_SELECTOR),
+    (element) => ({
+      box: element.getBoundingClientRect(),
+      weight: element.matches(DIALOG_CONTROL_SELECTOR) ? DIALOG_CONTROL_WEIGHT : 1,
+    }),
+  )
+    // The target's own words and blank space give way last.
+    .concat({ box: target.getBoundingClientRect(), weight: TARGET_WEIGHT })
+    .filter(({ box }) => box.width > 0 && box.height > 0);
+  const maxTop = window.innerHeight - DODGE_GAP_PX - panel.height;
+  let best: { top: number; side: "left" | "right"; cost: number } | null = null;
+  for (const side of ["right", "left"] as const) {
+    const left = side === "left" ? edge : viewportWidth - edge - width;
+    for (let top = Math.floor(maxTop); top >= minTop; top -= DODGE_STEP_PX) {
+      const cost = boxes.reduce((sum, { box, weight }) => {
+        const x = Math.min(box.right, left + width) - Math.max(box.left, left);
+        const y = Math.min(box.bottom, top + panel.height) - Math.max(box.top, top);
+        return x > 0 && y > 0 ? sum + x * y * weight : sum;
+      }, 0);
+      if (!best || cost < best.cost) best = { top, side, cost };
+    }
+  }
+  return best && { top: best.top, side: best.side };
+};
+
+/**
  * Viewport boxes of what a spotlight keeps in view: its hole, its pointer and its marks,
  * in `layer` or in every spotlight on the page.
  */
@@ -556,6 +597,13 @@ const SPOTLIT_STYLE = `:is([${SPOTLIT_ATTRIBUTE}], [${SPOTLIT_ATTRIBUTE}] *)[cla
 /** What a dodging dock keeps clear of inside a dialog. */
 const DIALOG_KEEP_SELECTOR =
   'h1, h2, h3, img, label, input, select, textarea, button, a[href], [role="slider"]';
+/** What of those the player presses or fills in, which must stay reachable. */
+const DIALOG_CONTROL_SELECTOR =
+  'input, select, textarea, button, a[href], [role="slider"]';
+/** How much more covering a control costs than covering a heading or a picture. */
+const DIALOG_CONTROL_WEIGHT = 20;
+/** How much covering the target's own words and blank space costs, against a heading. */
+const TARGET_WEIGHT = 0.05;
 /** Space a dodging dock keeps from the target and the screen's foot. */
 const DODGE_GAP_PX = 12;
 /** Room the bouncing hand takes beside a target (see `SpotlightPointer`). */
