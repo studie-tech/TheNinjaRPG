@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   AlertTriangle,
   ArrowBigUpDash,
+  ArrowRightLeft,
   DoorClosed,
   DoorOpen,
   FilePenLine,
@@ -716,8 +717,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
         </div>
       }
     >
-      <div className="grid grid-cols-8">
-        <div className="col-span-4 sm:col-span-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,3fr)] gap-x-4">
+        <div>
           <AvatarImage
             href={clanData.image}
             alt={clanData.id}
@@ -726,7 +727,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             priority
           />
         </div>
-        <div className="col-span-4 sm:col-span-6">
+        <div>
           <div className="grid grid-cols-1 pt-2 sm:grid-cols-2">
             <div>
               {!userData?.isOutlaw && <p>Village: {clanData.village.name}</p>}
@@ -790,14 +791,14 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             </div>
             <div>
               <p>PvP Activity: {clanData.pvpActivity}</p>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center">
                 <p>Points: {clanData.points.toLocaleString()}</p>
                 {leaderLike && userData.clanId === clanId && (
                   <ClanPointConversion clanId={clanId} points={clanData.points} />
                 )}
               </div>
               <div className="flex flex-row items-center">
-                <p>Bank: {clanData.bank}</p>{" "}
+                <p>Bank: {clanData.bank.toLocaleString()}</p>{" "}
                 <Confirm
                   title={`Donate to ${groupLabel.toLowerCase()}`}
                   proceed_label="Donate"
@@ -920,7 +921,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             </div>
           </div>
           {/* Clans and factions share training, Ryo and crafting speed boosts. */}
-          <div className="mt-4 grid grid-cols-2 gap-x-4">
+          <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
             {ClanBoostTypes.filter(
               (boostType) =>
                 !userData.isOutlaw || !CLAN_BOOST_CONFIG[boostType].villageOnly,
@@ -1339,7 +1340,7 @@ const BoostRow: React.FC<BoostRowProps> = ({
   const isMaxed = currentLevel >= CLAN_BOOST_MAX_LEVEL;
 
   return (
-    <div className="flex flex-row items-center">
+    <div className="flex items-center justify-between gap-2">
       <p>
         {label}: {currentBoost}%
       </p>
@@ -1348,10 +1349,11 @@ const BoostRow: React.FC<BoostRowProps> = ({
           title={`Purchase ${label}`}
           proceed_label={!isMaxed && canAfford ? "Purchase" : "Cannot purchase"}
           confirmDisabled={isMaxed || !canAfford}
+          triggerClassName="shrink-0"
           button={
             <>
               <span className="sr-only">Purchase {label}</span>
-              <ArrowBigUpDash className="ml-2 h-6 w-6 hover:cursor-pointer hover:text-orange-500" />
+              <ArrowBigUpDash className="h-6 w-6 hover:cursor-pointer hover:text-orange-500" />
             </>
           }
           disabled={isPending}
@@ -1426,15 +1428,18 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
   return (
     <>
       <Button
-        size="sm"
-        variant="outline"
+        size="icon"
+        variant="ghost"
+        className="ml-1 h-8 w-8 shrink-0"
+        aria-label="Convert points to ryo"
+        hoverText="Convert points to ryo"
         disabled={points < 1}
         onClick={() => {
           setError("");
           setIsOpen(true);
         }}
       >
-        Convert points to ryo
+        <ArrowRightLeft className="h-5 w-5" aria-hidden />
       </Button>
       <Modal
         id="convert-clan-points"
