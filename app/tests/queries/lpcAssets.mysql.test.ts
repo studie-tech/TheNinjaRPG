@@ -133,8 +133,16 @@ describeWithDatabase("LPC GameAsset persistence", () => {
       .set({ name: "Edited katana", lpcConfig: edited })
       .where(eq(gameAsset.id, "katana"));
     const repeated = await recordQueries(() => seedLpcAssets(database));
-    expect(repeated.result).toEqual({ designs: lpcAssets.length, inserted: 0, preserved: lpcAssets.length });
-    expect(repeated.statements.filter((statement) => /^(insert|update|delete) /i.test(statement))).toHaveLength(0);
+    expect(repeated.result).toEqual({
+      designs: lpcAssets.length,
+      inserted: 0,
+      preserved: lpcAssets.length,
+    });
+    expect(
+      repeated.statements.filter((statement) =>
+        /^(insert|update|delete) /i.test(statement),
+      ),
+    ).toHaveLength(0);
     expect(
       await database.query.gameAsset.findFirst({ where: eq(gameAsset.id, "katana") }),
     ).toMatchObject({ name: "Edited katana", lpcConfig: edited });
@@ -192,7 +200,11 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     ]);
 
     const sync = await recordQueries(() => seedLpcAssets(deadlocked));
-    expect(sync.result).toEqual({ designs: lpcAssets.length, inserted: 1, preserved: lpcAssets.length - 1 });
+    expect(sync.result).toEqual({
+      designs: lpcAssets.length,
+      inserted: 1,
+      preserved: lpcAssets.length - 1,
+    });
     expect(
       sync.statements.filter((statement) =>
         statement.startsWith("insert into `GameAsset`"),
@@ -209,9 +221,13 @@ describeWithDatabase("LPC GameAsset persistence", () => {
   it("allows concurrent local backfills without duplicate rows or overwriting saved designs", async () => {
     const database = await getTestDatabase();
     await Promise.all([seedLpcAssets(database), seedLpcAssets(database)]);
-    expect(await listLpcAssets(database)).toHaveLength(63);
+    expect(await listLpcAssets(database)).toHaveLength(lpcAssets.length);
     const steady = await recordQueries(() => seedLpcAssets(database));
-    expect(steady.result).toEqual({ designs: 63, inserted: 0, preserved: 63 });
+    expect(steady.result).toEqual({
+      designs: lpcAssets.length,
+      inserted: 0,
+      preserved: lpcAssets.length,
+    });
     expect(steady.statements).toHaveLength(1);
   });
 
@@ -223,8 +239,8 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     });
     expect(first).toMatchObject({
       status: "ready",
-      designs: 63,
-      expectedDesigns: 63,
+      designs: lpcAssets.length,
+      expectedDesigns: lpcAssets.length,
       missing: [],
       invalid: [],
     });

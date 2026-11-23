@@ -89,8 +89,8 @@ it("checks a complete catalog and its travel atlases without writing", async () 
     await prepareDevLpc({ databaseUrl: local, readOnly: true, client: db.client }),
   ).toMatchObject({
     status: "ready",
-    designs: 63,
-    expectedDesigns: 63,
+    designs: lpcSeedAssets().length,
+    expectedDesigns: lpcSeedAssets().length,
     missing: [],
     invalid: [],
   });
@@ -107,7 +107,7 @@ it("reports missing designs and the preparation command without seeding in docto
   });
   expect(report).toMatchObject({
     status: "incomplete",
-    designs: 62,
+    designs: lpcSeedAssets().length - 1,
     missing: ["body"],
   });
   expect(report.message).toContain("make dev-prepare");
