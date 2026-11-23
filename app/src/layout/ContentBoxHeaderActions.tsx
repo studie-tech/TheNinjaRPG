@@ -25,6 +25,8 @@ export function ContentBoxHeaderActions({
   noRightAlign,
   collapsedLabel,
   iconOnly = false,
+  collapsedIcon,
+  align = "end",
 }: ContentBoxHeaderActionsProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -35,7 +37,7 @@ export function ContentBoxHeaderActions({
     above: false,
     maxHeight: 0,
     maxWidth: 0,
-    right: 0,
+    offset: 0,
   });
   const panelId = useId();
   const isDisclosure = !!collapsedLabel || isOverflowing;
@@ -117,15 +119,21 @@ export function ContentBoxHeaderActions({
       const menuRight = collapsedLabel
         ? (headerRef.current?.getBoundingClientRect().right ?? rect.right)
         : rect.right;
-      const right = rect.right - menuRight;
-      const maxWidth = Math.max(44, Math.min(viewportWidth - 32, menuRight - 16));
+      const menuLeft = Math.max(
+        16,
+        headerRef.current?.getBoundingClientRect().left ?? rect.left,
+      );
+      const offset = align === "start" ? menuLeft - rect.left : rect.right - menuRight;
+      const availableWidth =
+        align === "start" ? viewportWidth - menuLeft - 16 : menuRight - 16;
+      const maxWidth = Math.max(44, Math.min(viewportWidth - 32, availableWidth));
       setPlacement((previous) =>
         previous.above === opensAbove &&
         previous.maxHeight === maxHeight &&
         previous.maxWidth === maxWidth &&
-        previous.right === right
+        previous.offset === offset
           ? previous
-          : { above: opensAbove, maxHeight, maxWidth, right },
+          : { above: opensAbove, maxHeight, maxWidth, offset },
       );
     };
     place();
@@ -157,7 +165,7 @@ export function ContentBoxHeaderActions({
       window.visualViewport?.removeEventListener("scroll", place);
       observer?.disconnect();
     };
-  }, [isDisclosure, isOpen, collapsedLabel, headerRef]);
+  }, [isDisclosure, isOpen, collapsedLabel, headerRef, align]);
 
   return (
     <div
@@ -200,7 +208,7 @@ export function ContentBoxHeaderActions({
         onClick={() => setIsOpen((open) => !open)}
       >
         {iconOnly ? (
-          <Menu className="size-6" aria-hidden />
+          (collapsedIcon ?? <Menu className="size-6" aria-hidden />)
         ) : (
           <List className="h-5 w-5" aria-hidden />
         )}
@@ -221,13 +229,15 @@ export function ContentBoxHeaderActions({
             ? {
                 maxHeight: placement.maxHeight,
                 maxWidth: placement.maxWidth,
-                right: placement.right,
+                left: align === "start" ? placement.offset : undefined,
+                right: align === "end" ? placement.offset : undefined,
               }
             : undefined
         }
         className={cn(
           isDisclosure &&
-            "bg-popover text-popover-foreground absolute top-full right-0 z-[45] mt-1 max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-auto rounded-md border p-3 shadow-md",
+            "bg-popover text-popover-foreground absolute top-full z-[45] mt-1 max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-auto rounded-md border p-3 shadow-md",
+          isDisclosure && (align === "start" ? "left-0" : "right-0"),
           collapsedLabel && "w-96",
           isDisclosure && placement.above && "top-auto bottom-full mb-1",
           isDisclosure &&
@@ -624,6 +634,8 @@ type ContentBoxHeaderActionsProps = {
   noRightAlign?: boolean;
   collapsedLabel?: string;
   iconOnly?: boolean;
+  collapsedIcon?: ReactNode;
+  align?: "start" | "end";
 };
 
 /** One header control for `ContentBoxPriorityActions`. */

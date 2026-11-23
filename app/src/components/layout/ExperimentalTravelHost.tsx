@@ -69,7 +69,7 @@ export function ExperimentalTravelHost({
             const target = returnFocus.current?.isConnected
               ? returnFocus.current
               : document.querySelector<HTMLElement>(
-                  "[data-experimental-travel-link], [data-experimental-map-navigation] button",
+                  "[data-experimental-travel-link], .experimental-nav-map-controls button",
                 );
             target?.focus({ preventScroll: true });
           }}

@@ -21,6 +21,8 @@ interface MobileGameNavProps {
   className?: string;
   /** Experimental frames use a destination compass in place of the location link. */
   centerControl?: ReactNode;
+  /** Travel hosts reserve the first and fourth left slots for their session controls. */
+  travelControls?: { menu: ReactNode; view: ReactNode };
 }
 
 /** Render a configured navigation shortcut, omitting unavailable travel destinations and unknown IDs. */
@@ -54,38 +56,46 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
   mobileNavbarButtonClassName,
   className,
   centerControl,
+  travelControls,
 }) => {
   const isNativeShell = useNativeShell();
   const showCookieSettings =
     isNativeShell === false && !isNativeUserAgent(navigator.userAgent);
   const navRef = useRef<HTMLDivElement>(null);
   useBottomNavInset(navRef);
+  const cookieControl = showCookieSettings ? (
+    <Link
+      href="/consent"
+      aria-label="Cookie settings"
+      aria-haspopup="dialog"
+      title="Cookie settings"
+      className="relative -top-2 flex min-h-[44px] min-w-0 justify-center"
+      onClick={(event) => {
+        if (openCookieConsentDialog()) event.preventDefault();
+      }}
+    >
+      <Cookie className={cn(mobileNavbarButtonClassName, "max-w-full")} />
+    </Link>
+  ) : null;
   return (
     <div
       ref={navRef}
       data-has-cookie-control={showCookieSettings}
+      data-travel-controls={!!travelControls}
       className={cn(
-        // The fixed web consent control balances the configured shortcuts around the centre.
-        // Native clients keep two wider left slots; the insets clear a landscape notch.
+        // Travel adds two left controls and moves web consent to the last right slot.
+        // Other native bars keep two wider left slots; the insets clear a landscape notch.
         "grid items-center justify-center pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
-        showCookieSettings ? "grid-cols-7" : "grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr]",
+        travelControls
+          ? "grid-cols-9"
+          : showCookieSettings
+            ? "grid-cols-7"
+            : "grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr]",
         className,
       )}
     >
-      {showCookieSettings && (
-        <Link
-          href="/consent"
-          aria-label="Cookie settings"
-          aria-haspopup="dialog"
-          title="Cookie settings"
-          className="relative -top-2 flex min-h-[44px] min-w-0 justify-center"
-          onClick={(event) => {
-            if (openCookieConsentDialog()) event.preventDefault();
-          }}
-        >
-          <Cookie className={cn(mobileNavbarButtonClassName, "max-w-full")} />
-        </Link>
-      )}
+      {travelControls?.menu}
+      {!travelControls && cookieControl}
       {mobileNavConfig.left.map((optionId) => (
         <div key={optionId} className="min-w-0">
           <MobileGameNavButton
@@ -99,28 +109,31 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
         className="relative -top-2 flex min-h-[44px] min-w-0 justify-center"
         iconClassName={cn(mobileNavbarButtonClassName, "max-w-full")}
       />
-      {centerControl ??
-        (location ? (
-          <Link
-            href="/village"
-            aria-label="Village"
-            className="relative -top-8 flex justify-center"
-          >
-            <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
-              <House className={cn(yellowButtonClassName)} />
-            </div>
-          </Link>
-        ) : (
-          <Link
-            href="/travel"
-            aria-label="Travel"
-            className="relative -top-8 flex justify-center"
-          >
-            <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
-              <Compass className={mobileNavbarButtonClassName} />
-            </div>
-          </Link>
-        ))}
+      {travelControls?.view}
+      <div className="min-w-0" data-nav-center>
+        {centerControl ??
+          (location ? (
+            <Link
+              href="/village"
+              aria-label="Village"
+              className="relative -top-8 flex justify-center"
+            >
+              <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
+                <House className={cn(yellowButtonClassName)} />
+              </div>
+            </Link>
+          ) : (
+            <Link
+              href="/travel"
+              aria-label="Travel"
+              className="relative -top-8 flex justify-center"
+            >
+              <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
+                <Compass className={mobileNavbarButtonClassName} />
+              </div>
+            </Link>
+          ))}
+      </div>
       {mobileNavConfig.right.map((optionId) => (
         <div key={optionId} className="min-w-0">
           <MobileGameNavButton
@@ -130,6 +143,7 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
           />
         </div>
       ))}
+      {travelControls && cookieControl}
     </div>
   );
 };
@@ -158,7 +172,7 @@ const useBottomNavInset = (navRef: React.RefObject<HTMLDivElement | null>) => {
       const top = Math.min(
         rect.top,
         ...Array.from(
-          nav.querySelectorAll("a, button"),
+          nav.querySelectorAll("[data-nav-center] a, [data-nav-center] button"),
           (link) => link.getBoundingClientRect().top,
         ),
       );

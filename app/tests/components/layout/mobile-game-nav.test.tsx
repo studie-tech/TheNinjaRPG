@@ -54,6 +54,71 @@ describe("mobile game navigation cookie settings", () => {
       "Settings",
     ]);
   });
+  it.each([false, true, undefined])(
+    "places four experimental controls on each side of the location action (native=%s)",
+    (native) => {
+      vi.spyOn(nativeShell, "useNativeShell").mockReturnValue(native);
+      const view = render(
+        <MobileGameNav
+          {...props}
+          mobileNavConfig={DEFAULT_MOBILE_NAV_CONFIG}
+          travelControls={{
+            menu: <button type="button" aria-label="Map controls" />,
+            view: <button type="button" aria-label="Show global map" />,
+          }}
+        />,
+      );
+      const names = Array.from(
+        view.container.querySelectorAll("a, button"),
+        (control) => control.getAttribute("aria-label"),
+      );
+      expect(names).toEqual([
+        "Map controls",
+        "Profile",
+        "Activity",
+        "Show global map",
+        "Village",
+        "Inbox",
+        "Tavern",
+        "Settings",
+        ...(native === false ? ["Cookie settings"] : []),
+      ]);
+    },
+  );
+
+  it("publishes the raised center's inset without counting the open travel popup", () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: Element,
+    ) {
+      const inset =
+        this.getAttribute("aria-label") === "Village"
+          ? 80
+          : this.textContent === "Quick Travel"
+            ? 500
+            : 60;
+      return new window.DOMRect(0, window.innerHeight - inset, 320, 60);
+    });
+    render(
+      <MobileGameNav
+        {...props}
+        travelControls={{
+          menu: (
+            <div>
+              <button type="button">Map controls</button>
+              <section>
+                <button type="button">Quick Travel</button>
+              </section>
+            </div>
+          ),
+          view: <button type="button">Show global map</button>,
+        }}
+      />,
+    );
+    expect(document.documentElement.style.getPropertyValue("--game-bottom-nav-h")).toBe(
+      "80px",
+    );
+  });
+
   it("opens preferences without leaving the player's current page", () => {
     const open = vi
       .spyOn(cookieConsent, "openCookieConsentDialog")

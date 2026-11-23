@@ -1,12 +1,16 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useContext, useEffect, useRef } from "react";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { useTravelSession } from "@/hooks/useTravelSession";
-import type { HeaderActionItem } from "@/layout/ContentBoxHeaderActions";
+import {
+  type HeaderActionItem,
+  REVEAL_CONTENT_BOX_CONTROLS,
+} from "@/layout/ContentBoxHeaderActions";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
+import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import { TravelView } from "@/screens/travel/TravelView";
 import { useAwake, usePublicPathname } from "@/utils/routing";
 import { travelLocationSchema } from "@/validators/travel";
@@ -36,6 +40,8 @@ function TravelRoute({ immersive, isInteractive, headerItems }: TravelScreenProp
   const pathname = usePublicPathname();
   const requestedLocationRef = useRef<string | null>(null);
   const router = useNavigationRouter();
+  const navigation = useContext(TravelNavigationContext);
+  const { setActiveTab, globalLink } = session;
 
   useEffect(() => {
     if (isInteractive && userData?.status === "BATTLE") {
@@ -65,6 +71,42 @@ function TravelRoute({ immersive, isInteractive, headerItems }: TravelScreenProp
     if (parsed.success) setLocationRequest(parsed.data);
     else showMutationToast({ success: false, message: "Invalid travel location" });
   }, [pathname, searchParams, userData, router, setLocationRequest]);
+
+  useEffect(() => {
+    if (
+      !immersive ||
+      !isInteractive ||
+      !userData ||
+      pathname !== "/travel" ||
+      searchParams.has("sector")
+    )
+      return;
+    const openControls = searchParams.get("controls") === "open";
+    const showGlobal = searchParams.get("view") === "global";
+    if (!openControls && !showGlobal) return;
+    const disclosure = navigation?.controls?.querySelector(
+      "[data-content-box-actions]",
+    );
+    if (!disclosure) return;
+    if (showGlobal) setActiveTab(globalLink);
+    if (openControls) disclosure.dispatchEvent(new Event(REVEAL_CONTENT_BOX_CONTROLS));
+    const remaining = new URLSearchParams(searchParams.toString());
+    if (openControls) remaining.delete("controls");
+    if (showGlobal) remaining.delete("view");
+    router.replace(`/travel${remaining.size ? `?${remaining}` : ""}`, {
+      scroll: false,
+    });
+  }, [
+    immersive,
+    isInteractive,
+    userData,
+    pathname,
+    searchParams,
+    navigation,
+    setActiveTab,
+    globalLink,
+    router,
+  ]);
 
   const view = (
     <TravelView

@@ -3,6 +3,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
+import { type ReactNode, useMemo, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import * as lpc from "@/hooks/lpc";
@@ -18,6 +19,7 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import * as JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import * as TravelPosition from "@/layout/TravelPositionLabel";
+import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -244,29 +246,81 @@ it("updates the Travel destination when the saved automatic-wake preference chan
   ).toBe("/home");
 });
 
-it.each([false, true])(
-  "keeps Sector and Global tabs visible during the tutorial (immersive=%s)",
-  (immersive) => {
-    actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
-    userRef.current = actor;
-    const view = render(<TravelScreen immersive={immersive} />);
-    expect(view.getByRole("button", { name: "Sector" })).toBeTruthy();
-    expect(view.getByRole("button", { name: "Global" })).toBeTruthy();
-    expect(ContentBox.default).toHaveBeenLastCalledWith(
-      expect.objectContaining(
-        immersive
-          ? {
-              topRightItems: expect.arrayContaining([
-                expect.objectContaining({ key: "map-navigation", priority: 0 }),
-              ]),
-            }
-          : {
-              headerStartContent: expect.anything(),
-              collapsedActionsLabel: "Map controls",
-            },
-      ),
-      undefined,
+it("keeps the standard Sector and Global tabs visible during the tutorial", () => {
+  actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
+  userRef.current = actor;
+  const view = render(<TravelScreen />);
+  expect(view.getByRole("button", { name: "Sector" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "Global" })).toBeTruthy();
+  expect(ContentBox.default).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      headerStartContent: expect.anything(),
+      collapsedActionsLabel: "Map controls",
+    }),
+    undefined,
+  );
+});
+
+it("switches the retained tutorial map from the bottom bar and pauses its controls with a building", async () => {
+  actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
+  userRef.current = actor;
+  const renderView = (isInteractive: boolean) => (
+    <TravelNavigationHarness>
+      <TravelScreen immersive isInteractive={isInteractive} />
+    </TravelNavigationHarness>
+  );
+  const view = render(renderView(true));
+  const menu = view.getByRole("button", { name: "Map controls" });
+  const toggle = view.getByRole("button", { name: "Show global map" });
+  fireEvent.click(toggle);
+  expect(view.getByRole("button", { name: "Show sector map" })).toBe(toggle);
+  fireEvent.click(toggle);
+  expect(view.getByRole("button", { name: "Show global map" })).toBe(toggle);
+  expect(view.getByRole("button", { name: "Map controls" })).toBe(menu);
+  view.rerender(renderView(false));
+  expect(toggle.hasAttribute("disabled")).toBe(true);
+  expect(menu.closest("[inert]")).toBeTruthy();
+  view.rerender(renderView(true));
+  expect(toggle.hasAttribute("disabled")).toBe(false);
+  expect(menu.closest("[inert]")).toBeNull();
+  expect(mutation.mutate).not.toHaveBeenCalled();
+});
+
+it("keeps the global view during an active journey", () => {
+  actor.status = "TRAVEL";
+  actor.travelFinishAt = new Date(Date.now() + 60_000);
+  const view = render(
+    <TravelNavigationHarness>
+      <TravelScreen immersive />
+    </TravelNavigationHarness>,
+  );
+  expect(
+    view.getByRole("button", { name: "Show sector map" }).hasAttribute("disabled"),
+  ).toBe(true);
+  expect(mutation.mutate).not.toHaveBeenCalled();
+});
+
+it.each(["controls=open", "view=global"])(
+  "consumes a bottom-navigation request from an ordinary page (%s)",
+  async (request) => {
+    vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+      new URLSearchParams(`${request}&keep=value`) as never,
     );
+    const replace = vi.fn();
+    vi.spyOn(navigation, "useRouter").mockReturnValue({ push, replace } as never);
+    const view = render(
+      <TravelNavigationHarness>
+        <TravelScreen immersive />
+      </TravelNavigationHarness>,
+    );
+    if (request === "controls=open")
+      expect(
+        view
+          .getByRole("button", { name: "Map controls" })
+          .getAttribute("aria-expanded"),
+      ).toBe("true");
+    else expect(view.getByRole("button", { name: "Show sector map" })).toBeTruthy();
+    expect(replace).toHaveBeenCalledWith("/travel?keep=value", { scroll: false });
   },
 );
 
@@ -615,18 +669,20 @@ it.each(["World Travel", "Auto Travel"])(
   },
 );
 
-it("renders host navigation alongside travel tools in the immersive header", () => {
+it("renders host navigation above the map and travel tools in the bottom bar", () => {
   const view = render(
-    <TravelScreen
-      immersive
-      headerItems={[
-        {
-          key: "host-menu",
-          node: <button type="button">Host menu</button>,
-          priority: 0,
-        },
-      ]}
-    />,
+    <TravelNavigationHarness>
+      <TravelScreen
+        immersive
+        headerItems={[
+          {
+            key: "host-menu",
+            node: <button type="button">Host menu</button>,
+            priority: 0,
+          },
+        ]}
+      />
+    </TravelNavigationHarness>,
   );
   expect(view.getByRole("button", { name: "Host menu" })).toBeTruthy();
   fireEvent.click(view.getByRole("button", { name: "Map controls" }));
@@ -654,7 +710,11 @@ it.each([false, true])(
         />
       );
     }
-    const view = render(<LoadedTravel />);
+    const view = render(
+      <TravelNavigationHarness>
+        <LoadedTravel />
+      </TravelNavigationHarness>,
+    );
     expect(view.queryByRole("button", { name: "Jutsu loadout" })).toBeNull();
     expect(view.queryByRole("button", { name: "Item loadout" })).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Map controls" }));
@@ -696,3 +756,17 @@ it.each([false, true])(
     );
   },
 );
+
+/** Render the same retained footer slots supplied by the experimental frame. */
+function TravelNavigationHarness({ children }: { children: ReactNode }) {
+  const [controls, setControls] = useState<HTMLDivElement | null>(null);
+  const [view, setView] = useState<HTMLDivElement | null>(null);
+  const value = useMemo(() => ({ controls, view }), [controls, view]);
+  return (
+    <TravelNavigationContext value={value}>
+      <div>{children}</div>
+      <div ref={setControls} />
+      <div ref={setView} />
+    </TravelNavigationContext>
+  );
+}

@@ -892,16 +892,16 @@ describe("quest steps", () => {
     const placement = vi.spyOn(tutorialPlacement, "getTutorialPortraitSide");
     spies.push(placement);
     const modalBox = new DOMRect(350, 250, 500, 220);
-    const getBox = HTMLElement.prototype.getBoundingClientRect;
+    const getBox = Element.prototype.getBoundingClientRect;
     spies.push(
-      vi
-        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-        .mockImplementation(function (this: HTMLElement) {
-          if (this.id === "tutorial-auto-travel-content") return modalBox;
-          if (this.id === "tutorial-auto-travel-proceed")
-            return new DOMRect(650, 400, 120, 40);
-          return getBox.call(this);
-        }),
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        if (this.id === "tutorial-auto-travel-content") return modalBox;
+        if (this.id === "tutorial-auto-travel-proceed")
+          return new DOMRect(650, 400, 120, 40);
+        return getBox.call(this);
+      }),
     );
     const index = TUTORIAL_STEPS.findIndex(
       (step) => step.id === "mission-travel-to-pup",

@@ -31,7 +31,7 @@ function MapSession({ isInteractive }: { isInteractive: boolean }) {
   return (
     <>
       <p>Map {isInteractive ? "active" : "paused"}</p>
-      <div data-experimental-map-navigation>
+      <div className="experimental-nav-map-controls">
         <button type="button">Sector</button>
       </div>
     </>

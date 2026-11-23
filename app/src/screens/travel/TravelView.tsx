@@ -5,9 +5,12 @@ import {
   Eye,
   EyeOff,
   GitMerge,
+  Globe,
   HousePlus,
   Locate,
+  Map as MapIcon,
   MapPinned,
+  MapPinSearch,
   Maximize2,
   Search,
   Swords,
@@ -17,7 +20,8 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
-import { Fragment, useMemo, useRef } from "react";
+import { Fragment, useContext, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -68,6 +72,7 @@ import { nonCombatConsume } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
 import { hasRequiredRank } from "@/libs/rank";
 import { calcGlobalTravelTime } from "@/libs/travel";
+import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import { getReadableVillageHexColor } from "@/utils/color";
 
 /** Render travel maps, controls and dialogs from a single session. */
@@ -78,6 +83,7 @@ export function TravelView({
   isInteractive = true,
   headerItems = [],
 }: TravelViewProps) {
+  const navigation = useContext(TravelNavigationContext);
   const {
     showActive,
     setShowActive,
@@ -703,6 +709,32 @@ export function TravelView({
 
   return (
     <>
+      {immersive &&
+        navigation?.controls &&
+        createPortal(
+          <div className="w-full" inert={!isInteractive}>
+            <TravelMapControls>{mapControls}</TravelMapControls>
+          </div>,
+          navigation.controls,
+        )}
+      {immersive &&
+        navigation?.view &&
+        createPortal(
+          <button
+            type="button"
+            className="experimental-nav-control"
+            aria-label={isGlobal ? "Show sector map" : "Show global map"}
+            title={isGlobal ? "Show sector map" : "Show global map"}
+            disabled={!isInteractive || (isGlobal && (isTraveling || !sectorLink))}
+            onClick={() => {
+              setActiveTab(isGlobal ? sectorLink : globalLink);
+              if (isGlobal) setCameraFocusRevision((previous) => previous + 1);
+            }}
+          >
+            {isGlobal ? <MapIcon aria-hidden /> : <Globe aria-hidden />}
+          </button>,
+          navigation.view,
+        )}
       <HuntingArrival
         blocked={
           !isInteractive ||
@@ -764,26 +796,7 @@ export function TravelView({
         collapsedActionsIconOnly
         headerStartContent={immersive ? undefined : mapTabs}
         topRightContent={immersive ? undefined : mapControls}
-        topRightItems={
-          immersive
-            ? [
-                ...headerItems,
-                {
-                  key: "map-navigation",
-                  node: (
-                    <div
-                      data-experimental-map-navigation
-                      className="flex min-w-0 items-center gap-1"
-                    >
-                      {mapTabs}
-                      <TravelMapControls>{mapControls}</TravelMapControls>
-                    </div>
-                  ),
-                  priority: 0,
-                },
-              ]
-            : undefined
-        }
+        topRightItems={immersive ? headerItems : undefined}
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
         <div
@@ -979,18 +992,20 @@ export function TravelView({
   );
 }
 
-/** Keep the shared map-controls disclosure inside the immersive navigation row. */
+/** Anchor the retained travel controls above the bottom navigation. */
 function TravelMapControls({ children }: { children: ReactNode }) {
   const headerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLDivElement>(null);
   return (
-    <div ref={headerRef}>
+    <div ref={headerRef} className="w-full">
       <ContentBoxHeaderActions
         headerRef={headerRef}
         titleRef={titleRef}
         label="Travel"
         collapsedLabel="Map controls"
         iconOnly
+        align="start"
+        collapsedIcon={<MapPinSearch className="size-6" aria-hidden />}
       >
         {children}
       </ContentBoxHeaderActions>

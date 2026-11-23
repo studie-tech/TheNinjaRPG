@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as navigation from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Confirm from "@/layout/Confirm";
 import ContentBox, * as contentBox from "@/layout/ContentBox";
 import {
+  ContentBoxHeaderActions,
   type HeaderActionItem,
   layoutHeaderMenu,
   REVEAL_CONTENT_BOX_CONTROLS,
@@ -178,6 +179,38 @@ it("uses available viewport height for menus and flips upward when that offers m
   } finally {
     document.documentElement.style.removeProperty("--game-bottom-nav-h");
   }
+});
+
+it("opens a left-edge footer menu upward with the available screen width", () => {
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+    () => new window.DOMRect(0, window.innerHeight - 60, 40, 44),
+  );
+  function FooterMenu() {
+    const headerRef = useRef<HTMLDivElement>(null);
+    const titleRef = useRef<HTMLDivElement>(null);
+    return (
+      <div ref={headerRef}>
+        <ContentBoxHeaderActions
+          headerRef={headerRef}
+          titleRef={titleRef}
+          label="Travel"
+          collapsedLabel="Map controls"
+          align="start"
+          iconOnly
+        >
+          <button type="button">Quick Travel</button>
+        </ContentBoxHeaderActions>
+      </div>
+    );
+  }
+  const view = render(<FooterMenu />);
+  fireEvent.click(view.getByRole("button", { name: "Map controls" }));
+  const panel = view.getByRole("region", { name: "Map controls" });
+  expect(panel.style.left).toBe("16px");
+  expect(panel.style.right).toBe("");
+  expect(Number.parseFloat(panel.style.maxWidth)).toBe(window.innerWidth - 32);
+  expect(panel.className).toContain("bottom-full");
+  expect(panel.style.maxHeight).toBe(`${window.innerHeight - 80}px`);
 });
 
 it("keeps named action menus collapsed at every width and reveals guided targets", () => {
