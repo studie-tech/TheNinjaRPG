@@ -302,6 +302,11 @@ html[data-game-layout="experimental"] {
 .player-status-identity {
   min-width: 0;
 }
+@media (max-width: 767px) {
+  .player-status-identity {
+    padding-inline-start: 2px;
+  }
+}
 .player-status-name {
   display: block;
   overflow: hidden;
