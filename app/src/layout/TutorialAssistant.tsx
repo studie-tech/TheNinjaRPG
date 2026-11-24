@@ -64,6 +64,7 @@ import {
   activityDockPlaceAtom,
   type DockPlace,
   getDockPlace,
+  isNearDockPlace,
   isSameDockPlace,
 } from "@/layout/tutorial/dockPlacement";
 import {
@@ -87,6 +88,7 @@ import {
   trackLayout,
 } from "@/layout/tutorial/Spotlight";
 import { VillageChooser } from "@/layout/VillageChooser";
+import { getContentHeight, getRestedRect } from "@/libs/dockMotion";
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import {
   canRetryQuestBattle,
@@ -161,6 +163,10 @@ const FLOAT_MIN_HEIGHT_PX = 480;
 const PLACE_PATIENCE_PX = { arriving: 24, page: 140, scene: 280 };
 /** Measurements in a row without a place before the lesson stands at the foot instead. */
 const MAX_PLACE_MISSES = 4;
+/** How long a new lesson's words take to fade in. */
+const LESSON_FADE_MS = 320;
+/** How long a place has to be the best one before the lesson sets out for it. */
+const SET_OUT_MS = 140;
 /** How long the lesson keeps its place while nothing is pointed at. */
 const PLACE_RELEASE_MS = 700;
 /** Space kept between the battlefield's highlight ring and the narrowed dock. */
@@ -1778,6 +1784,19 @@ const AssistantDialog: React.FC<{
     scene.includes(lemuImage),
   );
   const hasPendingFooter = !!pendingFooter;
+  // A new lesson's words fade in while the dock moves to what they are about.
+  const shownStepRef = React.useRef(stepId);
+  React.useLayoutEffect(() => {
+    if (shownStepRef.current === stepId) return;
+    shownStepRef.current = stepId;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    sectionRef.current
+      ?.querySelector("[data-coach-body]")
+      ?.animate?.([{ opacity: 0 }, { opacity: 1 }], {
+        duration: LESSON_FADE_MS,
+        easing: "ease-in-out",
+      });
+  }, [stepId]);
   // The dock is fixed over the foot of the page; while a lesson is open the game
   // layouts pad their content by the height it may grow to, so whatever it covers can be
   // scrolled clear of it.
@@ -1788,7 +1807,7 @@ const AssistantDialog: React.FC<{
     const reserve = () =>
       root.style.setProperty(
         "--activity-dock-space",
-        `${dock.offsetHeight + getPendingFooterHeight(dock)}px`,
+        `${getContentHeight(dock) + getPendingFooterHeight(dock)}px`,
       );
     reserve();
     const observer = new ResizeObserver(reserve);
@@ -2093,20 +2112,52 @@ const useHighlightPlacement = <Step extends { id: string }>({
   // The place outlives the lesson tab, so a lesson reopened is still where it stood.
   const placeRef = React.useRef<DockPlace | null>(dockPlace);
   const releaseRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  const setOutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  const nextPlaceRef = React.useRef<DockPlace | null>(null);
   /** Stands the dock at a place, or sends it back to its resting place. */
   const standAt = (place: DockPlace | null) => {
     clearTimeout(releaseRef.current);
+    clearTimeout(setOutRef.current);
     releaseRef.current = undefined;
+    setOutRef.current = undefined;
+    nextPlaceRef.current = null;
     if (isSameDockPlace(placeRef.current, place)) return;
     placeRef.current = place;
     setDockPlace(place);
   };
   /** Sends the dock back once nothing has been pointed at for a moment, as between pages. */
   const releasePlace = () => {
+    clearTimeout(setOutRef.current);
+    nextPlaceRef.current = null;
     if (!placeRef.current || releaseRef.current !== undefined) return;
     releaseRef.current = setTimeout(() => standAt(null), PLACE_RELEASE_MS);
   };
-  useEffect(() => () => clearTimeout(releaseRef.current), []);
+  /**
+   * Sends the dock to a place once it has been the best one for a moment, so a page still
+   * laying out does not send it back and forth.
+   */
+  const setOutFor = (place: DockPlace) => {
+    if (isSameDockPlace(placeRef.current, place)) return standAt(place);
+    clearTimeout(releaseRef.current);
+    releaseRef.current = undefined;
+    if (nextPlaceRef.current && isNearDockPlace(nextPlaceRef.current, place)) {
+      nextPlaceRef.current = place;
+      return;
+    }
+    clearTimeout(setOutRef.current);
+    nextPlaceRef.current = place;
+    setOutRef.current = setTimeout(
+      () => nextPlaceRef.current && standAt(nextPlaceRef.current),
+      SET_OUT_MS,
+    );
+  };
+  useEffect(
+    () => () => {
+      clearTimeout(releaseRef.current);
+      clearTimeout(setOutRef.current);
+    },
+    [],
+  );
   const [highlight, setHighlight] = useState<{
     stepId: string;
     elementId: string;
@@ -2204,7 +2255,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
           mark.getBoundingClientRect(),
         ),
       ),
-      height: dock.offsetHeight + getPendingFooterHeight(dock),
+      height: getContentHeight(dock) + getPendingFooterHeight(dock),
       viewport: {
         width: document.documentElement.clientWidth || window.innerWidth,
         height: window.innerHeight,
@@ -2239,7 +2290,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
     const place = findPlace(dock, rect, lit, patience);
     if (place) {
       placement.misses = 0;
-      standAt(place);
+      setOutFor(place);
       return;
     }
     placement.misses += 1;
@@ -2758,7 +2809,7 @@ const getAssistantPanelRect = (): DOMRect | null => {
       null
     );
   }
-  const rect = dock.getBoundingClientRect();
+  const rect = getRestedRect(dock);
   const isAtFoot = !dock.querySelector("[data-dodge-highlight]");
   const growth = isAtFoot ? getPendingFooterHeight(dock) : 0;
   return growth === 0
@@ -2779,10 +2830,8 @@ const fitActivityDockBesideField = () => {
   const field = document
     .getElementById("tutorial-combat-field")
     ?.getBoundingClientRect();
-  const dock = document
-    .getElementById(TUTORIAL_ASSISTANT_PANEL_ID)
-    ?.closest("[data-activity-dock]")
-    ?.getBoundingClientRect();
+  const dockElement = getActivityDock();
+  const dock = dockElement && getRestedRect(dockElement);
   if (!field || !dock || !isUsableHighlightRect(field) || !isUsableHighlightRect(dock))
     return false;
   const room = dock.right - field.right - ACTIVITY_DOCK_FIELD_GAP_PX;

@@ -1,3 +1,5 @@
+import { getRestedRect } from "@/libs/dockMotion";
+
 /**
  * Height of a travel map. A phone's map, and any loadout row under it, reaches down to the
  * first thing covering the foot of the screen: the fixed activity dock when it overlaps the
@@ -17,9 +19,9 @@ export const travelViewportHeight = (
   const pageTop = rect.top + window.scrollY;
   const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
   const isPhone = !window.matchMedia(WIDE_LAYOUT_QUERY).matches;
-  const dock = document
-    .querySelector<HTMLElement>(ACTIVITY_DOCK_SELECTOR)
-    ?.getBoundingClientRect();
+  const dockElement = document.querySelector<HTMLElement>(ACTIVITY_DOCK_SELECTOR);
+  // One on its way somewhere is where it is going.
+  const dock = dockElement && getRestedRect(dockElement);
   // A lesson's dock may grow up to the space it reserves, which must not resize the map.
   const reserved = Number.parseFloat(
     document.documentElement.style.getPropertyValue(DOCK_SPACE_PROPERTY),
@@ -92,7 +94,10 @@ export const watchTravelViewport = (refit: () => void) => {
   )
     return () => {};
   let dock: Element | null = null;
-  const dockObserver = new ResizeObserver(refit);
+  // A lesson placed beside its subject grows and shrinks clear of the map.
+  const dockObserver = new ResizeObserver(() => {
+    if (!dock?.hasAttribute("data-dock-placed")) refit();
+  });
   const followDock = () => {
     const next = document.querySelector(ACTIVITY_DOCK_SELECTOR);
     if (next === dock) return;

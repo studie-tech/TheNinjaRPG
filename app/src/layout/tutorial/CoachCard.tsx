@@ -87,7 +87,7 @@ export const CoachCard = ({
     >
       {portrait}
       {/* Above the portrait, whose hand reaches under the lesson text. */}
-      <div className="relative z-[1] min-w-0 flex-1">
+      <div data-coach-body="" className="relative z-[1] min-w-0 flex-1">
         <header className="flex items-start gap-2 px-4 pt-3 md:px-5 @max-[34rem]/dock:pt-2">
           <div className="min-w-0 flex-1">
             {eyebrow && (

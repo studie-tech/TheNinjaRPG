@@ -17,7 +17,6 @@ import {
   type RefObject,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -35,7 +34,8 @@ import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import { LogbookEntry } from "@/layout/Logbook";
 import { DockHighlight } from "@/layout/tutorial/DockHighlight";
-import { activityDockPlaceAtom, type DockPlace } from "@/layout/tutorial/dockPlacement";
+import { DockMotion } from "@/layout/tutorial/DockMotion";
+import { activityDockPlaceAtom } from "@/layout/tutorial/dockPlacement";
 import {
   isSameBox,
   Spotlight,
@@ -294,7 +294,12 @@ export function ActivityDock({
             Math.min(lessonPlace.top, window.innerHeight - QUESTS_MIN_HEIGHT_PX),
           ),
         };
-  useDockGlide(dockRef, place);
+  // A fitted width, or the place's own.
+  const dockWidth = place
+    ? `${place.width}px`
+    : fit.width === null
+      ? undefined
+      : `min(var(--activity-dock-width, 420px), ${fit.width}px)`;
   // During a lesson the Quests tab takes the lesson's height on a phone, so switching
   // tabs leaves the bottom-anchored dock's tab bar where it was.
   const lessonPanelRef = useRef<HTMLDivElement>(null);
@@ -348,6 +353,16 @@ export function ActivityDock({
             : ({ "--activity-dock-edge": `${fit.edge}px` } as CSSProperties)
       }
     >
+      <DockMotion
+        dockRef={dockRef}
+        place={
+          place
+            ? `${place.left},${place.top},${place.width}`
+            : `rest:${swapSides}:${fit.edge}:${fit.width}`
+        }
+        isOpen={open}
+        isPlaced={!!place}
+      />
       {open ? (
         // A tutorial fight narrows the dock to the space beside the battlefield, where
         // its tabs keep only their icons.
@@ -359,13 +374,9 @@ export function ActivityDock({
             "border-primary/60 bg-card text-card-foreground @container/dock pointer-events-auto relative w-[var(--activity-dock-width,420px)] max-w-[calc(100vw-2rem)] rounded-xl border-2 shadow-xl",
             isPulsing && ATTENTION_PULSE,
           )}
-          style={
-            place
-              ? { width: place.width }
-              : fit.width === null
-                ? undefined
-                : { width: `min(var(--activity-dock-width, 420px), ${fit.width}px)` }
-          }
+          style={dockWidth ? { width: dockWidth } : undefined}
+          data-dock-panel=""
+          data-dock-width={dockWidth}
         >
           <header className="bg-card relative z-10 flex items-center gap-1 rounded-t-[calc(var(--radius)-2px)] border-b px-2 py-1.5">
             <TabsList
@@ -506,42 +517,8 @@ export function ActivityDock({
   );
 }
 
-/**
- * Glides the dock to a new place beside its subject, so the eye can follow it there. Back at
- * its resting place, where the page is placed around it, it stands at once.
- */
-const useDockGlide = (
-  dockRef: RefObject<HTMLElement | null>,
-  place: DockPlace | null,
-) => {
-  const placeKey = place && `${place.left},${place.top}`;
-  const lastBox = useRef<DOMRect | null>(null);
-  const glide = useRef<Animation | null>(null);
-  useLayoutEffect(() => {
-    const dock = dockRef.current;
-    if (!dock) return;
-    glide.current?.cancel();
-    glide.current = null;
-    const box = dock.getBoundingClientRect();
-    const from = lastBox.current;
-    lastBox.current = box;
-    if (!placeKey || !from || typeof dock.animate !== "function") return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    glide.current = dock.animate(
-      [
-        { transform: `translate(${from.left - box.left}px, ${from.top - box.top}px)` },
-        { transform: "translate(0, 0)" },
-      ],
-      { duration: GLIDE_MS, easing: "ease-out", composite: "add" },
-    );
-  }, [dockRef, placeKey]);
-};
-
 /** Room the Quests tab keeps under its top where the lesson stood near the screen's foot. */
 const QUESTS_MIN_HEIGHT_PX = 380;
-
-/** How long the dock takes to glide to its subject. */
-const GLIDE_MS = 250;
 
 /** Below Tailwind's md breakpoint the dock would cover most of the page when open. */
 const PHONE_QUERY = "(max-width: 767px)";

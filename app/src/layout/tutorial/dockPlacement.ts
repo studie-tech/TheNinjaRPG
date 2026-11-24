@@ -146,6 +146,10 @@ export const getDockPlace = ({
 export const isSameDockPlace = (a: DockPlace | null, b: DockPlace | null) =>
   a && b ? a.left === b.left && a.top === b.top && a.width === b.width : a === b;
 
+/** Whether two places are too close to tell apart on the way to them. */
+export const isNearDockPlace = (a: DockPlace, b: DockPlace) =>
+  Math.hypot(a.left - b.left, a.top - b.top) < NEAR_PLACE_PX && a.width === b.width;
+
 /** The room the bouncing hand takes under a control, or over one at the screen's foot. */
 const getPointerReach = (
   target: SpotlightBox,
@@ -218,6 +222,8 @@ const RING_REACH_PX = 10;
 const MAX_LIT_OVERLAP_PX = 64;
 /** Room the bouncing hand takes beside a control (see `SpotlightPointer`). */
 const POINTER_REACH_PX = 76;
+/** Distance below which two places count as one. */
+const NEAR_PLACE_PX = 24;
 /** Distance between compared places. */
 const PLACE_STEP_PX = 12;
 
