@@ -20,13 +20,20 @@ export const travelViewportHeight = (
   const dock = document
     .querySelector<HTMLElement>(ACTIVITY_DOCK_SELECTOR)
     ?.getBoundingClientRect();
+  // A lesson's dock may grow up to the space it reserves, which must not resize the map.
+  const reserved = Number.parseFloat(
+    document.documentElement.style.getPropertyValue(DOCK_SPACE_PROPERTY),
+  );
+  const coveredTop = dock
+    ? dock.bottom - Math.max(dock.height, Number.isFinite(reserved) ? reserved : 0)
+    : 0;
   const dockTop =
     dock &&
     dock.height > 0 &&
     dock.left < rect.right &&
     dock.right > rect.left &&
-    dock.top > pageTop + minimum
-      ? dock.top
+    coveredTop > pageTop + minimum
+      ? coveredTop
       : null;
   return fillHeight({
     pageTop,
@@ -111,6 +118,8 @@ export const watchTravelViewport = (refit: () => void) => {
 };
 
 const ACTIVITY_DOCK_SELECTOR = "[data-activity-dock]";
+/** The space an open lesson reserves at the foot of the page, on the root element. */
+const DOCK_SPACE_PROPERTY = "--activity-dock-space";
 /** Tailwind's `md`: media queries resolve rem against 16px, so this is 768px. */
 const WIDE_LAYOUT_QUERY = "(min-width: 48rem)";
 /** The phone layouts' bottom padding (`pb-[calc(7rem+…)]`) clears the fixed navigation bar. */

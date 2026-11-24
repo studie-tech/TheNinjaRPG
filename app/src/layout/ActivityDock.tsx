@@ -17,6 +17,7 @@ import {
   type RefObject,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -26,7 +27,7 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import {
   characterStorageKey,
   useActivityDock,
-  useActivityDockFitWidth,
+  useActivityDockFit,
   useUntaughtModalOpen,
 } from "@/hooks/useActivityDock";
 import { storyDockPulseAtom, useStoryGuidance } from "@/hooks/useStoryGuidance";
@@ -34,6 +35,7 @@ import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import { LogbookEntry } from "@/layout/Logbook";
 import { DockHighlight } from "@/layout/tutorial/DockHighlight";
+import { activityDockPlaceAtom, type DockPlace } from "@/layout/tutorial/dockPlacement";
 import {
   isSameBox,
   Spotlight,
@@ -227,7 +229,28 @@ export function ActivityDock({
     lessonStep?.elementIds,
   );
   const isQuestsTabMarked = leadsToQuests && lessonShown && !isUnderModal;
-  const fitWidth = useActivityDockFitWidth(dockRef, open, swapSides);
+  const fit = useActivityDockFit(
+    dockRef,
+    open,
+    swapSides,
+    isTutorialRunning && !guided,
+  );
+  // A lesson about a control stands beside it, and the Quests tab where the lesson stood.
+  const [lessonPlace, setLessonPlace] = useAtom(activityDockPlaceAtom);
+  useEffect(() => () => setLessonPlace(null), [setLessonPlace]);
+  const isPlaced = open && isTutorialRunning && !guided;
+  const place = !isPlaced
+    ? null
+    : lessonShown
+      ? lessonPlace
+      : lessonPlace && {
+          ...lessonPlace,
+          top: Math.max(
+            0,
+            Math.min(lessonPlace.top, window.innerHeight - QUESTS_MIN_HEIGHT_PX),
+          ),
+        };
+  useDockGlide(dockRef, place);
   // During a lesson the Quests tab takes the lesson's height on a phone, so switching
   // tabs leaves the bottom-anchored dock's tab bar where it was.
   const lessonPanelRef = useRef<HTMLDivElement>(null);
@@ -256,12 +279,29 @@ export function ActivityDock({
       className={cn(
         // The lesson's scroll height leaves room for the portrait above the dock. A dock
         // dodging a highlight rises to just below the top bar, and its portrait steps aside.
-        "pointer-events-none fixed bottom-24 z-40 max-w-[calc(100vw-2rem)] has-[[data-dodge-highlight=true]]:top-[var(--activity-dock-dodge-top,5rem)] has-[[data-dodge-highlight=true]]:bottom-auto md:bottom-5",
+        "pointer-events-none fixed z-40 max-w-[calc(100vw-2rem)]",
         isLessonRaised && !isUnderModal && "z-[61]",
-        swapSides ? "right-4 md:right-5" : "left-4 md:left-5",
+        place
+          ? "top-0 left-0"
+          : "bottom-24 has-[[data-dodge-highlight=true]]:top-[var(--activity-dock-dodge-top,5rem)] has-[[data-dodge-highlight=true]]:bottom-auto md:bottom-[var(--activity-dock-bottom,1.25rem)]",
+        !place &&
+          (swapSides
+            ? "right-4 md:right-[var(--activity-dock-edge,1.25rem)]"
+            : "left-4 md:left-[var(--activity-dock-edge,1.25rem)]"),
         // A dock over a dialog moves to the side where it covers none of its controls.
-        "has-[[data-dodge-side=left]]:right-auto has-[[data-dodge-side=left]]:left-4 has-[[data-dodge-side=right]]:right-4 has-[[data-dodge-side=right]]:left-auto md:has-[[data-dodge-side=left]]:left-5 md:has-[[data-dodge-side=right]]:right-5",
+        !place &&
+          "has-[[data-dodge-side=left]]:right-auto has-[[data-dodge-side=left]]:left-4 has-[[data-dodge-side=right]]:right-4 has-[[data-dodge-side=right]]:left-auto md:has-[[data-dodge-side=left]]:left-5 md:has-[[data-dodge-side=right]]:right-5",
       )}
+      style={
+        place
+          ? ({
+              transform: `translate(${place.left}px, ${place.top}px)`,
+              "--activity-dock-top": `${place.top}px`,
+            } as CSSProperties)
+          : fit.edge === null || !open
+            ? undefined
+            : ({ "--activity-dock-edge": `${fit.edge}px` } as CSSProperties)
+      }
     >
       {open ? (
         // A tutorial fight narrows the dock to the space beside the battlefield, where
@@ -275,9 +315,11 @@ export function ActivityDock({
             isPulsing && ATTENTION_PULSE,
           )}
           style={
-            fitWidth === null
-              ? undefined
-              : { width: `min(var(--activity-dock-width, 420px), ${fitWidth}px)` }
+            place
+              ? { width: place.width }
+              : fit.width === null
+                ? undefined
+                : { width: `min(var(--activity-dock-width, 420px), ${fit.width}px)` }
           }
         >
           <header className="bg-card relative z-10 flex items-center gap-1 rounded-t-[calc(var(--radius)-2px)] border-b px-2 py-1.5">
@@ -310,7 +352,7 @@ export function ActivityDock({
                 </DockHighlight>
               ))}
             </TabsList>
-            {!isSideFixed && (
+            {!isSideFixed && !place && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -344,7 +386,7 @@ export function ActivityDock({
               ref={questsPanelRef}
               value="quests"
               className={cn(
-                "mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain rounded-b-xl",
+                "mt-0 max-h-[min(55dvh,520px,calc(100dvh-var(--activity-dock-top,0px)-5rem))] overflow-y-auto overscroll-contain rounded-b-xl",
                 // A narrow dock reads like its lesson: body text 13.5px, labels 10.5px.
                 "@max-[34rem]/dock:[&_.text-sm]:text-lg @max-[34rem]/dock:[&_.text-xs]:text-sm",
                 // A short lesson still leaves the list room to read.
@@ -416,6 +458,43 @@ export function ActivityDock({
     </aside>
   );
 }
+
+/**
+ * Glides the dock to a new place beside its subject, so the eye can follow it there. Back at
+ * its resting place, where the page is placed around it, it stands at once.
+ */
+const useDockGlide = (
+  dockRef: RefObject<HTMLElement | null>,
+  place: DockPlace | null,
+) => {
+  const placeKey = place && `${place.left},${place.top}`;
+  const lastBox = useRef<DOMRect | null>(null);
+  const glide = useRef<Animation | null>(null);
+  useLayoutEffect(() => {
+    const dock = dockRef.current;
+    if (!dock) return;
+    glide.current?.cancel();
+    glide.current = null;
+    const box = dock.getBoundingClientRect();
+    const from = lastBox.current;
+    lastBox.current = box;
+    if (!placeKey || !from || typeof dock.animate !== "function") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    glide.current = dock.animate(
+      [
+        { transform: `translate(${from.left - box.left}px, ${from.top - box.top}px)` },
+        { transform: "translate(0, 0)" },
+      ],
+      { duration: GLIDE_MS, easing: "ease-out", composite: "add" },
+    );
+  }, [dockRef, placeKey]);
+};
+
+/** Room the Quests tab keeps under its top where the lesson stood near the screen's foot. */
+const QUESTS_MIN_HEIGHT_PX = 380;
+
+/** How long the dock takes to glide to its subject. */
+const GLIDE_MS = 250;
 
 /** Below Tailwind's md breakpoint the dock would cover most of the page when open. */
 const PHONE_QUERY = "(max-width: 767px)";

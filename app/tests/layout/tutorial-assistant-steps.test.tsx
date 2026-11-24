@@ -693,24 +693,65 @@ describe("highlight placement", () => {
     }
   });
 
-  it("moves the lesson aside when scrolling cannot uncover the target", async () => {
+  it("moves the lesson aside on a phone when scrolling cannot uncover the target", async () => {
+    const width = window.innerWidth;
+    window.innerWidth = 600;
+    try {
+      const view = show(
+        index,
+        {},
+        "/village",
+        <Target id={target()} box={new DOMRect(40, 600, 160, 48)} />,
+      );
+      const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+      dock.getBoundingClientRect = () => new DOMRect(0, 500, 420, 300);
+      await waitFor(
+        () =>
+          expect(
+            lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute(
+              "data-dodge-highlight",
+            ),
+          ).toBe("true"),
+        { timeout: 3000 },
+      );
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
+  it("stands beside its target on a wide screen and returns once nothing is marked", async () => {
+    const middle = (80 + window.innerHeight) / 2;
     const view = show(
       index,
       {},
       "/village",
-      <Target id={target()} box={new DOMRect(40, 600, 160, 48)} />,
+      <Target id={target()} box={new DOMRect(40, middle - 24, 160, 48)} />,
     );
     const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
-    dock.getBoundingClientRect = () => new DOMRect(0, 500, 420, 300);
-    await waitFor(
-      () =>
-        expect(
-          lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute(
-            "data-dodge-highlight",
-          ),
-        ).toBe("true"),
-      { timeout: 3000 },
+    await waitFor(() => expect(dock.style.transform).toStartWith("translate(214px"));
+    document.getElementById(target())!.style.display = "none";
+    await waitFor(() => expect(dock.style.transform).toBe(""), { timeout: 3000 });
+  });
+
+  it("keeps its resting place while what is lit fills the screen", async () => {
+    const view = show(
+      index,
+      {},
+      "/village",
+      <div
+        data-spotlight-scene=""
+        ref={(element) => {
+          if (element)
+            element.getBoundingClientRect = () =>
+              new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+        }}
+      >
+        <Target id={target()} box={new DOMRect(40, 300, 160, 48)} />
+      </div>,
     );
+    const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+    await new Promise((done) => setTimeout(done, 1500));
+    expect(dock.style.transform).toBe("");
   });
 });
 
@@ -1648,7 +1689,7 @@ describe("quest steps", () => {
     };
   };
 
-  it("floats the dock above a waiting shortcut, so the shortcut arrives without moving its tabs", () => {
+  it("keeps the dock at the foot while a shortcut waits, with its room reserved", () => {
     vi.useFakeTimers();
     const height = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
@@ -1666,22 +1707,25 @@ describe("quest steps", () => {
       );
       const view = show(index, { sector: 301, level: 3 });
       const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+      const space = () =>
+        document.documentElement.style.getPropertyValue("--activity-dock-space");
       const preview = dock.querySelector<HTMLElement>("[data-tutorial-pending-footer]");
       expect(preview?.textContent).toContain("Take me there");
       expect(preview?.closest("[aria-hidden]")).toBeTruthy();
       expect(view.queryByRole("button", { name: "Take me there" })).toBeNull();
-      expect(dock.style.translate).toBe("0px -48px");
+      expect(dock.style.translate).toBe("");
+      expect(space()).toBe("48px");
       act(() => vi.advanceTimersByTime(idleWaitMs(index)));
       expect(view.getByRole("button", { name: "Take me there" })).toBeTruthy();
       // The skip a stuck player is offered waits in the same way.
       const skip = dock.querySelector<HTMLElement>("[data-tutorial-pending-footer]");
       expect(skip?.textContent).toContain("Skip this step");
       expect(skip?.textContent).not.toContain("Take me there");
-      expect(dock.style.translate).toBe("0px -48px");
+      expect(space()).toBe("48px");
       act(() => vi.advanceTimersByTime(60_000));
       expect(view.getByRole("button", { name: "Skip this step" })).toBeTruthy();
       expect(dock.querySelector("[data-tutorial-pending-footer]")).toBeNull();
-      expect(dock.style.translate).toBe("");
+      expect(space()).toBe("0px");
     } finally {
       if (height) Object.defineProperty(HTMLElement.prototype, "offsetHeight", height);
       vi.useRealTimers();

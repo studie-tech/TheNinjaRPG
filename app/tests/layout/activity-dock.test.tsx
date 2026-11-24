@@ -5,6 +5,7 @@ import * as storyGuidanceHook from "@/hooks/useStoryGuidance";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { ActivityDockButton } from "@/layout/ActivityDockButton";
 import * as logbook from "@/layout/Logbook";
+import { activityDockPlaceAtom } from "@/layout/tutorial/dockPlacement";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { getQuestsTabLesson } from "@/libs/questsTabLesson";
 import * as storyGuidance from "@/libs/storyGuidance";
@@ -545,6 +546,7 @@ it("fits the open dock to the gutter beside the centre column on a wide screen",
         : { left: 15, right: 435, width: 420 }
     ) as DOMRect;
   });
+  document.documentElement.style.fontSize = "12px";
   try {
     const view = render(<ActivityDock>Lesson</ActivityDock>);
     const panel = view.container.querySelector<HTMLElement>(
@@ -552,9 +554,42 @@ it("fits the open dock to the gutter beside the centre column on a wide screen",
     );
     expect(panel?.style.width).toBe("min(var(--activity-dock-width, 420px), 335px)");
   } finally {
+    document.documentElement.style.fontSize = "";
     window.matchMedia = matchMedia;
     column.remove();
   }
+});
+
+it("stands where the lesson is placed, on both tabs, until the player collapses it", () => {
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+  expect(dock.style.transform).toBe("");
+  act(() =>
+    getDefaultStore().set(activityDockPlaceAtom, { left: 120, top: 200, width: 360 }),
+  );
+  expect(dock.style.transform).toBe("translate(120px, 200px)");
+  expect(dock.querySelector<HTMLElement>(":scope > div")?.style.width).toBe("360px");
+  // The sides it could swap have no bearing on a lesson beside its subject.
+  expect(view.queryByRole("button", { name: /Swap/ })).toBeNull();
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  expect(dock.style.transform).toBe("translate(120px, 200px)");
+  fireEvent.click(view.getByRole("button", { name: "Collapse Activity" }));
+  expect(dock.style.transform).toBe("");
+  view.unmount();
+  expect(getDefaultStore().get(activityDockPlaceAtom)).toBeNull();
+});
+
+it("leaves Activity at rest for a player past the tutorial", () => {
+  user.tutorialStep = TUTORIAL_STEPS.length;
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  act(() =>
+    getDefaultStore().set(activityDockPlaceAtom, { left: 120, top: 200, width: 360 }),
+  );
+  const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+  expect(dock.style.transform).toBe("");
 });
 
 it("returns from Quests to the lesson when the step moves on there", () => {

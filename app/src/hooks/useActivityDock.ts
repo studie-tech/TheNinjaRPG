@@ -27,35 +27,41 @@ export function useActivityDock() {
 
 /**
  * On a wide screen, the width that keeps the open dock beside the page's centre column
- * instead of over it, or null to keep the dock's own width. The dock never narrows below
- * a readable lesson column for it, so a screen with too little gutter is only overlapped
- * less.
+ * instead of over it and, with `nearColumn`, the space from the screen's edge that stands it
+ * next to the column; null for either keeps the dock's own. The dock never narrows below a
+ * readable lesson column for it, so a screen with too little gutter is only overlapped less.
  */
-export function useActivityDockFitWidth(
+export function useActivityDockFit(
   dockRef: RefObject<HTMLElement | null>,
   enabled: boolean,
   swapSides: boolean,
+  nearColumn: boolean,
 ) {
-  const [fitWidth, setFitWidth] = useState<number | null>(null);
+  const [fit, setFit] = useState<{ width: number | null; edge: number | null }>(NO_FIT);
   useEffect(() => {
     const dock = dockRef.current;
     if (!enabled || !dock || typeof window.matchMedia !== "function") {
-      setFitWidth(null);
+      setFit(NO_FIT);
       return;
     }
     const wide = window.matchMedia(WIDE_SCREEN_QUERY);
     const column = getCentreColumn();
     const measure = () => {
       if (!wide.matches || !column) {
-        setFitWidth(null);
+        setFit(NO_FIT);
         return;
       }
-      const dockBox = dock.getBoundingClientRect();
       const columnBox = column.getBoundingClientRect();
-      const room = swapSides
-        ? dockBox.right - columnBox.right - DOCK_COLUMN_GAP_PX
-        : columnBox.left - dockBox.left - DOCK_COLUMN_GAP_PX;
-      setFitWidth(Math.floor(Math.max(DOCK_MIN_FIT_WIDTH_PX, room)));
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+      const gutter =
+        (swapSides ? viewportWidth - columnBox.right : columnBox.left) -
+        DOCK_COLUMN_GAP_PX;
+      const edge =
+        DOCK_EDGE_REM *
+        (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 12);
+      const width = Math.floor(Math.max(DOCK_MIN_FIT_WIDTH_PX, gutter - edge));
+      const inset = Math.floor(gutter - ACTIVITY_DOCK_WIDTH_PX);
+      setFit({ width, edge: nearColumn && inset > edge ? inset : null });
     };
     measure();
     window.addEventListener("resize", measure);
@@ -70,8 +76,8 @@ export function useActivityDockFitWidth(
       wide.removeEventListener("change", measure);
       observer?.disconnect();
     };
-  }, [dockRef, enabled, swapSides]);
-  return fitWidth;
+  }, [dockRef, enabled, swapSides, nearColumn]);
+  return fit;
 }
 
 /**
@@ -145,11 +151,17 @@ export const resetCharacterPresentation = (userId: string) => {
 const WIDE_SCREEN_QUERY = "(min-width: 1280px)";
 /** Narrowest fitted dock, which still reads as a lesson column. */
 const DOCK_MIN_FIT_WIDTH_PX = 320;
+/** The dock's own width. */
+export const ACTIVITY_DOCK_WIDTH_PX = 420;
+/** The dock's space from the screen's edge (`md:left-5`). */
+const DOCK_EDGE_REM = 1.25;
+/** A dock that keeps its own width and place. */
+const NO_FIT = { width: null, edge: null };
 /** Space kept between a fitted dock and the centre column. */
 const DOCK_COLUMN_GAP_PX = 8;
 
 /** The page's centre column: the widest reading surface on screen. */
-const getCentreColumn = () => {
+export const getCentreColumn = () => {
   let widest: HTMLElement | null = null;
   let widestWidth = 0;
   for (const surface of document.querySelectorAll<HTMLElement>(

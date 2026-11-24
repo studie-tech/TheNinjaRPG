@@ -35,7 +35,12 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useRetryQuestBattle } from "@/hooks/quest";
 import { TUTORIAL_REMATCH_TITLE, useTutorialStep } from "@/hooks/tutorial";
-import { characterStorageKey } from "@/hooks/useActivityDock";
+import {
+  ACTIVITY_DOCK_WIDTH_PX,
+  characterStorageKey,
+  getCentreColumn,
+  useActivityDock,
+} from "@/hooks/useActivityDock";
 import { useStoryGuidance } from "@/hooks/useStoryGuidance";
 import {
   spokenStepAtom,
@@ -55,6 +60,12 @@ import {
 } from "@/layout/TutorialScreens";
 import { CoachCard } from "@/layout/tutorial/CoachCard";
 import { DockHighlight } from "@/layout/tutorial/DockHighlight";
+import {
+  activityDockPlaceAtom,
+  type DockPlace,
+  getDockPlace,
+  isSameDockPlace,
+} from "@/layout/tutorial/dockPlacement";
 import {
   type GuidedLessonMark,
   type GuidedLessonStep,
@@ -91,6 +102,7 @@ import { cn } from "@/libs/shadui";
 import { getChapterForQuest, getNavigationLevel } from "@/libs/storyGuidance";
 import {
   canPositionTutorialHighlight,
+  getHighlightScrollDirection,
   getTutorialCatchUpStepIndex,
   getTutorialChapterProgress,
   getTutorialRewindStepIndex,
@@ -130,8 +142,8 @@ const DODGE_TOP_PROPERTY = "--activity-dock-dodge-top";
 
 /** Width the Activity dock takes in a fight (`--activity-dock-width`), set on the root. */
 const ACTIVITY_DOCK_WIDTH_PROPERTY = "--activity-dock-width";
-/** The Activity dock's own width. */
-const ACTIVITY_DOCK_FULL_WIDTH_PX = 420;
+/** Space under the Activity dock in a fight, set on the root and read by `ActivityDock`. */
+const ACTIVITY_DOCK_BOTTOM_PROPERTY = "--activity-dock-bottom";
 /** Narrowest dock beside a fight whose lesson still reads in comfortable lines. */
 const ACTIVITY_DOCK_READABLE_WIDTH_PX = 240;
 /** Narrowest dock that still fits its tabs, for a screen too short for anything else. */
@@ -141,6 +153,16 @@ const ACTIVITY_DOCK_STRIP_WIDTH_PX = 760;
 const ACTIVITY_DOCK_STRIP_HEIGHT_PX = 190;
 /** The button that leaves a finished fight, after which its action tiles do nothing. */
 const COMBAT_RETURN_ID = "return";
+/** Screens on which the lesson stands beside its target. */
+const FLOAT_MIN_WIDTH_PX = 768;
+/** Lowest such screen, with room for a lesson and the page around it. */
+const FLOAT_MIN_HEIGHT_PX = 480;
+/** How much nearer its target a better place must be for the lesson to move there. */
+const PLACE_PATIENCE_PX = { arriving: 24, page: 140, scene: 280 };
+/** Measurements in a row without a place before the lesson stands at the foot instead. */
+const MAX_PLACE_MISSES = 4;
+/** How long the lesson keeps its place while nothing is pointed at. */
+const PLACE_RELEASE_MS = 700;
 /** Space kept between the battlefield's highlight ring and the narrowed dock. */
 const ACTIVITY_DOCK_FIELD_GAP_PX = 16;
 
@@ -565,6 +587,9 @@ const PlayerTutorialAssistant: React.FC<
         ),
       // In a fight the field and the action bar must stay in view together.
       revealOnly: pathname === "/combat",
+      // A fight's lesson keeps its place beside the field, where its actions change.
+      floats: pathname !== "/combat",
+      markSelectors: placedStep?.marks?.map((mark) => mark.selector),
       pathname,
     });
 
@@ -1702,9 +1727,8 @@ const AssistantDialog: React.FC<{
   /** Controls that answer the step, kept in view under the scrolling text. */
   footer?: React.ReactNode;
   /**
-   * Controls the footer will offer later. Until then they are measured unseen, and the
-   * dock floats their height above its anchor, so they arrive in that space and the
-   * dock's tabs stay where the player may be about to tap.
+   * Controls the footer will offer later. Until then they are measured unseen, so the page
+   * and what it points at already leave them room, and their arrival covers nothing.
    */
   pendingFooter?: React.ReactNode;
   onOpenDisableModal?: () => void;
@@ -1748,33 +1772,9 @@ const AssistantDialog: React.FC<{
   const isSpeakerInScene = useAtomValue(sceneCharactersAtom).some((scene) =>
     scene.includes(lemuImage),
   );
-  const pendingRef = React.useRef<HTMLDivElement>(null);
-  const liftRef = React.useRef(0);
-  const reserveRef = React.useRef<() => void>(undefined);
   const hasPendingFooter = !!pendingFooter;
-  // Declared before the reserve below, so that on unmount the reserve is cleared last.
-  React.useLayoutEffect(() => {
-    const dock = sectionRef.current?.closest<HTMLElement>("[data-activity-dock]");
-    const pending = pendingRef.current;
-    // A dock dodging a highlight hangs from the top, where growing moves no tab.
-    if (!dock || !pending || dodgeHighlight) return;
-    const lift = () => {
-      liftRef.current = pending.offsetHeight;
-      dock.style.translate = `0px -${liftRef.current}px`;
-      reserveRef.current?.();
-    };
-    lift();
-    const observer = new ResizeObserver(lift);
-    observer.observe(pending);
-    return () => {
-      observer.disconnect();
-      liftRef.current = 0;
-      dock.style.translate = "";
-      reserveRef.current?.();
-    };
-  }, [hasPendingFooter, dodgeHighlight]);
   // The dock is fixed over the foot of the page; while a lesson is open the game
-  // layouts pad their content by its height, so whatever it covers can be
+  // layouts pad their content by the height it may grow to, so whatever it covers can be
   // scrolled clear of it.
   React.useLayoutEffect(() => {
     const dock = sectionRef.current?.closest<HTMLElement>("[data-activity-dock]");
@@ -1783,18 +1783,18 @@ const AssistantDialog: React.FC<{
     const reserve = () =>
       root.style.setProperty(
         "--activity-dock-space",
-        `${dock.offsetHeight + liftRef.current}px`,
+        `${dock.offsetHeight + getPendingFooterHeight(dock)}px`,
       );
-    reserveRef.current = reserve;
     reserve();
     const observer = new ResizeObserver(reserve);
     observer.observe(dock);
+    const pending = dock.querySelector("[data-tutorial-pending-footer]");
+    if (pending) observer.observe(pending);
     return () => {
       observer.disconnect();
-      reserveRef.current = undefined;
       root.style.removeProperty("--activity-dock-space");
     };
-  }, []);
+  }, [hasPendingFooter]);
   return (
     <section
       ref={sectionRef}
@@ -1820,7 +1820,6 @@ const AssistantDialog: React.FC<{
               so the preview takes no room; the gap it brings is measured with it. */}
               <div aria-hidden className="relative -mt-3 @max-[34rem]/dock:-mt-2">
                 <div
-                  ref={pendingRef}
                   inert
                   data-tutorial-pending-footer=""
                   className="invisible absolute inset-x-0 top-0 space-y-3 pt-3 @max-[34rem]/dock:space-y-2 @max-[34rem]/dock:pt-2"
@@ -2065,6 +2064,8 @@ const useHighlightPlacement = <Step extends { id: string }>({
   enabled,
   find,
   revealOnly,
+  floats = false,
+  markSelectors,
   pathname,
 }: {
   step: Step | null | undefined;
@@ -2076,8 +2077,31 @@ const useHighlightPlacement = <Step extends { id: string }>({
    * the screen, for scenes (a fight, a card table) that must stay in view around it.
    */
   revealOnly: boolean;
+  /** On a wide screen the lesson stands beside its target instead of at the screen's foot. */
+  floats?: boolean;
+  /** Further elements the lesson refers to, which it stands clear of. */
+  markSelectors?: string[];
   pathname: string;
 }) => {
+  const [dockPlace, setDockPlace] = useAtom(activityDockPlaceAtom);
+  const { swapSides } = useActivityDock();
+  // The place outlives the lesson tab, so a lesson reopened is still where it stood.
+  const placeRef = React.useRef<DockPlace | null>(dockPlace);
+  const releaseRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** Stands the dock at a place, or sends it back to its resting place. */
+  const standAt = (place: DockPlace | null) => {
+    clearTimeout(releaseRef.current);
+    releaseRef.current = undefined;
+    if (isSameDockPlace(placeRef.current, place)) return;
+    placeRef.current = place;
+    setDockPlace(place);
+  };
+  /** Sends the dock back once nothing has been pointed at for a moment, as between pages. */
+  const releasePlace = () => {
+    if (!placeRef.current || releaseRef.current !== undefined) return;
+    releaseRef.current = setTimeout(() => standAt(null), PLACE_RELEASE_MS);
+  };
+  useEffect(() => () => clearTimeout(releaseRef.current), []);
   const [highlight, setHighlight] = useState<{
     stepId: string;
     elementId: string;
@@ -2099,7 +2123,19 @@ const useHighlightPlacement = <Step extends { id: string }>({
     settledScrollY: number;
     /** The dock stepped aside for this target. */
     gaveWay: boolean;
-  }>({ key: "", attempts: 0, settled: false, settledScrollY: 0, gaveWay: false });
+    /** Measurements without a place beside this target; it stands at the foot after a few. */
+    misses: number;
+    /** It was tried beside this target again once the page settled. */
+    retried: boolean;
+  }>({
+    key: "",
+    attempts: 0,
+    settled: false,
+    settledScrollY: 0,
+    gaveWay: false,
+    misses: 0,
+    retried: false,
+  });
   // Set while the panel would otherwise be sitting on top of the highlight, so
   // it can step aside. Latched per target: recomputing it from the moved panel
   // would say "no longer covered" and send it straight back.
@@ -2147,6 +2183,68 @@ const useHighlightPlacement = <Step extends { id: string }>({
     placementRef.current.gaveWay = true;
   };
 
+  /** The dock's place beside its target, or null with none, in a screen showing the target. */
+  const findPlace = (
+    dock: HTMLElement,
+    rect: DOMRect,
+    lit: SpotlightBox,
+    patience = 0,
+  ) =>
+    getDockPlace({
+      target: rect,
+      lit,
+      column: getCentreColumn()?.getBoundingClientRect(),
+      marks: (markSelectors ?? []).flatMap((selector) =>
+        Array.from(document.querySelectorAll(selector), (mark) =>
+          mark.getBoundingClientRect(),
+        ),
+      ),
+      height: dock.offsetHeight + getPendingFooterHeight(dock),
+      viewport: {
+        width: document.documentElement.clientWidth || window.innerWidth,
+        height: window.innerHeight,
+      },
+      preferredSide: swapSides ? "right" : "left",
+      current: placeRef.current,
+      patience,
+    });
+
+  /**
+   * Stands the dock beside its target. Its previous place is kept while it serves about as
+   * well, so the lesson follows a target without wandering. A target without a place for it,
+   * as one filling a page that is still loading, is tried once more when the page settles.
+   */
+  const standBeside = (rect: DOMRect, lit: SpotlightBox, patience: number) => {
+    const dock = getActivityDock();
+    if (!dock) return;
+    const placement = placementRef.current;
+    // A target scrolled away leaves the lesson where it is.
+    if (getHighlightScrollDirection(rect, window.innerHeight)) {
+      standAt(placeRef.current);
+      return;
+    }
+    if (placement.misses >= MAX_PLACE_MISSES) {
+      const isSettled = placement.settled || placement.attempts >= 5;
+      if (!placement.retried && isSettled && findPlace(dock, rect, lit)) {
+        placement.retried = true;
+        placement.misses = 0;
+      }
+      return;
+    }
+    const place = findPlace(dock, rect, lit, patience);
+    if (place) {
+      placement.misses = 0;
+      standAt(place);
+      return;
+    }
+    placement.misses += 1;
+    if (placement.misses < MAX_PLACE_MISSES) return;
+    // The target is placed afresh around a lesson at the foot of the screen.
+    placement.attempts = 0;
+    placement.settled = false;
+    standAt(null);
+  };
+
   // Helper function to update the highlight position
   const updateHighlightPosition = (currentStepConfig: Step) => {
     const highlightInfo = find(currentStepConfig);
@@ -2166,13 +2264,16 @@ const useHighlightPlacement = <Step extends { id: string }>({
       // A rotated phone or a resized window is a new layout, placed afresh. Height is left
       // out: a phone's address bar changes it as the player scrolls.
       const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}:${window.innerWidth}`;
-      if (placementRef.current.key !== targetKey) {
+      const isNewTarget = placementRef.current.key !== targetKey;
+      if (isNewTarget) {
         placementRef.current = {
           key: targetKey,
           attempts: 0,
           settled: false,
           settledScrollY: 0,
           gaveWay: false,
+          misses: 0,
+          retried: false,
         };
         document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
         setPanelDodgesHighlight(false);
@@ -2191,7 +2292,15 @@ const useHighlightPlacement = <Step extends { id: string }>({
         isCombat && highlightInfo.element.id !== COMBAT_RETURN_ID
           ? withCombatActions(before)
           : before;
-      const panel = getAssistantPanelRect();
+      // A lesson beside its target is placed around it; one at the foot of the screen, or
+      // in the dock itself, is what the target has to clear.
+      const canFloat =
+        floats &&
+        window.innerHeight >= FLOAT_MIN_HEIGHT_PX &&
+        window.innerWidth >= FLOAT_MIN_WIDTH_PX &&
+        !highlightInfo.element.closest("[data-activity-dock]");
+      const isFloating = canFloat && placement.misses < MAX_PLACE_MISSES;
+      const panel = isFloating ? null : getAssistantPanelRect();
       // In a fight the AP bar must stay in view with the target.
       const timerTop = isCombat
         ? document
@@ -2274,7 +2383,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
         const aim = isLitInView ? lit : before;
         const preferredCentre = isLitInView
           ? litFloor / 2
-          : getPreferredHighlightCentre(before.height);
+          : getPreferredHighlightCentre(before.height, panel);
         let aimOffset = aim.top + aim.height / 2 - preferredCentre;
         let isAimMisplaced = Math.abs(aimOffset) > 100;
         if (isLitInView && !isOffscreen) {
@@ -2338,6 +2447,25 @@ const useHighlightPlacement = <Step extends { id: string }>({
         }
       }
       const rect = highlightInfo.element.getBoundingClientRect();
+      const scene =
+        getSpotlightScene(highlightInfo.element) ??
+        (highlightInfo.isInPanel ? getSpotlightPanel(highlightInfo.element) : null);
+      if (canFloat) {
+        // A page still laying out settles the target first.
+        const isArriving =
+          isNewTarget || (!placement.settled && placement.attempts < 5 && !dialog);
+        standBeside(
+          rect,
+          dialog?.getBoundingClientRect() ?? scene ?? rect,
+          isArriving
+            ? PLACE_PATIENCE_PX.arriving
+            : highlightInfo.isInScene
+              ? PLACE_PATIENCE_PX.scene
+              : PLACE_PATIENCE_PX.page,
+        );
+      } else {
+        standAt(null);
+      }
       const next = {
         stepId: currentStepConfig.id,
         elementId: highlightInfo.element.id,
@@ -2346,9 +2474,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
         left: rect.left,
         width: rect.width,
         height: rect.height,
-        scene:
-          getSpotlightScene(highlightInfo.element) ??
-          (highlightInfo.isInPanel ? getSpotlightPanel(highlightInfo.element) : null),
+        scene,
       };
       setHighlight((prev) =>
         prev &&
@@ -2363,6 +2489,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
       return highlightInfo.element;
     }
     setHighlight(null);
+    releasePlace();
     document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
     setPanelDodgesHighlight(false);
     setPanelCrowdsHighlight(false);
@@ -2371,19 +2498,24 @@ const useHighlightPlacement = <Step extends { id: string }>({
 
   // Update highlight position based on current step and element
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      releasePlace();
+      return;
+    }
     // Guard against undefined step
     if (!step) {
       setHighlight(null);
+      releasePlace();
       return;
     }
     const stopTracking = trackLayout(() => updateHighlightPosition(step));
     return () => {
       stopTracking();
       document.documentElement.style.removeProperty(ACTIVITY_DOCK_WIDTH_PROPERTY);
+      document.documentElement.style.removeProperty(ACTIVITY_DOCK_BOTTOM_PROPERTY);
       document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
     };
-  }, [step, enabled, pathname, revealOnly]);
+  }, [step, enabled, pathname, revealOnly, floats, swapSides]);
 
   return { highlight, panelDodgesHighlight, panelCrowdsHighlight };
 };
@@ -2589,12 +2721,34 @@ const subscribeToDialogs = (onChange: () => void) => {
 const useIsModalDialogOpen = () =>
   React.useSyncExternalStore(subscribeToDialogs, hasOpenModalDialog, () => false);
 
-/** Include the Activity header when keeping highlighted controls clear of the dock. */
+/** The Activity dock holding the lesson. */
+const getActivityDock = () =>
+  document
+    .getElementById(TUTORIAL_ASSISTANT_PANEL_ID)
+    ?.closest<HTMLElement>("[data-activity-dock]") ?? null;
+
+/** Height of the controls the lesson will offer later (see `pendingFooter`). */
+const getPendingFooterHeight = (dock: HTMLElement) =>
+  dock.querySelector<HTMLElement>("[data-tutorial-pending-footer]")?.offsetHeight ?? 0;
+
+/**
+ * What highlighted controls are kept clear of: the dock with its Activity header, and at the
+ * foot of the screen the room it grows up into.
+ */
 const getAssistantPanelRect = (): DOMRect | null => {
-  const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
-  return (
-    (panel?.closest("[data-activity-dock]") ?? panel)?.getBoundingClientRect() ?? null
-  );
+  const dock = getActivityDock();
+  if (!dock) {
+    return (
+      document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID)?.getBoundingClientRect() ??
+      null
+    );
+  }
+  const rect = dock.getBoundingClientRect();
+  const isAtFoot = !dock.querySelector("[data-dodge-highlight]");
+  const growth = isAtFoot ? getPendingFooterHeight(dock) : 0;
+  return growth === 0
+    ? rect
+    : new DOMRect(rect.left, rect.top - growth, rect.width, rect.height + growth);
 };
 
 /**
@@ -2629,15 +2783,24 @@ const fitActivityDockBesideField = () => {
     room >= ACTIVITY_DOCK_READABLE_WIDTH_PX ||
     (room >= ACTIVITY_DOCK_MIN_WIDTH_PX && !fitsStrip);
   const width = isBeside
-    ? Math.min(room, ACTIVITY_DOCK_FULL_WIDTH_PX)
+    ? Math.min(room, ACTIVITY_DOCK_WIDTH_PX)
     : Math.min(
         dock.right - ACTIVITY_DOCK_FIELD_GAP_PX,
-        fitsStrip ? ACTIVITY_DOCK_STRIP_WIDTH_PX : ACTIVITY_DOCK_FULL_WIDTH_PX,
+        fitsStrip ? ACTIVITY_DOCK_STRIP_WIDTH_PX : ACTIVITY_DOCK_WIDTH_PX,
       );
-  document.documentElement.style.setProperty(
-    ACTIVITY_DOCK_WIDTH_PROPERTY,
-    `${Math.floor(width)}px`,
-  );
+  const root = document.documentElement;
+  root.style.setProperty(ACTIVITY_DOCK_WIDTH_PROPERTY, `${Math.floor(width)}px`);
+  // Beside a fight that ends above the screen's foot, the lesson ends with it.
+  const lift = window.innerHeight - fight.bottom;
+  const maxLift = window.innerHeight - dock.height - ACTIVITY_DOCK_FIELD_GAP_PX;
+  if (isBeside && lift > ACTIVITY_DOCK_FIELD_GAP_PX && maxLift > 0) {
+    root.style.setProperty(
+      ACTIVITY_DOCK_BOTTOM_PROPERTY,
+      `${Math.floor(Math.min(lift, maxLift))}px`,
+    );
+  } else {
+    root.style.removeProperty(ACTIVITY_DOCK_BOTTOM_PROPERTY);
+  }
   return true;
 };
 
@@ -2665,8 +2828,7 @@ const rectsOverlap = (a: ScreenEdges, b: ScreenEdges) =>
  * middle is not safe: the assistant panel is fixed over the foot of the screen,
  * so on a short viewport the middle is underneath it.
  */
-const getPreferredHighlightCentre = (targetHeight: number) => {
-  const panel = getAssistantPanelRect();
+const getPreferredHighlightCentre = (targetHeight: number, panel: DOMRect | null) => {
   // Where the usual margin leaves no room above the panel, a narrow one may.
   const top = [80, 16].find((margin) => panel && panel.top > margin + targetHeight);
   return panel && top !== undefined
