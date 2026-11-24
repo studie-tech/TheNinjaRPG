@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import { type ReactNode, useId } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -53,14 +53,19 @@ export function AbilityListEditor({
 }: AbilityListEditorProps) {
   const headingId = useId();
   const groupListId = useId();
-  const replace = (index: number, ability: DraftAbility) =>
-    onChange(abilities.map((entry, at) => (at === index ? ability : entry)));
-  const move = (index: number, step: -1 | 1) => {
-    const next = [...abilities];
-    const [entry] = next.splice(index, 1);
-    if (entry) next.splice(index + step, 0, entry);
+  // Editor-only entry ids, so a half-typed amount and the focus follow a moved entry.
+  const [storedIds, setStoredIds] = useState<readonly number[]>([]);
+  const ids = entryIds(storedIds, abilities.length);
+  const commit = (next: DraftAbility[], nextIds: readonly number[]) => {
+    setStoredIds(nextIds);
     onChange(next);
   };
+  const replace = (index: number, ability: DraftAbility) =>
+    onChange(abilities.map((entry, at) => (at === index ? ability : entry)));
+  const move = (index: number, step: -1 | 1) =>
+    commit(moved(abilities, index, step), moved(ids, index, step));
+  const remove = (index: number) =>
+    commit(without(abilities, index), without(ids, index));
   const isFull = abilities.length >= KESSEN_MAX_ABILITIES;
 
   return (
@@ -94,9 +99,8 @@ export function AbilityListEditor({
       {abilities.length > 0 && (
         <ol className="grid gap-2 @min-[760px]:grid-cols-2">
           {abilities.map((ability, index) => (
-            // Entries have no id; every control is driven by the value at its position.
             <AbilityEntry
-              key={index}
+              key={ids[index]}
               ability={ability}
               index={index}
               count={abilities.length}
@@ -106,7 +110,7 @@ export function AbilityListEditor({
               disabled={disabled}
               onChange={(next) => replace(index, next)}
               onMove={(step) => move(index, step)}
-              onRemove={() => onChange(abilities.filter((_, at) => at !== index))}
+              onRemove={() => remove(index)}
             />
           ))}
         </ol>
@@ -393,6 +397,22 @@ function IconButton({
     </Button>
   );
 }
+
+/** One unique id per entry: the known ones, then the lowest unused numbers. */
+const entryIds = (known: readonly number[], count: number) => {
+  const ids = known.slice(0, count);
+  for (let id = 0; ids.length < count; id++) if (!ids.includes(id)) ids.push(id);
+  return ids;
+};
+
+const without = <T,>(list: readonly T[], index: number) =>
+  list.filter((_, at) => at !== index);
+
+const moved = <T,>(list: readonly T[], index: number, step: -1 | 1) => {
+  const next = [...list];
+  next.splice(index + step, 0, ...next.splice(index, 1));
+  return next;
+};
 
 interface AbilityListEditorProps {
   abilities: readonly DraftAbility[];

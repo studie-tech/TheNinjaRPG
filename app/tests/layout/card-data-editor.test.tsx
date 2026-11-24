@@ -153,6 +153,26 @@ describe("card ability editor", () => {
     expect(error?.textContent).toBe("Use 1 to 20");
   });
 
+  it("moves a rejected amount with its entry", () => {
+    renderEditor(
+      itemOf({
+        abilities: [
+          { k: "rally", x: 2 },
+          { k: "meditate", x: 3 },
+        ],
+      }),
+    );
+    const amount = (entry: number) =>
+      screen.getByRole("spinbutton", { name: `Ability ${entry}: Amount` });
+    fireEvent.input(amount(1), { target: { value: "21" } });
+    fireEvent.input(amount(2), { target: { value: "22" } });
+    fireEvent.click(screen.getByRole("button", { name: "Move Ability 1 down" }));
+    expect([1, 2].map((entry) => (amount(entry) as HTMLInputElement).value)).toEqual([
+      "22",
+      "21",
+    ]);
+  });
+
   it("shows the keyword budget of the rarity under the list", async () => {
     renderEditor(itemOf({ abilities: [{ k: "rally", x: 2 }] }, "COMMON"));
     fireEvent.click(screen.getByRole("button", { name: "Add ability" }));
