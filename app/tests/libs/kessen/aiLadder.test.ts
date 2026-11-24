@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { availableParallelism } from "node:os";
 import type { KessenAiTier } from "@/libs/kessen/ai";
 import type { LadderJob, LadderTally } from "./aiHelpers";
@@ -6,6 +6,7 @@ import type { LadderJob, LadderTally } from "./aiHelpers";
 const PREFIX = "ladder-";
 /** Pinned games per pair in the regular suite. */
 const QUICK_GAMES = 48;
+const activeWorkers = new Set<Worker>();
 
 /**
  * Each tier against the one below on mirrored starter decks. The suite plays a short
@@ -35,6 +36,12 @@ const LADDER: {
     ];
 
 describe("Kessen AI tier ladder", () => {
+  afterEach(() => {
+    // A test timeout must not leave simulations competing with subsequent suites.
+    for (const worker of activeWorkers) worker.terminate();
+    activeWorkers.clear();
+  });
+
   for (const { stronger, weaker, games, threshold } of LADDER) {
     it(
       `${stronger} beats ${weaker} in at least ${Math.round(100 * threshold)}% of ${games} mirror starter games`,
@@ -48,7 +55,8 @@ describe("Kessen AI tier ladder", () => {
           tally,
         });
       },
-      FULL ? 900_000 : 120_000,
+      // Kage's full-match rollouts share CI CPUs with the other test shards.
+      FULL ? 900_000 : stronger === "KAGE" ? 300_000 : 120_000,
     );
   }
 });
@@ -81,12 +89,15 @@ const playLadder = async (
 const runWorker = (job: LadderJob) =>
   new Promise<LadderTally>((resolve, reject) => {
     const worker = new Worker(new URL("./aiLadderWorker.ts", import.meta.url).href);
+    activeWorkers.add(worker);
     worker.onmessage = (event: MessageEvent<LadderTally>) => {
       worker.terminate();
+      activeWorkers.delete(worker);
       resolve(event.data);
     };
     worker.onerror = (event) => {
       worker.terminate();
+      activeWorkers.delete(worker);
       reject(new Error(event.message));
     };
     worker.postMessage(job);
