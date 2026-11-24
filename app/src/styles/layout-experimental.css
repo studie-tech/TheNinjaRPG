@@ -111,6 +111,10 @@ html[data-game-layout="experimental"] {
   min-height: 0;
   overflow: hidden;
 }
+/* Keep both corner action stacks above the 44px Chat launcher on either side. */
+.experimental-travel [data-sector-corner-actions] {
+  bottom: calc(44px + 2rem);
+}
 /* Every sector wrapper must inherit height so the observed scene mount follows it. */
 .experimental-travel [data-travel-viewport] div:has(#tutorial-travel-sector),
 .experimental-travel [data-travel-viewport] > div:has(#tutorial-global-map),

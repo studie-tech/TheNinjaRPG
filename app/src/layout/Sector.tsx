@@ -2696,7 +2696,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         </Modal>
       )}
       {currentStructure && (
-        <div className="absolute bottom-3 left-3 z-20 max-w-[calc(50%-40px)] rounded-lg bg-black/80 p-3 text-white shadow-lg sm:bottom-4 sm:left-4 sm:max-w-xs">
+        <div
+          data-sector-corner-actions
+          className="absolute bottom-3 left-3 z-20 max-w-[calc(50%-40px)] rounded-lg bg-black/80 p-3 text-white shadow-lg sm:bottom-4 sm:left-4 sm:max-w-xs"
+        >
           <h3 className="text-sm font-semibold">
             {currentServices.map((service) => service.name).join(" · ")}
           </h3>
@@ -2710,7 +2713,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         </div>
       )}
       {/* Stack corner actions so dungeon, hover and raid cards share the map without overlap. */}
-      <div className="pointer-events-none absolute right-3 bottom-3 z-20 flex max-w-[calc(50%-40px)] flex-col items-end gap-2 sm:right-4 sm:bottom-4 sm:max-w-xs">
+      <div
+        data-sector-corner-actions
+        className="pointer-events-none absolute right-3 bottom-3 z-20 flex max-w-[calc(50%-40px)] flex-col items-end gap-2 sm:right-4 sm:bottom-4 sm:max-w-xs"
+      >
         <MapLocationActions
           arrived={arrivedLocations}
           hovered={hoveredLocation}
