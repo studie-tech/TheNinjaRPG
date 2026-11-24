@@ -38,9 +38,9 @@ it.each([true, false])(
         <MenuBoxCombat />
       </Provider>,
     );
-    expect(view.getAllByText("Mercenary")).toHaveLength(2);
+    expect(view.getAllByText("Mercenary")).toHaveLength(1);
     const profiles = view.queryAllByRole("link", { name: "Mercenary" });
-    expect(profiles).toHaveLength(isMasked ? 0 : 2);
+    expect(profiles).toHaveLength(isMasked ? 0 : 1);
     for (const profile of profiles)
       expect(profile.getAttribute("href")).toBe("/userid/opponent");
   },
@@ -108,14 +108,14 @@ it.each([true, false])(
         <MenuBoxCombat />
       </Provider>,
     );
-    // Both name links and the avatar open the profile.
-    expect(view.getAllByRole("link", { name: "Opponent" })).toHaveLength(3);
+    // The name and avatar open the profile.
+    expect(view.getAllByRole("link", { name: "Opponent" })).toHaveLength(2);
     fireEvent.change(view.getByRole("combobox", { name: "Inspect character" }), {
       target: { value: "ally" },
     });
     expect(view.queryAllByRole("link", { name: "Opponent" })).toHaveLength(0);
     const profiles = view.queryAllByRole("link", { name: "Teammate" });
-    expect(profiles).toHaveLength(isMasked ? 0 : 3);
+    expect(profiles).toHaveLength(isMasked ? 0 : 2);
     for (const profile of profiles)
       expect(profile.getAttribute("href")).toBe("/userid/ally");
     expect(view.getByRole("img", { name: "Teammate" })).toBeTruthy();
