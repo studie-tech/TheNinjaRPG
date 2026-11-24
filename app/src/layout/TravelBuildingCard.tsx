@@ -10,7 +10,6 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import type { VillageStructure } from "@/drizzle/schema";
-import Link from "@/layout/Link";
 
 /** Keep building actions attached to their artwork as the travel camera moves. */
 export const TravelBuildingCard = ({
@@ -19,15 +18,19 @@ export const TravelBuildingCard = ({
   getBounds,
   boundary,
   onGoTo,
+  onEnter,
+  openingServiceId,
   onClose,
 }: {
   structure: VillageStructure;
-  /** Available services at the player's current building; empty before arrival. */
+  /** Pages available at this building, including before the player arrives. */
   services: VillageStructure[];
   /** Live scene bounds for this mount's building; callers key the card by building ID. */
   getBounds: () => DOMRect | null;
   boundary: HTMLElement | null;
   onGoTo: () => void;
+  onEnter: (service: VillageStructure) => void;
+  openingServiceId?: string | null;
   onClose: () => void;
 }) => {
   const titleId = useId();
@@ -80,15 +83,16 @@ export const TravelBuildingCard = ({
             services.map((service) => (
               <Button
                 key={service.id}
-                asChild
+                aria-label={`Enter ${service.name}`}
+                disabled={!!openingServiceId}
+                loading={openingServiceId === service.id}
+                onClick={() => onEnter(service)}
                 className="h-auto min-h-12 w-full justify-between gap-3 py-2 text-base whitespace-normal"
               >
-                <Link href={service.route} aria-label={`Enter ${service.name}`}>
-                  <span className="min-w-0 break-words">
-                    {services.length === 1 ? "Enter" : service.name}
-                  </span>
-                  <DoorOpen aria-hidden className="size-4 shrink-0" />
-                </Link>
+                <span className="min-w-0 break-words">
+                  {services.length === 1 ? "Enter" : service.name}
+                </span>
+                <DoorOpen aria-hidden className="size-4 shrink-0" />
               </Button>
             ))
           ) : (

@@ -250,6 +250,10 @@ export function TravelView({
           setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
           setPosition={setScenePosition}
+          onBuildingEntry={() => {
+            setPendingAttackTarget(null);
+            setAutoDestination(null);
+          }}
         />
       )
     );
@@ -261,6 +265,8 @@ export function TravelView({
     sectorWindow,
     hasCurrentSector,
     setScenePosition,
+    setPendingAttackTarget,
+    setAutoDestination,
     targetPosition,
     showSorrounding,
     showOtherUsers,

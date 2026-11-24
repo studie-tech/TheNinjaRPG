@@ -1,5 +1,6 @@
 import { expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
+import type { VillageStructure } from "@/drizzle/schema";
 
 // Exercise the scene's movement controller without WebGL, as in sector-movement-feedback.test.ts.
 const source = readFileSync(
@@ -33,6 +34,13 @@ const setup = () => {
     userRef: { current: { status: "AWAKE", location: "" } },
     mountedRef: { current: true },
     isActiveRef: { current: true },
+    buildingEntryRef: {
+      current: null as { service: VillageStructure; sector: number } | null,
+    },
+    setOpeningServiceId: vi.fn(),
+    setWalkingToBuilding: vi.fn(),
+    router: { push: vi.fn() },
+    props: { onBuildingEntry: vi.fn() },
     movePendingRef: { current: true },
     moveTargetRef: { current: requested as Destination | null },
     walkAnimatingRef: { current: false },
@@ -112,6 +120,37 @@ const setup = () => {
     `${block("  function continueMovement()", "\n  // Parent commands")}\nreturn continueMovement;`,
     scope,
   ) as () => void;
+  const enterBuilding = evaluate(
+    `${block("  const enterBuilding = (", "\n\n  /** Step one tile")}\nreturn enterBuilding;`,
+    scope,
+  ) as (service: VillageStructure) => void;
+  const controller = evaluate(
+    `${block("  const executeMove = useSceneMutation({", "\n\n  const move =")}\nreturn executeMove;`,
+    {
+      ...scope,
+      useSceneMutation: (options: unknown) => options,
+      getMutationKey: () => [],
+      api: { travel: { moveInSector: {} } },
+      prepareSectorUpdate: () => ({}),
+      prepareUserUpdate: () => 1,
+      publishMovementStatus: vi.fn(),
+      autoAttackRef: { current: vi.fn() },
+      updateSector: vi.fn(),
+      utils: { profile: { getUser: { invalidate: vi.fn() } } },
+      runJourneySegment,
+      reconcileCrossing,
+      applyCrossing,
+      enterBuilding,
+    },
+  ) as {
+    onMutate: (input: object) => {
+      walk: Promise<void>;
+      entryCommitted: boolean;
+      target: Destination | null;
+    };
+    onSuccess: (...args: unknown[]) => Promise<void>;
+    onSettled: (...args: unknown[]) => Promise<void>;
+  };
   return {
     scope,
     requested,
@@ -120,8 +159,106 @@ const setup = () => {
     runJourneySegment,
     handleCrossing,
     continueMovement,
+    enterBuilding,
+    controller,
   };
 };
+
+const bank = {
+  id: "bank",
+  name: "Bank",
+  route: "/bank",
+  longitude: 20,
+  latitude: 6,
+} as VillageStructure;
+
+it("queues entry behind an existing move and keeps the route closed until confirmation", () => {
+  const test = setup();
+  test.enterBuilding(bank);
+  expect(test.scope.setTarget).toHaveBeenCalledWith({ x: 20, y: 6 });
+  expect(test.scope.buildingEntryRef.current?.service).toBe(bank);
+  expect(test.scope.router.push).not.toHaveBeenCalled();
+  expect(test.scope.setOpeningServiceId).toHaveBeenCalledWith("bank");
+  expect(test.scope.props.onBuildingEntry).toHaveBeenCalledTimes(1);
+  test.enterBuilding({ ...bank, id: "shop", route: "/itemshop" });
+  expect(test.scope.setTarget).toHaveBeenCalledTimes(1);
+});
+
+it("opens a confirmed building before its animation finishes and commits arrival only once", async () => {
+  const test = setup();
+  let finishWalk = () => {};
+  const walk = new Promise<void>((resolve) => {
+    finishWalk = resolve;
+  });
+  test.scope.animateWalk.mockImplementation(() => walk);
+  test.enterBuilding(bank);
+  const input = { sector: 1, longitude: bank.longitude, latitude: bank.latitude };
+  const context = test.controller.onMutate(input);
+  const data = { ...input, location: "Village" };
+  const completion = test.controller.onSuccess({ success: true, data }, input, context);
+  for (let index = 0; index < 5; index++) await Promise.resolve();
+  expect(test.scope.router.push).toHaveBeenCalledWith("/bank");
+  expect(test.scope.setWalkingToBuilding).toHaveBeenCalledWith(true);
+  expect(context.entryCommitted).toBe(true);
+  expect(test.scope.commitMovePosition).toHaveBeenCalledTimes(1);
+  expect(test.scope.runQuestTriggers).toHaveBeenCalledTimes(1);
+  test.scope.isActiveRef.current = false;
+  finishWalk();
+  await completion;
+  expect(test.scope.commitMovePosition).toHaveBeenCalledTimes(1);
+  expect(test.scope.runQuestTriggers).toHaveBeenCalledTimes(1);
+});
+
+it.each(["cancelled", "unmounted", "rejected"])(
+  "does not open a building after entry is %s",
+  async (reason) => {
+    const test = setup();
+    test.enterBuilding(bank);
+    const input = { sector: 1, longitude: bank.longitude, latitude: bank.latitude };
+    const context = test.controller.onMutate(input);
+    if (reason === "cancelled") test.scope.buildingEntryRef.current = null;
+    if (reason === "unmounted") test.scope.mountedRef.current = false;
+    await test.controller.onSuccess(
+      { success: reason !== "rejected", data: { ...input, location: "Village" } },
+      input,
+      context,
+    );
+    expect(test.scope.router.push).not.toHaveBeenCalled();
+  },
+);
+
+it("opens immediately without another move when already standing at the building", () => {
+  const test = setup();
+  test.scope.movePendingRef.current = false;
+  test.scope.originRef.current = { col: bank.longitude, row: bank.latitude };
+  test.enterBuilding(bank);
+  expect(test.scope.router.push).toHaveBeenCalledWith("/bank");
+  expect(test.scope.move).not.toHaveBeenCalled();
+});
+
+it("enters after a walk that was already accepted when the player clicked Enter", async () => {
+  const test = setup();
+  let finishWalk = () => {};
+  const walk = new Promise<void>((resolve) => {
+    finishWalk = resolve;
+  });
+  test.scope.animateWalk.mockImplementation(() => walk);
+  const input = { sector: 1, longitude: bank.longitude, latitude: bank.latitude };
+  const context = test.controller.onMutate(input);
+  const completion = test.controller.onSuccess(
+    { success: true, data: { ...input, location: "Village" } },
+    input,
+    context,
+  );
+  await Promise.resolve();
+  test.enterBuilding(bank);
+  finishWalk();
+  await completion;
+  await test.controller.onSettled();
+  expect(test.scope.router.push).toHaveBeenCalledTimes(1);
+  expect(test.scope.router.push).toHaveBeenCalledWith("/bank");
+  expect(test.scope.buildingEntryRef.current).toBeNull();
+});
 
 const landed = { sector: 2, longitude: 3, latitude: 5, location: "Field" };
 

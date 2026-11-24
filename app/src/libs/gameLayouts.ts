@@ -113,9 +113,9 @@ export const GAME_LAYOUTS = [
     art: IMG_FRONTPAGE_SCREENSHOT_SECTOR,
     audience: "Players using the sector as their main game interface",
     rationale:
-      "Explore a full-screen sector map and visit the Bank and Item Shop in dialogs. Other destinations open as pages through the game menu.",
+      "Put your shinobi's world at the center of the game, with a full-screen sector map, character controls and game menus.",
     composition:
-      "A full-height map with sliding sidebars, centered bottom shortcuts and building dialogs.",
+      "A full-height map with sliding sidebars, centered bottom shortcuts and game screens in dialogs.",
     tone: "light",
     frame: "sector",
     publicFrame: "page",
