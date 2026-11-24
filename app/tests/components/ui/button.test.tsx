@@ -57,4 +57,24 @@ describe("Button", () => {
     expect(wrapper?.className).toContain("self-start");
     expect(wrapper?.className).not.toContain("px-4");
   });
+
+  it("pins the count to the top right corner, also on a slotted button", () => {
+    const view = render(
+      <>
+        <Button count={3}>Filter</Button>
+        <Button asChild count={12}>
+          <a href="/missions">Missions</a>
+        </Button>
+        <Button count={0}>Empty</Button>
+      </>,
+    );
+    for (const count of ["3", "12"]) {
+      const classes = view.getByText(count).className.split(" ");
+      expect(classes).toEqual(
+        expect.arrayContaining(["absolute", "-top-1.5", "-right-1.5", "min-w-5"]),
+      );
+      expect(classes).toContain("pointer-events-none");
+    }
+    expect(view.queryByText("0")).toBeNull();
+  });
 });
