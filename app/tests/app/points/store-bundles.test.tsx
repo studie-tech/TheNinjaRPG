@@ -8,9 +8,9 @@ import {
   within,
 } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
-import { StoreBundles } from "@/app/[shell]/points/StoreBundles";
-import * as checkout from "@/app/[shell]/points/StoreCheckout";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
+import { StoreBundles } from "@/screens/points/StoreBundles";
+import * as checkout from "@/screens/points/StoreCheckout";
 import * as UserContext from "@/utils/UserContext";
 import {
   flushRadixFocus,

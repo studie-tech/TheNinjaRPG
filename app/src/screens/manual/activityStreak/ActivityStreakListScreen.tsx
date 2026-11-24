@@ -1,0 +1,317 @@
+"use client";
+
+import { FilePlus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { ActivityStreakType } from "@/drizzle/constants";
+import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
+import { useNavigationRouter } from "@/hooks/navigation";
+import { useContentListActions } from "@/hooks/useContentListActions";
+import Confirm from "@/layout/Confirm";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Modal from "@/layout/Modal";
+import { formatEventPassCost } from "@/libs/activityStreak";
+import { getRewardArray } from "@/libs/objectives";
+import { showMutationToast } from "@/libs/toast";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserDataSelector } from "@/utils/UserContext";
+
+/** Render the manual activityStreak screen independently of its route adapter. */
+export function ActivityStreakListScreen() {
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedConfig, setSelectedConfig] = useState<ConfigWithRewards | null>(null);
+  const [typeFilter, setTypeFilter] = useState<"all" | ActivityStreakType>("all");
+  const router = useNavigationRouter();
+
+  const {
+    data: allConfigs,
+    isFetching,
+    refetch,
+  } = api.activityStreak.getConfigs.useQuery();
+  const configs =
+    typeFilter === "all"
+      ? allConfigs
+      : allConfigs?.filter((c) => c.streakType === typeFilter);
+
+  const { onCreated, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/activityStreak/edit",
+  );
+
+  const { mutate: create, isPending: createPending } =
+    api.activityStreak.createConfig.useMutation({
+      onSuccess: onCreated,
+    });
+
+  const { mutate: remove, isPending: deletePending } =
+    api.activityStreak.deleteConfig.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await refetch();
+          setIsOpen(false);
+          setSelectedConfig(null);
+        }
+      },
+    });
+
+  const isPending = isFetching || createPending || deletePending;
+
+  // Check if a RECURRING config already exists, regardless of the active tab
+  const hasRecurring = allConfigs?.some((c) => c.streakType === "RECURRING");
+
+  const handleCreate = () => {
+    // Default to EVENT_PASS if RECURRING already exists
+    const streakType = hasRecurring ? "EVENT_PASS" : "RECURRING";
+    create({
+      name: streakType === "RECURRING" ? "Daily Login Streak" : "New Event Pass",
+      totalDays: 28,
+      streakType,
+      isActive: false,
+      ryoCost: 0,
+      repsCost: 0,
+      seichiSilverCost: 0,
+      rewards: [{ dayNumber: 1, rewards: {} }],
+    });
+  };
+
+  return (
+    <ContentBox
+      title="Activity Streak Configurations"
+      subtitle="Manage daily login streaks and event passes"
+      defaultBackHref="/manual"
+      topRightContent={
+        userData && canChangeContent(userData.role) ? (
+          <Button
+            id="create-config"
+            onClick={handleCreate}
+            disabled={isPending || isOpeningCreated}
+            loading={createPending || isOpeningCreated}
+          >
+            <FilePlus className="mr-2 h-6 w-6" />
+            New
+          </Button>
+        ) : undefined
+      }
+    >
+      <p className="mb-4">
+        Configure activity streak rewards that players can claim daily. RECURRING
+        streaks apply to all players automatically. EVENT_PASS streaks can be purchased
+        by players.
+      </p>
+
+      <Tabs
+        value={typeFilter}
+        onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}
+      >
+        <TabsList className="mb-4">
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="RECURRING">Recurring</TabsTrigger>
+          <TabsTrigger value="EVENT_PASS">Event Pass</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={typeFilter}>
+          {isPending && <Loader explanation="Loading configurations..." />}
+
+          {!isPending && (!configs || configs.length === 0) && (
+            <p className="text-muted-foreground">No streak configurations found.</p>
+          )}
+
+          {!isPending && configs && configs.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {configs.map((config) => (
+                <Card
+                  key={config.id}
+                  className="cursor-pointer transition-colors hover:bg-accent"
+                  onClick={() => {
+                    setSelectedConfig(config);
+                    setIsOpen(true);
+                  }}
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex flex-col items-start justify-between">
+                      <CardTitle className="text-lg">{config.name}</CardTitle>
+                      <div className="flex gap-1">
+                        <Badge
+                          variant={
+                            config.streakType === "RECURRING" ? "default" : "secondary"
+                          }
+                        >
+                          {config.streakType}
+                        </Badge>
+                        <Badge variant={config.isActive ? "default" : "outline"}>
+                          {config.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="line-clamp-2 text-muted-foreground text-sm">
+                      {config.description || "No description"}
+                    </p>
+                    <div className="mt-2 text-sm">
+                      <span className="font-medium">{config.totalDays}</span> days
+                      {config.streakType === "EVENT_PASS" && (
+                        <>
+                          {" • "}
+                          {formatEventPassCost(config, {
+                            separator: " / ",
+                            repsLabel: "reps",
+                          })}
+                        </>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {isOpen && selectedConfig && (
+        <Modal
+          title="Configuration Details"
+          isOpen={isOpen}
+          setIsOpen={setIsOpen}
+          isValid={false}
+          className="max-w-3xl"
+        >
+          {!isPending && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-bold text-xl">{selectedConfig.name}</h2>
+                <div className="flex gap-2">
+                  <Badge
+                    variant={
+                      selectedConfig.streakType === "RECURRING"
+                        ? "default"
+                        : "secondary"
+                    }
+                  >
+                    {selectedConfig.streakType}
+                  </Badge>
+                  <Badge variant={selectedConfig.isActive ? "default" : "outline"}>
+                    {selectedConfig.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+              </div>
+
+              {selectedConfig.description && (
+                <p className="text-muted-foreground">{selectedConfig.description}</p>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h3 className="font-medium text-sm">Total Days</h3>
+                  <p className="text-muted-foreground text-sm">
+                    {selectedConfig.totalDays} days
+                  </p>
+                </div>
+                {selectedConfig.streakType === "EVENT_PASS" && (
+                  <div>
+                    <h3 className="font-medium text-sm">Cost</h3>
+                    <p className="text-muted-foreground text-sm">
+                      {formatEventPassCost(selectedConfig, {
+                        separator: " ",
+                        repsLabel: "reps",
+                      })}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {selectedConfig.startDate && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="font-medium text-sm">Start Date</h3>
+                    <p className="text-muted-foreground text-sm">
+                      {new Date(selectedConfig.startDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {selectedConfig.endDate && (
+                    <div>
+                      <h3 className="font-medium text-sm">End Date</h3>
+                      <p className="text-muted-foreground text-sm">
+                        {new Date(selectedConfig.endDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <h3 className="mb-2 font-medium text-sm">Day Rewards</h3>
+                <div className="max-h-48 space-y-1 overflow-y-auto">
+                  {selectedConfig.rewards
+                    .sort((a, b) => a.dayNumber - b.dayNumber)
+                    .map((reward) => {
+                      const rewardSummary = getRewardArray(reward.rewards).join(" • ");
+                      return (
+                        <div
+                          key={reward.id}
+                          className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2"
+                        >
+                          <span className="font-medium">Day {reward.dayNumber}</span>
+                          <span className="text-muted-foreground text-sm">
+                            {rewardSummary || "No rewards"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  {selectedConfig.rewards.length === 0 && (
+                    <p className="text-muted-foreground text-sm">
+                      No rewards configured
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {userData && canChangeContent(userData.role) && (
+                <div className="flex gap-2 border-t pt-4">
+                  <Button
+                    onClick={() =>
+                      router.push(`/manual/activityStreak/edit/${selectedConfig.id}`)
+                    }
+                  >
+                    Edit Configuration
+                  </Button>
+                  <Confirm
+                    title="Delete Configuration"
+                    proceed_label="Delete"
+                    confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    button={
+                      <Button variant="destructive">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </Button>
+                    }
+                    onAccept={() => remove({ id: selectedConfig.id })}
+                  >
+                    <p className="text-muted-foreground text-sm">
+                      Are you sure you want to delete &quot;
+                      {selectedConfig.name}
+                      &quot;? This will also delete all user progress for this
+                      configuration. This action cannot be undone.
+                    </p>
+                  </Confirm>
+                </div>
+              )}
+            </div>
+          )}
+          {isPending && <Loader explanation="Processing..." />}
+        </Modal>
+      )}
+    </ContentBox>
+  );
+}
+
+type ConfigWithRewards = ActivityStreakConfig & {
+  rewards: ActivityStreakReward[];
+};

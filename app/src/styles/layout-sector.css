@@ -19,10 +19,9 @@ html[data-game-layout="sector"] {
   overflow: hidden;
 }
 .sector-header {
-  display: grid;
+  display: flex;
   flex: none;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 44px;
+  min-height: var(--sector-header-height);
   align-items: center;
   gap: 0.5rem;
   border-bottom: 1px solid var(--theme-line);
@@ -95,12 +94,6 @@ html[data-game-layout="sector"] {
   position: fixed;
   bottom: calc(var(--game-bottom-nav-h, 0px) + 1rem);
 }
-.sector-page {
-  width: min(100%, 80rem);
-  margin-inline: auto;
-  padding: calc(44px + 2rem) max(1rem, env(safe-area-inset-right))
-    calc(var(--sector-bottom-nav-space) + var(--activity-dock-space, 0px) + 2rem) max(1rem, env(safe-area-inset-left));
-}
 .sector-map-main {
   flex: 1;
   min-height: 0;
@@ -156,7 +149,40 @@ html[data-game-layout="sector"] {
   max-height: 22dvh;
   overflow-y: auto;
 }
-.sector-building-dialog {
+/* Page dialogs share the sector's coordinate space; the HUD and navigation stay outside it. */
+.sector-travel-host {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+.sector-screen-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  contain: layout paint;
+  pointer-events: none;
+}
+.sector-screen-viewport {
+  position: absolute;
+  inset: 0;
+  contain: layout paint;
+  pointer-events: none;
+}
+.sector-screen-viewport > * {
+  pointer-events: auto;
+}
+.sector-screen-backdrop {
+  position: absolute;
+  pointer-events: auto;
+  inset: 0;
+  background: rgb(0 0 0 / 0.6);
+}
+.sector-screen-layer [role="dialog"]:not(.sector-screen-dialog),
+.sector-screen-layer [role="alertdialog"] {
+  max-height: calc(100% - 1rem);
+}
+.sector-screen-dialog {
+  max-height: calc(100% - 1rem);
   grid-template-columns: minmax(0, 1fr);
   width: calc(100% - 1rem);
   max-width: 72rem;
@@ -164,14 +190,24 @@ html[data-game-layout="sector"] {
 }
 @media (max-width: 480px) {
   .sector-header {
-    gap: 0;
+    gap: 4px;
   }
-  .sector-building-dialog {
+  .sector-screen-dialog {
     padding-inline: 0.5rem;
   }
 }
 
 @media (min-width: 768px) {
+  html[data-game-layout="sector"] {
+    /* Narrow desktops keep two readable menus and a usable center column. */
+    --sector-sidebar-width: clamp(16rem, 22vw, 20rem);
+  }
+  .sector-game[data-player-menu-open] .sector-screen-viewport {
+    left: calc(var(--sector-sidebar-width) + 2rem);
+  }
+  .sector-game[data-game-menu-open] .sector-screen-viewport {
+    right: calc(var(--sector-sidebar-width) + 2rem);
+  }
   .sector-drawer {
     top: calc(var(--sector-header-height) + 1rem);
     bottom: auto;
@@ -194,15 +230,15 @@ html[data-game-layout="sector"] {
   }
 }
 
-.sector-building-dialog > [data-content-box] {
+.sector-screen-dialog > [data-content-box] {
   min-width: 0;
   width: 100%;
   max-width: 100%;
 }
 
-/* A collapsed lesson or its Quests tab still needs to open above the building.
+/* A collapsed lesson or its Quests tab still needs to open above a screen.
    Nested confirmations keep the shared dialog layer above that dock. */
-.sector-building-dialog[data-guided-tutorial] {
+.sector-screen-dialog[data-guided-tutorial] {
   z-index: 30;
 }
 
@@ -299,9 +335,10 @@ html[data-game-layout="sector"] {
 
 /* Give the character summary the full header width while retaining a 44px row. */
 .sector-player-status {
+  flex: 1;
   container-type: inline-size;
   display: grid;
-  grid-template-columns: 36px clamp(60px, 20vw, 100px) clamp(68px, 20vw, 96px) minmax(0, 1fr);
+  grid-template-columns: 36px clamp(60px, 20vw, 100px) minmax(68px, 1fr) minmax(0, max-content);
   gap: 3px;
   width: 100%;
   height: 44px;
@@ -335,6 +372,9 @@ html[data-game-layout="sector"] {
 }
 .player-status-identity {
   min-width: 0;
+}
+.player-status-combat {
+  display: none;
 }
 @media (max-width: 767px) {
   .player-status-identity {
@@ -521,30 +561,105 @@ html[data-game-layout="sector"] {
   }
 }
 
-/* Overlay only the controls themselves, leaving map gestures available between them. */
-.sector-sidebar-controls {
-  position: fixed;
-  z-index: 25;
-  top: calc(var(--sector-header-height) + 1rem);
-  right: max(1rem, env(safe-area-inset-right));
-  left: max(1rem, env(safe-area-inset-left));
-  display: flex;
-  justify-content: space-between;
-  pointer-events: none;
+/* Wide desktops fit both stat groups without lengthening the five resource bars. */
+@media (min-width: 1600px) {
+  .sector-player-status {
+    grid-template-columns: 40px 160px minmax(240px, 420px) minmax(440px, 1fr) minmax(0, max-content);
+  }
+  .player-status-combat {
+    display: grid;
+    grid-column: 4;
+    grid-row: 1 / 3;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    min-width: 0;
+    border-right: 1px solid var(--theme-line);
+    padding-right: 1rem;
+  }
+  .player-status-combat section {
+    min-width: 0;
+    border-left: 1px solid var(--theme-line);
+    padding-left: 1rem;
+  }
+  .player-status-combat h3 {
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 11px;
+  }
+  .player-status-combat dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 1rem;
+    font-size: 10px;
+    line-height: 11px;
+  }
+  .player-status-combat dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .player-status-combat dt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .player-status-combat dd {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .player-status-combat small {
+    opacity: 0.7;
+    font-size: inherit;
+  }
+  .player-status-shortcuts {
+    grid-column: 5;
+  }
+}
+
+/* The character summary takes over a collapsed control slot while its drawer is open. */
+.sector-header-menu {
+  flex: none;
 }
 .sector-sidebar-toggle {
-  pointer-events: auto;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  flex-direction: column;
+  gap: 0;
+  padding: 2px;
   border: 1px solid var(--theme-line);
-  border-radius: 0.6rem;
-  background: var(--theme-surface);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  border-color: color-mix(in srgb, var(--theme-accent) 40%, transparent);
+  border-radius: 0.5rem;
+  background: var(--theme-bg);
+  background: color-mix(in srgb, var(--theme-accent) 10%, var(--theme-surface));
+  box-shadow: none;
+}
+.sector-menu-label {
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 10px;
+}
+.sector-sidebar-toggle:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 1px;
 }
 .sector-sidebar-toggle[hidden] {
   display: none;
 }
 .sector-sidebar-toggle svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
+}
+@media (min-width: 768px) {
+  .sector-sidebar-toggle {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
 }
 .sector-travel [data-sector-weather] {
   top: 1rem;

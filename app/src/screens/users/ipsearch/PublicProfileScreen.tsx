@@ -1,0 +1,93 @@
+"use client";
+
+import { ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { UserInfoCell } from "@/layout/UserInfoCell";
+import { useInfinitePagination } from "@/libs/pagination";
+import { canSeeIps } from "@/utils/permissions";
+import type { ArrayElement } from "@/utils/typeutils";
+import { useUserDataSelector } from "@/utils/UserContext";
+
+/** Render the users ipsearch screen independently of its route adapter. */
+export function PublicProfileScreen(props: { params: { ip: string } }) {
+  const params = props.params;
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
+
+  const {
+    data: users,
+    fetchNextPage,
+    hasNextPage,
+  } = api.profile.getPublicUsers.useInfiniteQuery(
+    {
+      limit: 30,
+      orderBy: "Online",
+      ip: params.ip,
+      isAi: false,
+    },
+    {
+      enabled: !!userData && canSeeIps(userData.role),
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      placeholderData: (previousData) => previousData,
+      staleTime: 1000 * 60 * 5, // every 5min
+    },
+  );
+  const allUsers = users?.pages
+    .flatMap((page) => page.data)
+    .map((user) => ({
+      ...user,
+      info: <UserInfoCell user={user} />,
+    }));
+  type User = ArrayElement<typeof allUsers>;
+
+  useInfinitePagination({
+    fetchNextPage,
+    hasNextPage,
+    lastElement,
+  });
+
+  const columns: ColumnDefinitionType<User, keyof User>[] = [
+    { key: "avatar", header: "", type: "avatar" },
+    { key: "info", header: "Info", type: "jsx" },
+    { key: "updatedAt", header: "Last Active", type: "time_passed" },
+    { key: "lastIp", header: "LastIP", type: "string" },
+  ];
+
+  if (!userData) return <Loader explanation="Loading userdata" />;
+  if (!canSeeIps(userData.role)) {
+    return (
+      <ContentBox title="Users" defaultBackHref="/users" subtitle="IP Lookup">
+        You are not allowed to search IPs.
+      </ContentBox>
+    );
+  }
+
+  return (
+    <ContentBox
+      title={`Users`}
+      defaultBackHref="/users"
+      subtitle={`IP Lookup: ${params.ip}`}
+      padding={false}
+    >
+      <Table
+        data={allUsers}
+        columns={columns}
+        linkPrefix="/username/"
+        linkColumn={"username"}
+        setLastElement={setLastElement}
+        buttons={[
+          {
+            label: <ExternalLink className="h-5 w-5" />,
+            onClick: (user: User) => {
+              window.open(`/userid/${user.userId}`, "_blank");
+            },
+          },
+        ]}
+      />
+    </ContentBox>
+  );
+}

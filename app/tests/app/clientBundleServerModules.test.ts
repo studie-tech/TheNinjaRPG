@@ -43,7 +43,10 @@ const DIRECTIVELESS_CLIENT_ENTRIES = ["instrumentation-client.ts"];
  * are derived from the table definitions: they may ship the schema and drizzle, but not
  * the database client or the server env.
  */
-const SCHEMA_EDITORS = ["src/app/[shell]/manual/ai/edit/[aiid]/page.tsx"];
+const SCHEMA_EDITORS = [
+  "src/app/[shell]/manual/ai/edit/[aiid]/page.tsx",
+  "src/screens/manual/ai/edit/ManualAisEditScreen.tsx",
+];
 const SCHEMA_SUPPORT = /^(?:drizzle\/schema\.ts|drizzle-orm(?:\/.*)?|drizzle-zod)$/;
 
 // Typed locally: importing "bun" would load its global types into the whole program.

@@ -1,0 +1,140 @@
+"use client";
+
+import { useUser } from "@clerk/nextjs";
+import { CheckCircle2, XCircle } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import ContentBox from "@/layout/ContentBox";
+import { DiscordAuthorizeButton, DiscordLinkRules } from "@/layout/DiscordLinkRules";
+import Link from "@/layout/Link";
+import Loader from "@/layout/Loader";
+import {
+  DISCORD_AUTOMATIC_LINK_TEXT,
+  type DiscordLinkResult,
+  describeDiscordLinkResult,
+  isDiscordLinkResult,
+} from "@/libs/discordLink";
+import { useUserDataSelector } from "@/utils/UserContext";
+
+/**
+ * Discord Linked Roles verification page. Discord opens it when a member claims the
+ * Verified Ninja role; the OAuth callback and the Clerk auto-link return here with
+ * `?result=` (plus `auto=1` when the link reused the Discord sign-in).
+ */
+export function DiscordLinkScreen() {
+  return (
+    <ContentBox
+      title="Discord"
+      subtitle="Link your Discord account"
+      defaultBackHref="/profile"
+    >
+      <Suspense fallback={<Loader explanation="Loading" />}>
+        <DiscordLinkContent />
+      </Suspense>
+    </ContentBox>
+  );
+}
+
+const DiscordLinkContent: React.FC = () => {
+  const searchParams = useSearchParams();
+  const result = searchParams.get("result");
+  if (isDiscordLinkResult(result))
+    return (
+      <DiscordLinkOutcome
+        result={result}
+        hint={searchParams.get("hint") ?? undefined}
+        until={searchParams.get("until") ?? undefined}
+        automatic={searchParams.get("auto") === "1"}
+      />
+    );
+  return <DiscordLinkStart />;
+};
+
+/** Results the player can retry directly from this page. */
+const RETRYABLE: DiscordLinkResult[] = [
+  "cancelled",
+  "invalid_state",
+  "error",
+  "signed_out",
+];
+
+const DiscordLinkOutcome: React.FC<{
+  result: DiscordLinkResult;
+  hint?: string;
+  until?: string;
+  automatic?: boolean;
+}> = ({ result, hint, until, automatic }) => {
+  const copy = describeDiscordLinkResult(result, { hint, until, automatic });
+  const Icon = copy.success ? CheckCircle2 : XCircle;
+  return (
+    <div className="flex flex-col items-center gap-3 p-4 text-center">
+      <Icon
+        className={`h-12 w-12 ${copy.success ? "text-green-600" : "text-red-600"}`}
+        aria-hidden
+      />
+      <h2 className="font-bold text-lg">{copy.title}</h2>
+      <p className="max-w-prose">{copy.description}</p>
+      <div className="flex flex-row flex-wrap justify-center gap-2 pt-2">
+        {RETRYABLE.includes(result) && <DiscordAuthorizeButton label="Try again" />}
+        <Link href="/profile?tab=edit">
+          <Button variant="secondary">Profile settings</Button>
+        </Link>
+      </div>
+    </div>
+  );
+};
+
+const DiscordLinkStart: React.FC = () => {
+  const { isLoaded, isSignedIn } = useUser();
+  const { data: userData, status } = useUserDataSelector((u) => ({
+    username: u.username,
+  }));
+  const { data, isPending } = api.discord.getStatus.useQuery();
+
+  if (!isLoaded || isPending) return <Loader explanation="Loading" />;
+  if (!data?.enabled) return <DiscordLinkOutcome result="disabled" />;
+  if (!isSignedIn)
+    return (
+      <div className="flex flex-col items-center gap-3 p-4 text-center">
+        <p className="max-w-prose">
+          Sign in to TheNinja-RPG to link your Discord account to your character.
+        </p>
+        <Link href={`/login?redirect_url=${encodeURIComponent("/discord/link")}`}>
+          <Button>Sign in</Button>
+        </Link>
+      </div>
+    );
+  if (!userData && status === "pending")
+    return <Loader explanation="Loading character" />;
+  if (!userData) return <DiscordLinkOutcome result="no_character" />;
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      {data.link ? (
+        <p>
+          Your character <span className="font-bold">{userData.username}</span> is
+          linked to <span className="font-bold">{data.link.discordUsername}</span>.
+          {data.link.tokenSource === "CLERK" && ` ${DISCORD_AUTOMATIC_LINK_TEXT}`}{" "}
+          {data.link.needsRelink
+            ? "Discord no longer accepts updates for this link. Re-link to restore your roles."
+            : "Continue with Discord to refresh your roles and nickname."}
+        </p>
+      ) : (
+        <p>
+          Link the Discord account you use for the TheNinja-RPG server to your character{" "}
+          <span className="font-bold">{userData.username}</span>. Linking grants the
+          Verified Ninja role, sets your server nickname to your character name and adds
+          your village role.
+        </p>
+      )}
+      <DiscordLinkRules />
+      <div>
+        <DiscordAuthorizeButton
+          label={data.link?.needsRelink ? "Re-link Discord" : "Continue with Discord"}
+        />
+      </div>
+    </div>
+  );
+};

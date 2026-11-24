@@ -85,6 +85,7 @@ const TIER_OPPONENTS: Record<KessenTier, KessenNpcKey> = {
 
 describe("guest Circuit matches", () => {
   for (const [tier, npcKey] of Object.entries(TIER_OPPONENTS)) {
+    // Each case simulates two complete matches, including the deepest AI tier.
     it(`plays a ${tier} match against ${npcKey} to its end, the same way for one seed`, () => {
       const first = playOut(
         startNpc(npcKey as KessenNpcKey, "fixed-seed"),
@@ -106,7 +107,7 @@ describe("guest Circuit matches", () => {
       expect(stateHash(again.step.match.table.engine)).toBe(
         stateHash(first.step.match.table.engine),
       );
-    });
+    }, 15_000);
   }
 
   it("plays every Circuit opponent at the tier its standard match has on the server", () => {

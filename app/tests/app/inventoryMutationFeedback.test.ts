@@ -27,7 +27,7 @@ for (const procedure of [
         ? "../../src/hooks/useBulkSellItems.ts"
         : isItem
           ? "../../src/hooks/useItemActions.ts"
-          : "../../src/app/[shell]/jutsus/page.tsx";
+          : "../../src/screens/jutsus/MyJutsuScreen.tsx";
     const source = readFileSync(join(import.meta.dirname, file), "utf8");
     const call = source.indexOf(`api.${procedure}.useMutation(`);
     const callbacks = source

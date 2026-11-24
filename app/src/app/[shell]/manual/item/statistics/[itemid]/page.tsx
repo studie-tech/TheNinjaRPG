@@ -1,18 +1,8 @@
 "use client";
+
 import { use } from "react";
-import { ContentStatistics } from "@/layout/ContentStatistics";
-import { itemText } from "@/layout/seoTexts";
+import { ItemStatisticsScreen } from "@/screens/manual/item/statistics/ItemStatisticsScreen";
 
 export default function ItemStatistics(props: { params: Promise<{ itemid: string }> }) {
-  const { itemid } = use(props.params);
-  return (
-    <ContentStatistics
-      type="item"
-      id={itemid}
-      label="Item"
-      seoTitle="Item Statistics"
-      seoText={itemText}
-      subtitle={({ total, totalUsers }) => `#battles: ${total}. #users: ${totalUsers}`}
-    />
-  );
+  return <ItemStatisticsScreen params={use(props.params)} />;
 }

@@ -1,0 +1,172 @@
+"use client";
+
+import type { ReactNode } from "react";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import ApplicationsFiltering, {
+  getApplicationsFilter,
+  useApplicationsFiltering,
+} from "@/layout/ApplicationsFiltering";
+import Confirm from "@/layout/Confirm";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Table from "@/layout/Table";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
+import { canDeleteStaffApplication, isStaffRole } from "@/utils/permissions";
+import { useUserDataSelector } from "@/utils/UserContext";
+
+/** Render the manual staff applications screen independently of its route adapter. */
+export function ApplicationsScreen() {
+  const { data: me } = useUserDataSelector((profile) => ({ role: profile.role }));
+  const isStaff = me?.role ? isStaffRole(me.role) : false;
+  const canDelete = !!me && canDeleteStaffApplication(me.role);
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
+  const filterState = useApplicationsFiltering();
+  const {
+    data: appsPages,
+    fetchNextPage,
+    hasNextPage,
+    isPending,
+  } = api.applications.list.useInfiniteQuery(
+    { ...getApplicationsFilter(filterState), limit: 30 },
+    {
+      enabled: isStaff,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      placeholderData: (previousData) => previousData,
+      staleTime: 1000 * 60 * 5,
+    },
+  );
+  const apps = appsPages?.pages.flatMap((p) => p.data);
+  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
+  const utils = api.useUtils();
+  const deleteMutation = api.applications.delete.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (!data.success) return;
+      // Invalidate the exact list query with current filters for precision
+      await utils.applications.list.invalidate({
+        ...getApplicationsFilter(filterState),
+        limit: 30,
+      });
+    },
+  });
+
+  if (!isStaff) {
+    return (
+      <ContentBox
+        title="Applications"
+        subtitle="Staff only"
+        defaultBackHref="/manual/staff"
+      >
+        You do not have access to this page.
+      </ContentBox>
+    );
+  }
+
+  const rows: ApplicationRow[] = (apps || []).map((a) => ({
+    id: a.id,
+    createdAt: a.createdAt,
+    motivation: a.motivation,
+    avatar: a.applicant?.avatar || "",
+    info: (
+      <div>
+        <p className="font-bold">{a.applicant?.username}</p>
+        <p>
+          Target: {a.targetRole} • Status: {a.state.toLowerCase()}
+        </p>
+        <p>
+          Lvl. {a.applicant?.level || 0} {a.applicant?.rank || "STUDENT"}
+        </p>
+        <p>{a.applicant?.village?.name || "Syndicate"}</p>
+      </div>
+    ),
+    motivationPreview:
+      (a.motivation || "").length > 140
+        ? `${a.motivation?.slice(0, 140)}…`
+        : a.motivation || "",
+    // Human-friendly vote text for table
+    myVote: a.myVote
+      ? a.myVote === "APPROVED"
+        ? "Approved"
+        : "Rejected"
+      : "Not voted",
+    // Actions: delete button for the owner
+    actions: (
+      <div>
+        {canDelete && (
+          <Confirm
+            title="Confirm delete"
+            button={
+              <Button
+                variant="destructive"
+                size="sm"
+                loading={deleteMutation.isPending}
+              >
+                Delete
+              </Button>
+            }
+            confirmClassName="bg-red-600 text-white hover:bg-red-700"
+            disabled={deleteMutation.isPending}
+            onAccept={(e) => {
+              e.preventDefault();
+              if (deleteMutation.isPending) return;
+              deleteMutation.mutate({ id: a.id });
+            }}
+            proceed_label="Delete"
+          >
+            Delete this application? This cannot be undone.
+          </Confirm>
+        )}
+      </div>
+    ),
+  }));
+
+  return (
+    <ContentBox
+      title="Applications"
+      subtitle="Current staff applications"
+      defaultBackHref="/manual/staff"
+      padding={false}
+      topRightContent={<ApplicationsFiltering state={filterState} />}
+    >
+      {isPending && <Loader explanation="Loading applications" />}
+      {!isPending && rows.length === 0 && <p className="p-3">No applications found</p>}
+      {!isPending && rows.length > 0 && (
+        <Table<ApplicationRow, keyof ApplicationRow>
+          data={rows}
+          linkPrefix="/manual/staff/applications/"
+          linkColumn={"id"}
+          columns={[
+            { key: "avatar", header: "", type: "avatar" },
+            { key: "info", header: "Info", type: "jsx" },
+            { key: "createdAt", header: "Created", type: "date" },
+            { key: "myVote", header: "Your Vote", type: "string" },
+            {
+              key: "motivationPreview",
+              header: "Motivation",
+              type: "string",
+              tooltip: (row) => row.motivation || "",
+            },
+            ...(canDelete
+              ? [{ key: "actions" as const, header: "Actions", type: "jsx" as const }]
+              : []),
+          ]}
+          setLastElement={setLastElement}
+        />
+      )}
+    </ContentBox>
+  );
+}
+
+type ApplicationRow = {
+  id: string;
+  avatar: string;
+  info: ReactNode;
+  createdAt: Date;
+  myVote: string;
+  motivation?: string | null;
+  motivationPreview: string;
+  actions: ReactNode;
+};

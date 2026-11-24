@@ -9,7 +9,12 @@ import {
 } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { SectorPlayerStatus } from "@/components/layout/SectorPlayerStatus";
-import { MAX_PVP_BRACKET, MISSIONS_PER_DAY } from "@/drizzle/constants";
+import {
+  getCombatStatCap,
+  getUserCaps,
+  MAX_PVP_BRACKET,
+  MISSIONS_PER_DAY,
+} from "@/drizzle/constants";
 import * as Avatar from "@/layout/Avatar";
 import * as userContext from "@/utils/UserContext";
 import {
@@ -80,6 +85,37 @@ it("keeps five live HUD meters while profile pools update", () => {
   user = { ...user, curHealth: 35, maxHealth: 90 };
   view.rerender(<SectorPlayerStatus hasLocation />);
   expect(view.getByRole("button", { name: "HP: 35 / 90" })).toBeTruthy();
+});
+
+it("keeps combat readings rank-capped and mastery modifiers separate from earned values", () => {
+  user = {
+    ...user,
+    offence: 1_000_000,
+    speed: 123.456,
+    ninjutsuMastery: 200,
+    effectiveMasteries: { ninjutsuMastery: 225 },
+    masteryRanks: { ninjutsuMastery: "D" },
+  };
+  const view = render(<SectorPlayerStatus hasLocation />);
+  const combat = within(view.getByRole("region", { name: "Combat stats" }));
+  expect(
+    combat.getByText(
+      getCombatStatCap(getUserCaps("GENIN"), "offence").toLocaleString(),
+    ),
+  ).toBeTruthy();
+  expect(combat.getByText("123.46")).toBeTruthy();
+  const mastery = view.container.querySelector(
+    '[title="Ninjutsu (D): 200 (+25 from modifiers)"]',
+  );
+  expect(mastery?.textContent).toBe("Ninjutsu200 (+25)");
+  expect(user.offence).toBe(1_000_000);
+
+  user = { ...user, speed: 150, effectiveMasteries: { ninjutsuMastery: 190 } };
+  view.rerender(<SectorPlayerStatus hasLocation />);
+  expect(combat.getByText("150")).toBeTruthy();
+  expect(
+    view.container.querySelector('[title="Ninjutsu (D): 200 (-10 from modifiers)"]'),
+  ).toBeTruthy();
 });
 
 it("opens full character readings from each meter and returns keyboard focus on close", async () => {

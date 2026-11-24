@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CombatStatNames, MasteryNames } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import Link from "@/layout/Link";
 import {
@@ -22,6 +23,9 @@ import {
   StatusLink,
 } from "@/layout/MenuBoxProfile";
 import { modalScrollableBodyClassName, modalViewportClassName } from "@/layout/Modal";
+import { getMasteryRank } from "@/libs/masteryProgression";
+import { withCappedStats } from "@/libs/profile";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Live character shortcuts with detailed resources and timers available on demand. */
@@ -99,6 +103,7 @@ export function SectorPlayerStatus({ hasLocation }: { hasLocation: boolean }) {
           <ProfilePools compact onInspect={inspectResources} />
           <ProfileLevel compact onInspect={inspectResources} />
         </fieldset>
+        <SectorCombatStats />
         <section
           className="player-status-shortcuts"
           aria-label="Character shortcuts"
@@ -160,5 +165,63 @@ export function SectorPlayerStatus({ hasLocation }: { hasLocation: boolean }) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Rank-capped combat readings and earned masteries from the shared profile cache. */
+function SectorCombatStats() {
+  const { data } = useUserDataSelector((user) => {
+    const capped = withCappedStats(user);
+    return [
+      {
+        title: "Combat stats",
+        stats: CombatStatNames.map((name) => ({
+          label: capitalizeFirstLetter(name),
+          value: capped[name] ?? 0,
+          bonus: 0,
+          rank: "",
+        })),
+      },
+      {
+        title: "Masteries",
+        stats: MasteryNames.map((name) => ({
+          label: capitalizeFirstLetter(name.replace("Mastery", "")),
+          value: capped[name] ?? 0,
+          bonus:
+            (user.effectiveMasteries?.[name] ?? capped[name] ?? 0) -
+            (capped[name] ?? 0),
+          rank: getMasteryRank(user, name),
+        })),
+      },
+    ];
+  });
+  return (
+    <div className="player-status-combat">
+      {data?.map(({ title, stats }) => (
+        <section key={title} aria-label={title}>
+          <h3>{title}</h3>
+          <dl>
+            {stats.map(({ label, value, bonus, rank }) => (
+              <div
+                key={label}
+                title={`${label}${rank ? ` (${rank})` : ""}: ${value.toLocaleString()}${bonus ? ` (${bonus > 0 ? "+" : ""}${bonus.toLocaleString()} from modifiers)` : ""}`}
+              >
+                <dt>{label}</dt>
+                <dd>
+                  {value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  {bonus !== 0 && (
+                    <small>
+                      {" "}
+                      ({bonus > 0 ? "+" : ""}
+                      {bonus.toLocaleString(undefined, { maximumFractionDigits: 2 })})
+                    </small>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
+    </div>
   );
 }

@@ -1,0 +1,102 @@
+"use client";
+
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { AvatarNameCell } from "@/layout/AvatarNameCell";
+import AwardsFiltering, { getFilter, useFiltering } from "@/layout/AwardsFiltering";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { useInfinitePagination } from "@/libs/pagination";
+import { humanizeConstant } from "@/utils/string";
+import type { ArrayElement } from "@/utils/typeutils";
+
+/** Render the manual awards screen independently of its route adapter. */
+export function AwardsManualScreen() {
+  // State for infinite scroll
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
+
+  // Filtering state
+  const state = useFiltering();
+  const filter = getFilter(state);
+
+  // Query with pagination
+  const { data, fetchNextPage, hasNextPage } = api.misc.getAllAwards.useInfiniteQuery(
+    { limit: 50, ...filter },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      placeholderData: (previousData) => previousData,
+    },
+  );
+
+  // Setup infinite scroll
+  useInfinitePagination({
+    fetchNextPage,
+    hasNextPage,
+    lastElement,
+  });
+
+  // Process awards data
+  const allAwards = data?.pages
+    .flatMap((page) => page.data)
+    .filter((award) => award.receiver && award.awardedBy)
+    .map((award) => ({
+      ...award,
+      reason: humanizeConstant(award.reason),
+      awardedBy: (
+        <AvatarNameCell
+          href={`/username/${award.awardedBy.username}`}
+          avatar={award.awardedBy.avatar}
+          name={award.awardedBy.username}
+        />
+      ),
+      receiver: (
+        <AvatarNameCell
+          href={`/username/${award.receiver.username}`}
+          avatar={award.receiver.avatar}
+          name={award.receiver.username}
+        />
+      ),
+      rewards: (
+        <div>
+          {award.reputationAmount > 0 && (
+            <p>Reputation: {award.reputationAmount.toLocaleString()}</p>
+          )}
+          {award.moneyAmount > 0 && <p>Money: {award.moneyAmount.toLocaleString()}</p>}
+        </div>
+      ),
+    }));
+
+  // Table configuration
+  type AwardWithUsers = ArrayElement<typeof allAwards>;
+  const columns: ColumnDefinitionType<AwardWithUsers, keyof AwardWithUsers>[] = [
+    { key: "receiver", header: "Awarded To", type: "jsx" },
+    { key: "awardedBy", header: "Awarded By", type: "jsx" },
+    { key: "rewards", header: "Rewards", type: "jsx" },
+    { key: "reason", header: "Reason", type: "string" },
+    {
+      key: "createdAt",
+      header: "Date",
+      type: "date",
+      className: "whitespace-nowrap",
+    },
+  ];
+
+  if (!data) return <Loader explanation="Loading awards data..." />;
+
+  return (
+    <ContentBox
+      title="User Rewards"
+      subtitle="History of all reputation points and money awarded"
+      padding={false}
+      defaultBackHref="/manual"
+      topRightContent={<AwardsFiltering state={state} />}
+    >
+      {allAwards && allAwards.length > 0 ? (
+        <Table data={allAwards} columns={columns} setLastElement={setLastElement} />
+      ) : (
+        <p className="p-3">No awards found.</p>
+      )}
+    </ContentBox>
+  );
+}

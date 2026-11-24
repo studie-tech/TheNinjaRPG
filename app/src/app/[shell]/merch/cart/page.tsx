@@ -1,13 +1,7 @@
-import { MerchCollection } from "@/components/merch/MerchCollection";
-import { buildMetadata } from "@/libs/seo";
+import { MerchCartScreen } from "@/screens/merch/cart/MerchCartScreen";
 
-export const metadata = buildMetadata({
-  title: "Your merch bag",
-  description: "Review your selected merchandise and quantities.",
-  path: "/merch/cart",
-  noindex: true,
-});
+export { metadata } from "@/screens/merch/cart/MerchCartScreen.metadata";
 
 export default function MerchCartPage() {
-  return <MerchCollection />;
+  return <MerchCartScreen />;
 }

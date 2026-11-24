@@ -1,17 +1,7 @@
-import { headers } from "next/headers";
-import { notFound } from "next/navigation";
-import DeviceSettings from "@/components/native/DeviceSettings";
-import ContentBox from "@/layout/ContentBox";
-import { isNativeUserAgent } from "@/libs/native/userAgent";
-import { noindexMetadata } from "@/libs/seo";
+import { DeviceSettingsScreen } from "@/screens/settings/device/DeviceSettingsScreen";
 
-export const metadata = noindexMetadata("App settings");
+export { metadata } from "@/screens/settings/device/DeviceSettingsScreen.metadata";
 
-export default async function DeviceSettingsPage() {
-  if (!isNativeUserAgent((await headers()).get("user-agent"))) notFound();
-  return (
-    <ContentBox title="App settings" subtitle="Your app preferences">
-      <DeviceSettings />
-    </ContentBox>
-  );
+export default function DeviceSettingsPage() {
+  return <DeviceSettingsScreen />;
 }

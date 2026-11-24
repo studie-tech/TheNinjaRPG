@@ -1,13 +1,5 @@
-"use client";
+import { MinigamesScreen } from "@/screens/minigames/MinigamesScreen";
 
-import ContentBox from "@/layout/ContentBox";
-import { MinigameGrid } from "@/layout/MinigameGrid";
-
-/** Wake Island's Minigames building: every minigame, as in the manual's section. */
 export default function MinigamesPage() {
-  return (
-    <ContentBox title="Minigames" subtitle="Fun games to play in the ninja world">
-      <MinigameGrid priority />
-    </ContentBox>
-  );
+  return <MinigamesScreen />;
 }

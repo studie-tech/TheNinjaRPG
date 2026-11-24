@@ -1,4 +1,5 @@
-import ManualSkillTree from "@/layout/ManualSkillTree";
+import { Screen } from "@/screens/manual/bloodright/Screen";
+
 export default function Page() {
-  return <ManualSkillTree isBloodright />;
+  return <Screen />;
 }

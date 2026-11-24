@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
+import { PublicProfileScreen } from "@/screens/users/PublicProfileScreen";
 
 export default async function PublicProfile(props: {
   params: Promise<{ userid: string }>;
 }) {
-  const params = await props.params;
-  redirect(`/userid/${params.userid}`);
+  return <PublicProfileScreen params={await props.params} />;
 }

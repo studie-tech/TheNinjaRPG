@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { getPageForumContext } from "@/app/[shell]/forum/pageData";
 import { buildMetadata, noindexMetadata } from "@/libs/seo";
+import { getPageForumContext } from "@/screens/forum/pageData";
 
 /** Generate board metadata using guest read permissions so private names and summaries stay unindexed. */
 export async function generateMetadata(props: {

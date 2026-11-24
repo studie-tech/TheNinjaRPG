@@ -84,8 +84,9 @@ describe("card ability editor", () => {
     restoreBrowserGlobals();
   });
 
-  it("keeps every seeded ability list through moving, adding and removing entries", () => {
-    for (const card of KESSEN_SEED_CATALOG) {
+  it.each(KESSEN_SEED_CATALOG)(
+    "keeps $name's ability list through moving, adding and removing entries",
+    (card) => {
       const stored = structuredClone(card.abilities);
       let current: DraftAbility[] = card.abilities;
       const Harness = () => {
@@ -113,9 +114,8 @@ describe("card ability editor", () => {
         fireEvent.click(getByTitle(`Move Ability ${index} down`));
       }
       expect(current).toEqual(stored);
-      cleanup();
-    }
-  });
+    },
+  );
 
   it("builds an ability from its verb, amount and target", async () => {
     const { abilities } = renderEditor(itemOf({}));

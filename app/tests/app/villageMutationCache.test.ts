@@ -6,7 +6,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const flows = [
-  { file: "app/[shell]/village/page.tsx", procedure: "leaveVillage" },
+  { file: "screens/village/VillageOverviewScreen.tsx", procedure: "leaveVillage" },
   { file: "hooks/useTravelSession.ts", procedure: "joinVillage" },
   { file: "layout/profileEdit/SwapVillage.tsx", procedure: "swapVillage" },
 ];

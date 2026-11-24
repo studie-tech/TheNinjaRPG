@@ -65,12 +65,12 @@ const staleTime = new Function(`return (${staleTimeExpression});`)() as number;
  * re-read it when mounted. The options are taken from the source so dropping them fails here.
  */
 const inventoryQueries = [
-  { file: "app/[shell]/items/page.tsx", procedure: "getUserItemsWithVariants" },
+  { file: "screens/items/MyItemsScreen.tsx", procedure: "getUserItemsWithVariants" },
   {
-    file: "app/[shell]/auctionhouse/NewListingDialog.tsx",
+    file: "screens/auctionhouse/NewListingDialog.tsx",
     procedure: "getUserItemsWithVariants",
   },
-  { file: "app/[shell]/auctionhouse/Offers.tsx", procedure: "getUserItems" },
+  { file: "screens/auctionhouse/Offers.tsx", procedure: "getUserItems" },
 ];
 
 const queryOptions = (file: string, procedure: string) => {

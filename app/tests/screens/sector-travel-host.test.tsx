@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import * as navigation from "@/hooks/navigation";
 import * as media from "@/hooks/useMediaQuery";
 import * as help from "@/layout/LowerRightHelpBtn";
+import { PUBLIC_PAGE_ROUTES } from "@/libs/browserRouteTelemetry";
 import { getGameLayout } from "@/libs/gameLayouts";
 import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
 import { useScreenNavigation } from "@/screens/ScreenNavigationContext";
@@ -92,7 +93,17 @@ it("keeps one session across travel, direct building entries, back and forward",
     </SectorTravelHost>,
   );
   expect(view.queryByText("Unused route")).toBeNull();
-  for (const path of ["/bank", "/travel", "/itemshop", "/bank", "/travel"]) {
+  for (const path of [
+    "/bank",
+    "/auctionhouse",
+    "/forum/board/thread",
+    "/combat",
+    "/profile",
+    "/travel",
+    "/itemshop",
+    "/bank",
+    "/travel",
+  ]) {
     pathname = path;
     await act(async () => {
       view.rerender(
@@ -111,6 +122,104 @@ it("keeps one session across travel, direct building entries, back and forward",
   }
 });
 
+it("hosts every non-travel route in a dialog without replacing the map session", async () => {
+  const view = render(
+    <SectorTravelHost isGuidedTutorial={false}>
+      <p>Route screen</p>
+    </SectorTravelHost>,
+  );
+  for (const path of PUBLIC_PAGE_ROUTES) {
+    pathname = path;
+    await act(async () => {
+      view.rerender(
+        <SectorTravelHost isGuidedTutorial={false}>
+          <p>Route screen</p>
+        </SectorTravelHost>,
+      );
+    });
+    expect(view.queryAllByRole("dialog")).toHaveLength(path === "/travel" ? 0 : 1);
+    expect(view.queryByText("Route screen") !== null).toBe(path !== "/travel");
+    expect(starts).toBe(1);
+    expect(stops).toBe(0);
+  }
+});
+
+it("resets dialog scroll for a new route while retaining the map", () => {
+  pathname = "/auctionhouse";
+  const view = render(
+    <SectorTravelHost isGuidedTutorial={false}>
+      <p>Auctions</p>
+    </SectorTravelHost>,
+  );
+  const dialog = view.getByRole("dialog");
+  dialog.scrollTop = 400;
+  pathname = "/forum";
+  view.rerender(
+    <SectorTravelHost isGuidedTutorial={false}>
+      <p>Forum</p>
+    </SectorTravelHost>,
+  );
+  expect(view.getByRole("dialog")).toBe(dialog);
+  expect(dialog.scrollTop).toBe(0);
+  expect(starts).toBe(1);
+});
+
+it("keeps page and nested dialogs inside the sector while navigation remains reachable", async () => {
+  pathname = "/auctionhouse";
+  const navigate = vi.fn();
+  const view = render(
+    <>
+      <button type="button" onClick={navigate}>
+        Main navigation
+      </button>
+      <SectorTravelHost isGuidedTutorial={false}>
+        <Building />
+      </SectorTravelHost>
+      <button type="button">Bottom navigation</button>
+    </>,
+  );
+  await act(async () => flushRadixFocus());
+  const layer = view.container.querySelector("[data-sector-screen-layer]");
+  const page = view.getByRole("dialog", { name: "Game screen" });
+  expect(page.closest("[data-sector-screen-layer]")).toBe(layer);
+  expect(page.closest("[data-sector-screen-viewport]")).toBeTruthy();
+  const mainNavigation = view.getByRole("button", { name: "Main navigation" });
+  expect(view.getByRole("button", { name: "Bottom navigation" })).toBeTruthy();
+  fireEvent.pointerDown(mainNavigation);
+  fireEvent.click(mainNavigation);
+  fireEvent.focusIn(mainNavigation);
+  expect(navigate).toHaveBeenCalledTimes(1);
+  expect(replace).not.toHaveBeenCalled();
+  fireEvent.click(view.getByRole("button", { name: "Transfer" }));
+  await act(async () => flushRadixFocus());
+  expect(
+    view
+      .getByRole("dialog", { name: "Confirm transfer" })
+      .closest("[data-sector-screen-layer]"),
+  ).toBe(layer);
+  fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+  await act(async () => flushRadixFocus());
+  expect(replace).not.toHaveBeenCalled();
+  expect(view.getByRole("dialog", { name: "Game screen" })).toBe(page);
+});
+
+it("dismisses a page from the sector backdrop", async () => {
+  pathname = "/auctionhouse";
+  const view = render(
+    <SectorTravelHost isGuidedTutorial={false}>
+      <Building />
+    </SectorTravelHost>,
+  );
+  await act(async () => flushRadixFocus());
+  const backdrop = view.container.querySelector("[data-sector-screen-backdrop]");
+  expect(backdrop?.closest("[data-sector-screen-layer]")).toBeTruthy();
+  fireEvent.pointerDown(backdrop!, { pointerType: "mouse", button: 0 });
+  fireEvent.click(backdrop!);
+  await waitFor(() =>
+    expect(replace).toHaveBeenCalledWith("/travel", { scroll: false }),
+  );
+});
+
 it("returns direct building visits to travel through their header and Escape", async () => {
   pathname = "/bank";
   const view = render(
@@ -118,7 +227,7 @@ it("returns direct building visits to travel through their header and Escape", a
       <Building />
     </SectorTravelHost>,
   );
-  expect(view.getByRole("dialog", { name: "Bank" })).toBeTruthy();
+  expect(view.getByRole("dialog", { name: "Game screen" })).toBeTruthy();
   fireEvent.click(view.getByRole("button", { name: "Leave building" }));
   expect(replace).toHaveBeenCalledWith("/travel", { scroll: false });
   replace.mockClear();
@@ -243,7 +352,44 @@ describe("responsive sector menus", () => {
     );
   });
 
-  it("uses corner sidebar toggles and bottom Activity navigation on desktop", () => {
+  it.each(["/auctionhouse", "/combat", "/forum/board/thread", "/manual/item"])(
+    "retains the map frame for %s",
+    (path) => {
+      vi.spyOn(routing, "usePublicPathname").mockReturnValue(path);
+      const view = render(<SectorGameLayout {...props()} />);
+      expect(view.getByLabelText("Map host")).toBeTruthy();
+      expect(view.container.querySelector("main.sector-map-main")).toBeTruthy();
+      expect(view.queryByRole("link", { name: "Show global map" })).toBeNull();
+    },
+  );
+
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    "exposes each open sidebar to the desktop dialog columns (left=%s, right=%s)",
+    (left, right) => {
+      isDesktop = true;
+      const input = { ...props(), leftSideBarOpen: left, rightSideBarOpen: right };
+      const view = render(<SectorGameLayout {...input} />);
+      const frame = view.container.querySelector(".sector-game");
+      expect(frame?.getAttribute("data-player-menu-open")).toBe(left ? "true" : null);
+      expect(frame?.getAttribute("data-game-menu-open")).toBe(right ? "true" : null);
+      view.rerender(
+        <SectorGameLayout
+          {...input}
+          leftSideBarOpen={false}
+          rightSideBarOpen={false}
+        />,
+      );
+      expect(frame?.hasAttribute("data-player-menu-open")).toBe(false);
+      expect(frame?.hasAttribute("data-game-menu-open")).toBe(false);
+    },
+  );
+
+  it("uses top-bar sidebar toggles and bottom Activity navigation on desktop", () => {
     isDesktop = true;
     const input = props();
     const view = render(<SectorGameLayout {...input} />);
@@ -263,23 +409,29 @@ describe("responsive sector menus", () => {
     expect(getGameLayout("sector").sidebarBreakpoint).toBeNull();
   });
   it.each([false, true])(
-    "shows only the closed sidebar's overlay toggle (desktop=%s)",
+    "shows only the closed sidebar's top-bar toggle (desktop=%s)",
     async (desktop) => {
       isDesktop = desktop;
       const input = props();
       const view = render(<SectorGameLayout {...input} />);
       const player = view.getByRole("button", { name: "Open player menu" });
       const game = view.getByRole("button", { name: "Open game menu" });
-      expect(player.closest("header")).toBeNull();
-      expect(game.closest("header")).toBeNull();
+      expect(player.closest("header")).toBeTruthy();
+      expect(game.closest("header")).toBeTruthy();
+      expect(player.querySelector(".sector-menu-label")?.textContent).toBe("Player");
+      expect(game.querySelector(".sector-menu-label")?.textContent).toBe("Game");
       view.rerender(<SectorGameLayout {...input} leftSideBarOpen />);
       await act(async () => flushRadixFocus());
       expect(player.hidden).toBe(true);
+      expect(player.parentElement?.hidden).toBe(true);
       expect(game.hidden).toBe(false);
+      expect(game.parentElement?.hidden).toBe(false);
       view.rerender(<SectorGameLayout {...input} rightSideBarOpen />);
       await act(async () => flushRadixFocus());
       expect(player.hidden).toBe(false);
+      expect(player.parentElement?.hidden).toBe(false);
       expect(game.hidden).toBe(true);
+      expect(game.parentElement?.hidden).toBe(true);
       view.rerender(<SectorGameLayout {...input} />);
       await act(async () => flushRadixFocus());
       expect(player.hidden).toBe(false);
@@ -305,7 +457,7 @@ describe("responsive sector menus", () => {
     expect(button.querySelector('span[aria-hidden="true"]')).toBeNull();
   });
 
-  it("uses mobile corner menus and the shared configured bottom navigation", () => {
+  it("uses mobile top-bar menus and the shared configured bottom navigation", () => {
     const input = props();
     input.mobileNavConfig = { left: ["bank"], right: ["itemshop", "items", "tavern"] };
     const view = render(<SectorGameLayout {...input} />);

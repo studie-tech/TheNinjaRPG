@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as paypal from "@paypal/react-paypal-js";
 import { act, cleanup, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
-import { StoreCheckout } from "@/app/[shell]/points/StoreCheckout";
+import { StoreCheckout } from "@/screens/points/StoreCheckout";
 import * as UserContext from "@/utils/UserContext";
 import {
   installBrowserGlobals,

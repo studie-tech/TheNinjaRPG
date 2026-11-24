@@ -8,21 +8,21 @@ import { join } from "node:path";
  * Sentry capture. A local onError would replace all of that.
  */
 const mutations = [
-  { file: "items", path: "blackmarket.buyItemSlot" },
-  { file: "reports", path: "reports.clear" },
-  { file: "conceptart", path: "conceptart.create" },
-  { file: "conceptart", path: "conceptart.createVideo" },
-  { file: "manual/staff", path: "applications.create" },
-  { file: "manual/world/tilesets", path: "mapAsset.create" },
-  { file: "manual/world/tilesets", path: "mapAsset.delete" },
-  { file: "manual/world/tilesets", path: "mapTerrain.create" },
-  { file: "manual/world/tilesets", path: "mapTerrain.delete" },
+  { file: "items/MyItemsScreen", path: "blackmarket.buyItemSlot" },
+  { file: "reports/ReportsScreen", path: "reports.clear" },
+  { file: "conceptart/ConceptArtScreen", path: "conceptart.create" },
+  { file: "conceptart/ConceptArtScreen", path: "conceptart.createVideo" },
+  { file: "manual/staff/StaffScreen", path: "applications.create" },
+  { file: "manual/world/tilesets/MapTilesetsScreen", path: "mapAsset.create" },
+  { file: "manual/world/tilesets/MapTilesetsScreen", path: "mapAsset.delete" },
+  { file: "manual/world/tilesets/MapTilesetsScreen", path: "mapTerrain.create" },
+  { file: "manual/world/tilesets/MapTilesetsScreen", path: "mapTerrain.delete" },
 ] as const;
 
 /** The options object of `api.<path>.useMutation({ ... })`, up to its closing line. */
 const mutationOptions = (file: string, path: string) => {
   const lines = readFileSync(
-    join(import.meta.dirname, "../../src/app/[shell]", file, "page.tsx"),
+    join(import.meta.dirname, "../../src/screens", `${file}.tsx`),
     "utf8",
   ).split("\n");
   const start = lines.findIndex((line) => line.includes(`api.${path}.useMutation({`));

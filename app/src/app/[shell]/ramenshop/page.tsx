@@ -1,7 +1,5 @@
-"use client";
-
-import RamenShop from "@/layout/RamenShop";
+import { MyRamenShopScreen } from "@/screens/ramenshop/MyRamenShopScreen";
 
 export default function MyRamenShop() {
-  return <RamenShop defaultBackHref="/village" showImage />;
+  return <MyRamenShopScreen />;
 }

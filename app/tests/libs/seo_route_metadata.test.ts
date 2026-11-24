@@ -34,7 +34,7 @@ const pageDirs = (dir: string): string[] => {
  * bare substring, so an import or a comment mentioning generateMetadata does not count.
  */
 const DECLARES_METADATA =
-  /export\s+(?:const\s+metadata\b|(?:async\s+)?function\s+generateMetadata\b)/;
+  /export\s+(?:const\s+metadata\b|(?:async\s+)?function\s+generateMetadata\b|\{\s*(?:metadata|generateMetadata)\s*\}\s+from\b)/;
 
 const declaresMetadata = (dir: string): boolean =>
   readdirSync(dir, { withFileTypes: true }).some(

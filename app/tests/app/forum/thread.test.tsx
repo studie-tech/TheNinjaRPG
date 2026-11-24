@@ -17,7 +17,6 @@ import { observable } from "@trpc/server/observable";
 import * as navigation from "next/navigation";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
-import Thread from "@/app/[shell]/forum/[boardid]/[threadid]/thread";
 import { FORUM_THREAD_POSTS_PER_PAGE } from "@/drizzle/constants";
 import * as Confirm from "@/layout/Confirm";
 import * as ContentBox from "@/layout/ContentBox";
@@ -25,6 +24,7 @@ import * as Forum from "@/layout/Forum";
 import * as Link from "@/layout/Link";
 import * as Post from "@/layout/Post";
 import * as toast from "@/libs/toast";
+import Thread from "@/screens/forum/thread";
 import * as UserContext from "@/utils/UserContext";
 import {
   installBrowserGlobals,

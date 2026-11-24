@@ -1,14 +1,5 @@
-"use client";
-
-import Loader from "@/layout/Loader";
-import OccupationFarming from "@/layout/OccupationFarming";
-import { useRequireInVillage } from "@/utils/UserContext";
+import { FarmScreen } from "@/screens/farm/FarmScreen";
 
 export default function FarmPage() {
-  const { userData, access } = useRequireInVillage("/home");
-
-  if (!userData) return <Loader explanation="Loading farm..." />;
-  if (!access) return <Loader explanation="Accessing farm..." />;
-
-  return <OccupationFarming defaultBackHref="/home" />;
+  return <FarmScreen />;
 }

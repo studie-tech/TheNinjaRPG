@@ -1,13 +1,7 @@
-import { Suspense } from "react";
-import NativeBrowserSignIn from "@/components/native/NativeBrowserSignIn";
-import { noindexMetadata } from "@/libs/seo";
+import { NativeSignInScreen } from "@/screens/native-sign-in/NativeSignInScreen";
 
-export const metadata = noindexMetadata("Sign in to the app");
+export { metadata } from "@/screens/native-sign-in/NativeSignInScreen.metadata";
 
 export default function NativeSignInPage() {
-  return (
-    <Suspense>
-      <NativeBrowserSignIn />
-    </Suspense>
-  );
+  return <NativeSignInScreen />;
 }
