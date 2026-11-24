@@ -12,7 +12,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 const key = [["profile", "getUser"], { type: "query" }];
 const flows = [
   {
-    file: "app/[shell]/points/StoreCheckout.tsx",
+    file: "screens/points/StoreCheckout.tsx",
     procedure: "paypal.captureStoreOrder",
   },
 ];
@@ -240,7 +240,7 @@ describe.each(flows)("$procedure purchase confirmation", ({ file, procedure }) =
 
 it("applies a newly delivered scalar purchase once without a profile read", async () => {
   const test = setup(
-    "app/[shell]/points/StoreCheckout.tsx",
+    "screens/points/StoreCheckout.tsx",
     "paypal.captureStoreOrder",
     [],
   );
@@ -268,7 +268,10 @@ it("applies a newly delivered scalar purchase once without a profile read", asyn
 
 describe.each([
   { file: "layout/StripePayments.tsx", procedure: "stripe.resolveSession" },
-  { file: "app/[shell]/points/page.tsx", procedure: "paypal.resolveTransaction" },
+  {
+    file: "screens/points/PaypalShopScreen.tsx",
+    procedure: "paypal.resolveTransaction",
+  },
 ])("$procedure receipt recovery", ({ file, procedure }) => {
   it("reconciles provider outcomes with one canonical profile read", async () => {
     const test = setup(file, procedure, []);
@@ -287,7 +290,11 @@ describe.each([
 });
 
 it("reconciles partial transaction delivery after an unsuccessful lookup", async () => {
-  const test = setup("app/[shell]/points/page.tsx", "paypal.resolveTransaction", []);
+  const test = setup(
+    "screens/points/PaypalShopScreen.tsx",
+    "paypal.resolveTransaction",
+    [],
+  );
   try {
     await test.options.onSuccess(
       { success: false, message: "One receipt failed after another delivered" },
@@ -307,7 +314,7 @@ describe("paypal.resolveSubscription receipt recovery", () => {
       const onSuccess = vi.fn();
       // The selected recipient can change while PayPal approval is open.
       const test = setup(
-        "app/[shell]/points/page.tsx",
+        "screens/points/PaypalShopScreen.tsx",
         "paypal.resolveSubscription",
         [],
         { userId: "buyer", buyerId: "buyer", onSuccess },
@@ -343,7 +350,7 @@ describe("paypal.resolveSubscription receipt recovery", () => {
     async (hasRevision) => {
       const onSuccess = vi.fn();
       const test = setup(
-        "app/[shell]/points/page.tsx",
+        "screens/points/PaypalShopScreen.tsx",
         "paypal.resolveSubscription",
         [],
         { userId: "other", buyerId: "buyer", onSuccess },
@@ -366,7 +373,7 @@ describe("paypal.resolveSubscription receipt recovery", () => {
   it("shows a rejected lookup without reconciling the profile or completing approval", async () => {
     const onSuccess = vi.fn();
     const test = setup(
-      "app/[shell]/points/page.tsx",
+      "screens/points/PaypalShopScreen.tsx",
       "paypal.resolveSubscription",
       [],
       { onSuccess },

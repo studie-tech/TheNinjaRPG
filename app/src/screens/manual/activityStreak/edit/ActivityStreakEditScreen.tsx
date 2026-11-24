@@ -1,0 +1,361 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus, Trash2 } from "lucide-react";
+import { nanoid } from "nanoid";
+import { useState } from "react";
+import type { UseFormReturn } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
+import { ActivityStreakTypes, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
+import { useRequireRole } from "@/hooks/useRequireRole";
+import Accordion from "@/layout/Accordion";
+import ContentBox from "@/layout/ContentBox";
+import ContentImageSelector from "@/layout/ContentImageSelector";
+import type { FormEntry } from "@/layout/EditContent";
+import { EditContent } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import { RewardFormWrapper } from "@/layout/RewardEditor";
+import { getRewardArray } from "@/libs/objectives";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { canChangeContent } from "@/utils/permissions";
+import {
+  type ActivityStreakFormType,
+  activityStreakFormSchema,
+  streakDayRewardSchema,
+} from "@/validators/activityStreak";
+import type { ObjectiveRewardType } from "@/validators/rewards";
+import { ObjectiveReward } from "@/validators/rewards";
+
+/** Render the manual activityStreak edit screen independently of its route adapter. */
+export function ActivityStreakEditScreen(props: { params: { configid: string } }) {
+  const params = props.params;
+  const configId = params.configid;
+  const { userData, hasAccess } = useRequireRole(canChangeContent);
+
+  const { data, isPending, isError, isFetching, refetch } =
+    api.activityStreak.getConfig.useQuery(
+      { id: configId },
+      { enabled: !!configId && !!userData },
+    );
+
+  if (isPending || !userData || !hasAccess) {
+    return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="activity streak config"
+        subtitle="Activity Streak Management"
+        backHref="/manual/activityStreak"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
+  }
+
+  return <SingleEditConfig config={data} refetch={refetch} />;
+}
+
+// Type aliases for form handling with z.coerce fields
+type ActivityStreakFormInput = z.input<typeof activityStreakFormSchema>;
+
+type ConfigWithRewards = ActivityStreakConfig & {
+  rewards: ActivityStreakReward[];
+};
+
+interface SingleEditConfigProps {
+  config: ConfigWithRewards;
+  refetch: () => void;
+}
+
+const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) => {
+  const dayNumberSchema = streakDayRewardSchema.shape.dayNumber;
+  const [rewards, setRewards] = useState<
+    Array<{
+      id: string;
+      dayNumber: number;
+      rewards: ObjectiveRewardType;
+      image?: string | null;
+    }>
+  >(
+    config.rewards.map((r) => ({
+      id: r.id,
+      dayNumber: r.dayNumber,
+      rewards: r.rewards,
+      image: r.image,
+    })),
+  );
+  const [openDay, setOpenDay] = useState<string>("");
+
+  const form = useForm<ActivityStreakFormInput, unknown, ActivityStreakFormType>({
+    mode: "all",
+    criteriaMode: "all",
+    defaultValues: {
+      name: config.name,
+      description: config.description,
+      image: config.image,
+      totalDays: config.totalDays,
+      streakType: config.streakType,
+      isActive: config.isActive,
+      ryoCost: config.ryoCost,
+      repsCost: config.repsCost,
+      seichiSilverCost: config.seichiSilverCost,
+      startDate: config.startDate,
+      endDate: config.endDate,
+    },
+    resolver: zodResolver(activityStreakFormSchema),
+  });
+
+  const streakType = useWatch({ control: form.control, name: "streakType" });
+  const imageUrl = useWatch({ control: form.control, name: "image" });
+
+  const { mutate: updateConfig, isPending } =
+    api.activityStreak.updateConfig.useMutation({
+      onSuccess: (data) => {
+        showMutationToast(data);
+        refetch();
+      },
+    });
+
+  const handleSubmit = form.handleSubmit(
+    (data: ActivityStreakFormType) => {
+      if (
+        rewards.some(
+          (reward) =>
+            !Number.isInteger(reward.dayNumber) ||
+            !dayNumberSchema.safeParse(reward.dayNumber).success,
+        )
+      ) {
+        showMutationToast({
+          success: false,
+          message: `Enter a whole day number between ${dayNumberSchema.minValue} and ${dayNumberSchema.maxValue}.`,
+        });
+        return;
+      }
+      updateConfig({
+        id: config.id,
+        ...data,
+        rewards: [...rewards].sort((a, b) => a.dayNumber - b.dayNumber),
+      });
+    },
+    (errors) => showFormErrorsToast(errors),
+  );
+
+  const addReward = () => {
+    const existingDays = rewards.map((r) => r.dayNumber);
+    let nextDay = 1;
+    while (existingDays.includes(nextDay)) {
+      nextDay++;
+    }
+    const id = nanoid();
+    setRewards([
+      ...rewards,
+      { id, dayNumber: nextDay, rewards: ObjectiveReward.parse({}) },
+    ]);
+    setOpenDay(id);
+  };
+
+  const removeReward = (index: number) => {
+    setRewards(rewards.filter((_, i) => i !== index));
+  };
+
+  const updateRewardDay = (index: number, dayNumber: number) => {
+    const newRewards = [...rewards];
+    const existing = newRewards[index];
+    if (existing) {
+      newRewards[index] = { ...existing, dayNumber };
+      setRewards(newRewards);
+    }
+  };
+
+  const updateRewardImage = (index: number, newImage: string) => {
+    const newRewards = [...rewards];
+    const existing = newRewards[index];
+    if (existing) {
+      newRewards[index] = { ...existing, image: newImage };
+      setRewards(newRewards);
+    }
+  };
+
+  const formData: FormEntry<keyof ActivityStreakFormType>[] = [
+    { id: "name", label: "Name", type: "text" },
+    {
+      id: "description",
+      label: "Description",
+      type: "text",
+      doubleWidth: true,
+    },
+    { id: "image", label: "Image", type: "avatar", href: imageUrl },
+    { id: "totalDays", label: "Total Days", type: "number" },
+    {
+      id: "streakType",
+      label: "Type",
+      type: "str_array",
+      values: ActivityStreakTypes,
+    },
+    { id: "isActive", label: "Active", type: "boolean" },
+    ...(streakType === "EVENT_PASS"
+      ? ([
+          { id: "ryoCost", label: "Ryo Cost", type: "number" },
+          { id: "repsCost", label: "Reputation Cost", type: "number" },
+          {
+            id: "seichiSilverCost",
+            label: "Seichi Silver Cost",
+            type: "number",
+          },
+          { id: "startDate", label: "Start Date", type: "date" },
+          { id: "endDate", label: "End Date", type: "date" },
+        ] as FormEntry<keyof ActivityStreakFormType>[])
+      : []),
+  ];
+
+  return (
+    <ContentBox
+      title="Edit Activity Streak"
+      subtitle={config.name}
+      defaultBackHref="/manual/activityStreak"
+    >
+      <EditContent
+        schema={activityStreakFormSchema}
+        form={form as UseFormReturn<ActivityStreakFormType>}
+        formData={formData}
+        relationId={config.id}
+        showSubmit={false}
+        type="activityStreak"
+        allowImageUpload={true}
+      />
+
+      <div className="mt-6 border-t pt-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-semibold text-lg">Day Rewards</h3>
+          <Button type="button" onClick={addReward} size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Day
+          </Button>
+        </div>
+
+        <div className="space-y-1">
+          {[...rewards]
+            .sort((a, b) => a.dayNumber - b.dayNumber)
+            .map((reward) => {
+              const originalIndex = rewards.findIndex((r) => r.id === reward.id);
+              const rewardSummary = getRewardArray(reward.rewards).join(" • ");
+              const dayKey = reward.id;
+
+              const displayImage = reward.image || IMG_AVATAR_DEFAULT;
+
+              return (
+                <Accordion
+                  key={dayKey}
+                  selectionKey={dayKey}
+                  title={`Day ${reward.dayNumber}`}
+                  selectedTitle={openDay}
+                  onClick={setOpenDay}
+                  options={
+                    <Image
+                      src={displayImage}
+                      alt={`Day ${reward.dayNumber} reward`}
+                      width={40}
+                      height={40}
+                      className="mr-2 rounded"
+                      unoptimized
+                    />
+                  }
+                  unselectedSubtitle={
+                    <span className="text-muted-foreground text-sm">
+                      {rewardSummary || "No rewards configured"}
+                    </span>
+                  }
+                >
+                  <div className="space-y-4 py-4">
+                    {/* Day number and remove button */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Label>Day</Label>
+                        <NumberInput
+                          min={dayNumberSchema.minValue ?? undefined}
+                          max={dayNumberSchema.maxValue ?? undefined}
+                          value={reward.dayNumber}
+                          onValueChange={(value) =>
+                            updateRewardDay(originalIndex, value)
+                          }
+                          className="w-20"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeReward(originalIndex)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+
+                    {/* Reward image */}
+                    <ContentImageSelector
+                      label="Reward Image"
+                      imageUrl={reward.image}
+                      id={reward.id}
+                      prompt={`Day ${reward.dayNumber} reward icon, treasure chest, gold coins, glowing item`}
+                      allowImageUpload={true}
+                      type="activityStreak"
+                      onUploadComplete={(newImage) =>
+                        updateRewardImage(originalIndex, newImage)
+                      }
+                      size="square"
+                      maxDim={256}
+                    />
+
+                    {/* Reward fields using RewardFormWrapper */}
+                    <RewardFormWrapper
+                      idx={originalIndex}
+                      reward={reward.rewards}
+                      rewards={rewards.map((r) => r.rewards)}
+                      setRewards={(newRewardsList) => {
+                        const newRewards = rewards.map((r, i) => ({
+                          ...r,
+                          rewards: newRewardsList[i] ?? r.rewards,
+                        }));
+                        setRewards(newRewards);
+                      }}
+                      hideFields={[
+                        "reward_hunter_items",
+                        "reward_hunter_items_ids",
+                        "reward_gathering_items",
+                        "reward_gathering_items_ids",
+                        "reward_war_damage",
+                        "reward_war_healing",
+                        "reward_tokens",
+                      ]}
+                    />
+                  </div>
+                </Accordion>
+              );
+            })}
+
+          {rewards.length === 0 && (
+            <p className="py-4 text-center text-muted-foreground">
+              No rewards configured. Click &quot;Add Day&quot; to add a reward.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-6 flex gap-2 border-t pt-6">
+        <Button onClick={handleSubmit} disabled={isPending}>
+          {isPending ? "Saving..." : "Save Configuration"}
+        </Button>
+      </div>
+    </ContentBox>
+  );
+};

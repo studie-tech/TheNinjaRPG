@@ -1,42 +1,5 @@
-"use client";
-
-import { useState } from "react";
-import { api } from "@/app/_trpc/client";
-import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
-import { MassEffectEditorPage } from "@/layout/MassEffectEditorPage";
-import { useInfinitePagination } from "@/libs/pagination";
+import { JutsuMassEditScreen } from "@/screens/manual/jutsu/mass_edit/JutsuMassEditScreen";
 
 export default function JutsuMassEditPage() {
-  const state = useFiltering();
-
-  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const {
-    data: jutsus,
-    isFetching,
-    fetchNextPage,
-    hasNextPage,
-    refetch,
-  } = api.jutsu.getAll.useInfiniteQuery(
-    { limit: 50, ...getFilter(state) },
-    {
-      getNextPageParam: (last) => last.nextCursor,
-      placeholderData: (p) => p,
-    },
-  );
-  const allJutsus = jutsus?.pages.flatMap((p) => p.data) || [];
-  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
-
-  return (
-    <MassEffectEditorPage
-      kind="jutsu"
-      subtitle="Jutsu"
-      defaultBackHref="/manual/jutsu"
-      entries={allJutsus}
-      isFetching={isFetching}
-      lastElementRef={setLastElement}
-      onEntriesUpdated={() => refetch()}
-      renderFilter={(disabled) => <JutsuFiltering state={state} disabled={disabled} />}
-      filterEffectTypes={state.effect}
-    />
-  );
+  return <JutsuMassEditScreen />;
 }

@@ -1,12 +1,5 @@
-"use client";
-import ContentBox from "@/layout/ContentBox";
-import { QuestTeams } from "@/layout/QuestTeams";
+import { QuestTeamsScreen } from "@/screens/questteams/QuestTeamsScreen";
 
-/** Mount the full team roster, discovery controls and shared conversation in the game shell. */
 export default function QuestTeamsPage() {
-  return (
-    <ContentBox title="Quest Teams" subtitle="Explore Seichi together" padding={false}>
-      <QuestTeams />
-    </ContentBox>
-  );
+  return <QuestTeamsScreen />;
 }

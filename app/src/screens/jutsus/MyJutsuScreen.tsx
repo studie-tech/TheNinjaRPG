@@ -1,0 +1,1584 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  ArrowRightLeft,
+  ChevronsDown,
+  CircleFadingArrowUp,
+  Download,
+  List,
+  ListX,
+  Loader2,
+  Palette,
+  SquareChevronLeft,
+  SquareChevronRight,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  getEquippedJutsuProfilePatch,
+  getForgottenJutsuProfilePatch,
+  getForgottenJutsus,
+  getTransferredJutsus,
+  getUnequippedJutsus,
+} from "@/deltas/jutsu";
+import {
+  COST_EXTRA_JUTSU_SLOT,
+  COST_RESKIN_JUTSU,
+  JUTSU_LEVEL_CAP,
+  JUTSU_TRANSFER_COST,
+  JUTSU_TRANSFER_DAYS,
+  JUTSU_TRANSFER_MAX_LEVEL,
+  JUTSU_TRANSFER_MINIMUM_LEVEL,
+  MAX_EXTRA_JUTSU_SLOTS,
+  RESKIN_LIMIT,
+} from "@/drizzle/constants";
+import type { UserItemWithItem, UserJutsuWithRelations } from "@/drizzle/schema";
+import { useJutsuCacheUpdate } from "@/hooks/useJutsuCacheUpdate";
+import { useJutsuLoadoutCacheUpdate } from "@/hooks/useJutsuLoadoutCacheUpdate";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
+import AvatarImage from "@/layout/Avatar";
+import { ActionSelector } from "@/layout/CombatActions";
+import Confirm from "@/layout/Confirm";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import { LoadoutHotkeysPanel, useHotkeyAssignment } from "@/layout/HotkeyControls";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import JutsuFiltering, {
+  getFilter,
+  JutsuStatQuickFilters,
+  useFiltering,
+} from "@/layout/JutsuFiltering";
+import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
+import { JutsuLoadoutSharing } from "@/layout/JutsuLoadoutSharing";
+import { LazyUploadButton } from "@/layout/LazyUploadButton";
+import Loader from "@/layout/Loader";
+import Modal from "@/layout/Modal";
+import {
+  EVOLUTION_STAT_FIELDS,
+  meetsEvolutionStatRequirements,
+} from "@/libs/evolution";
+import {
+  compareByLoadoutOrder,
+  filterFreeJutsuTransfers,
+  getFreeTransfers,
+} from "@/libs/jutsu";
+import { getJutsuMaxLevel, getJutsuXpToLevel } from "@/libs/jutsuProgression";
+import { calcJutsuEquipLimit, jutsuRequirementWarning } from "@/libs/jutsuRequirements";
+import type { MasterySources } from "@/libs/mastery";
+import { showUserRank } from "@/libs/profile";
+import { showMutationToast } from "@/libs/toast";
+import { isJutsuInTraining, remainingXpToLevel } from "@/libs/train";
+import type { UserWithRelations } from "@/routers/profile";
+import { canReskinFreely, canTransferJutsu } from "@/utils/permissions";
+import { DAY_S, secondsFromDate } from "@/utils/time";
+import { useRequiredUserData } from "@/utils/UserContext";
+import { readUploadResult, showUploadError } from "@/utils/uploadResult";
+import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
+import { jutsuReskinCreateSchema } from "@/validators/jutsu";
+
+/** Manage learned jutsu, training and evolutions with shared requirement checks and cache updates. */
+export function MyJutsuScreen() {
+  // tRPC utility
+  const utils = api.useUtils();
+
+  // Two-level filtering
+  const state = useFiltering();
+
+  // Settings
+  const {
+    data: userData,
+    updateUser,
+    timeDiff,
+    prepareUserUpdate,
+  } = useRequiredUserData();
+  // finishTraining is a server timestamp, so compare it on the server clock. The clock
+  // is state so typing in a dialog reuses the jutsu counts; it moves when a training
+  // ends or the rows change.
+  const [clientNow, setClientNow] = useState(() => Date.now());
+  const serverNow = clientNow - timeDiff;
+  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [sharingMode, setSharingMode] = useState<"export" | "import" | null>(null);
+  const [loadoutConfirmation, setLoadoutConfirmation] = useState<
+    "unequip" | "upgrade" | null
+  >(null);
+  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
+  const [isReskinOpen, setIsReskinOpen] = useState<boolean>(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [selectedUserJutsu, setUserJutsu] = useState<
+    UserJutsuWithRelations | undefined
+  >(undefined);
+  const [transferTarget, setTransferTarget] = useState<
+    UserJutsuWithRelations | undefined
+  >(undefined);
+  const transferCost = canTransferJutsu(userData) ? 0 : JUTSU_TRANSFER_COST;
+  const [transferValue, setTransferValue] = useState<number>(1);
+  const [reskinData, setReskinData] = useState<JutsuReskinCreateSchema | null>(null);
+  const [pendingOrder, setPendingOrder] = useState<{
+    jutsuId: string;
+    moveForward: boolean;
+  } | null>(null);
+  const loadoutRequestInFlightRef = useRef(false);
+  const buyJutsuSlotInFlightRef = useRef(false);
+
+  // Accordion state for jutsu category sections (multiple can be open simultaneously)
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(["bloodline", "pvpOnly", "pveOnly", "general"]),
+  );
+
+  const toggleSection = (section: string) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  };
+
+  // Reskin form
+  const reskinForm = useForm<JutsuReskinCreateSchema>({
+    mode: "onChange",
+    resolver: zodResolver(jutsuReskinCreateSchema),
+    defaultValues: {
+      jutsuId: "",
+      name: "",
+      description: "",
+      battleDescription: "",
+      image: undefined,
+    },
+  });
+
+  // Hold the reskin draft while the player confirms it
+  const confirmReskin = () => {
+    const data = reskinForm.getValues();
+    setReskinData(data);
+    setIsReskinOpen(false);
+    setIsConfirmOpen(true);
+  };
+
+  // Watch reskin image for React Compiler compatibility
+  const watchedReskinImage = useWatch({
+    control: reskinForm.control,
+    name: "image",
+  });
+
+  // User Jutsus & items
+  const jutsuInput = { ...getFilter(state), includeEquipped: true };
+  const { prepareJutsuUpdate, updateJutsus, updateJutsuRows } =
+    useJutsuCacheUpdate(jutsuInput);
+  const { prepareLoadoutUpdate, updateEquippedLoadout, updateLoadoutOrder } =
+    useJutsuLoadoutCacheUpdate();
+  const { data: userJutsus, isFetching: l1 } = api.jutsu.getUserJutsus.useQuery(
+    jutsuInput,
+    { enabled: !!userData, placeholderData: (previousData) => previousData },
+  );
+  // Keep open-dialog training and levels current when ownership data is refreshed.
+  const userjutsu =
+    userJutsus?.find((owned) => owned.id === selectedUserJutsu?.id) ??
+    selectedUserJutsu;
+  useEffect(() => {
+    if (userJutsus) setClientNow(Date.now());
+  }, [userJutsus]);
+  useRefreshAt(
+    (userJutsus ?? []).map((owned) => owned.finishTraining),
+    () => setClientNow(Date.now()),
+    timeDiff,
+  );
+  // Open the details modal of one owned jutsu
+  const openJutsu = (id: string) => {
+    setUserJutsu(userJutsus?.find((uj) => uj.id === id));
+    setIsOpen(true);
+  };
+  const { data: userItems, isFetching: l2 } = api.item.getUserItems.useQuery(
+    undefined,
+    { enabled: !!userData },
+  );
+  const { data: userReskins } = api.jutsu.getUserReskins.useQuery(undefined, {
+    enabled: !!userData,
+  });
+  const { data: recentTransfers } = api.jutsu.getRecentTransfers.useQuery(undefined, {
+    enabled: !!userData,
+  });
+
+  const userJutsuCounts = userJutsus?.map((userJutsu) => {
+    return {
+      id: userJutsu.id,
+      quantity: isJutsuInTraining(userJutsu, serverNow)
+        ? userJutsu.level - 1
+        : userJutsu.level,
+    };
+  });
+
+  // Jutsu that can receive levels from the open jutsu. Ones in training stay listed but
+  // greyed out: the server refuses the transfer until the training ends.
+  const transferCandidates = userjutsu
+    ? (userJutsus ?? []).filter(
+        (uj) =>
+          uj.jutsu.jutsuType === userjutsu.jutsu.jutsuType &&
+          uj.jutsu.jutsuRank === userjutsu.jutsu.jutsuRank &&
+          uj.id !== userjutsu.id &&
+          !uj.jutsu.parentJutsuId &&
+          uj.level < JUTSU_TRANSFER_MAX_LEVEL,
+      )
+    : [];
+  const trainingTransferIds = transferCandidates
+    .filter((uj) => isJutsuInTraining(uj, serverNow))
+    .map((uj) => uj.id);
+
+  // Transfer costs
+  const prevFreeTransfers = filterFreeJutsuTransfers(recentTransfers ?? []);
+  const freeTransfers = getFreeTransfers(userData?.federalStatus || "NONE");
+  const usedTransfers = prevFreeTransfers.length;
+
+  // Calculate when free transfers reset
+  const getFreeTransferResetTime = () => {
+    if (!recentTransfers || recentTransfers.length === 0) return null;
+
+    // Find the oldest transfer that used a free transfer
+    const oldestFreeTransfer = prevFreeTransfers.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )[0];
+
+    if (!oldestFreeTransfer) return null;
+
+    // Add JUTSU_TRANSFER_DAYS to the oldest transfer date using secondsFromDate
+    return secondsFromDate(
+      JUTSU_TRANSFER_DAYS * DAY_S,
+      new Date(oldestFreeTransfer.createdAt),
+    );
+  };
+
+  const freeTransferResetTime = getFreeTransferResetTime();
+
+  const onSettled = () => {
+    setIsOpen(false);
+    setUserJutsu(undefined);
+    setTransferTarget(undefined);
+  };
+
+  // Mutations
+  const { mutate: equip, isPending: isToggling } = api.jutsu.toggleEquip.useMutation({
+    onMutate: () => ({
+      jutsus: prepareJutsuUpdate(),
+      user: prepareUserUpdate(),
+      loadouts: prepareLoadoutUpdate(),
+    }),
+    onSuccess: async (data, variables, context) => {
+      showMutationToast(data);
+      if (data.success) {
+        const change = data.data;
+        await Promise.allSettled([
+          updateJutsus(variables.userJutsuId, change, context.jutsus),
+          updateUser((current) => getEquippedJutsuProfilePatch(current, change), {
+            revision: context.user,
+          }),
+          updateEquippedLoadout(change, context.loadouts),
+        ]);
+      }
+    },
+    onError: async (error) => {
+      // Local recovery replaces the provider's error handler, so feedback must be explicit.
+      showMutationToast({
+        success: false,
+        message: error.message,
+        variant: "destructive",
+      });
+      await Promise.all([
+        utils.jutsu.getUserJutsus.invalidate(),
+        utils.jutsu.getLoadouts.invalidate(),
+        utils.profile.getUser.invalidate(),
+      ]);
+    },
+    onSettled: () => {
+      loadoutRequestInFlightRef.current = false;
+      onSettled();
+    },
+  });
+
+  const { mutate: unequipAll, isPending: isUnequipping } =
+    api.jutsu.unequipAll.useMutation({
+      onMutate: () => ({
+        jutsus: prepareJutsuUpdate(),
+        user: prepareUserUpdate(),
+      }),
+      onSuccess: async (data, _variables, context) => {
+        showMutationToast(data);
+        if (data.success) {
+          await Promise.all([
+            updateUser(data, { revision: context.user }),
+            updateJutsuRows(getUnequippedJutsus, context.jutsus),
+            // Selection can change in another tab before the server clears its live pointer.
+            utils.jutsu.getLoadouts.invalidate(),
+          ]);
+        }
+      },
+      onSettled,
+    });
+
+  const { mutate: forget, isPending: isForgetting } = api.jutsu.forget.useMutation({
+    onMutate: (variables) => ({
+      jutsus: prepareJutsuUpdate(),
+      user: prepareUserUpdate(),
+      owned: userJutsus?.find((row) => row.id === variables.id),
+    }),
+    onSuccess: async (data, variables, context) => {
+      showMutationToast(data);
+      if (data.success) {
+        await Promise.all([
+          updateJutsuRows(
+            (rows) => getForgottenJutsus(rows, variables.id),
+            context.jutsus,
+          ),
+          updateUser(
+            (current) =>
+              getForgottenJutsuProfilePatch(current, context.owned, variables.id),
+            { revision: context.user },
+          ),
+        ]);
+      }
+    },
+    onSettled,
+  });
+
+  const { mutate: updateOrder, isPending: isReordering } =
+    api.jutsu.updateUserJutsuOrder.useMutation({
+      onMutate: () => ({
+        revision: prepareUserUpdate(),
+        loadouts: prepareLoadoutUpdate(),
+      }),
+      onSuccess: async (data, variables, context) => {
+        showMutationToast(data);
+        if (data.success) {
+          const loadout = data.userPatch?.loadout;
+          await Promise.all([
+            updateLoadoutOrder(
+              variables.loadoutId,
+              loadout?.jutsuIds,
+              context.loadouts,
+            ),
+            updateUser(
+              loadout
+                ? (current) =>
+                    current.jutsuLoadout === variables.loadoutId ? { loadout } : {}
+                : undefined,
+              { revision: context.revision },
+            ),
+          ]);
+        }
+      },
+      onSettled: () => {
+        loadoutRequestInFlightRef.current = false;
+        setPendingOrder(null);
+      },
+    });
+
+  const reorderJutsu = (jutsuId: string, moveForward: boolean) => {
+    if (loadoutRequestInFlightRef.current) return;
+
+    loadoutRequestInFlightRef.current = true;
+    setPendingOrder({ jutsuId, moveForward });
+    updateOrder({
+      jutsuId,
+      loadoutId: userData?.jutsuLoadout ?? "",
+      moveForward,
+    });
+  };
+
+  const { mutate: buyJutsuSlot, isPending: isUpgrading } =
+    api.blackmarket.buyJutsuSlot.useMutation({
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        showMutationToast(data);
+        if (data.success) {
+          await updateUser(undefined, { revision, delta: data.userDelta });
+          setLoadoutConfirmation(null);
+        }
+      },
+      onSettled: () => {
+        buyJutsuSlotInFlightRef.current = false;
+      },
+    });
+
+  const { mutate: transferLevel, isPending: isTransferring } =
+    api.jutsu.transferLevel.useMutation({
+      onMutate: () => ({ jutsus: prepareJutsuUpdate(), user: prepareUserUpdate() }),
+      onSuccess: async (data, _variables, context) => {
+        showMutationToast(data);
+        if (data.success && userData) {
+          await Promise.all([
+            updateJutsuRows(
+              (rows) => getTransferredJutsus(rows, data.transfer),
+              context.jutsus,
+            ),
+            // The transfer log decides the remaining free transfers.
+            utils.jutsu.getRecentTransfers.invalidate(),
+            updateUser(undefined, { revision: context.user, delta: data.userDelta }),
+          ]);
+        }
+      },
+      onSettled,
+    });
+
+  const { mutate: reskin, isPending: isReskinning } =
+    api.jutsu.createReskin.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await Promise.all([
+            utils.jutsu.getUserJutsus.invalidate(),
+            utils.jutsu.getUserReskins.invalidate(),
+          ]);
+          setIsReskinOpen(false);
+          setUserJutsu(undefined);
+        }
+      },
+    });
+
+  const { mutate: removeReskin, isPending: isRemovingReskin } =
+    api.jutsu.removeReskin.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await Promise.all([
+            utils.jutsu.getUserJutsus.invalidate(),
+            utils.jutsu.getUserReskins.invalidate(),
+          ]);
+          setIsOpen(false);
+        }
+      },
+    });
+
+  const { mutate: evolveJutsu, isPending: isEvolving } =
+    api.jutsu.evolveJutsu.useMutation({
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        showMutationToast(data);
+        if (data.success) {
+          await Promise.all([
+            utils.jutsu.getUserJutsus.invalidate(),
+            utils.jutsu.getEvolutions.invalidate(),
+            utils.jutsu.getLoadouts.invalidate(),
+            updateUser(data, { revision }),
+          ]);
+          setIsOpen(false);
+          setUserJutsu(undefined);
+        }
+      },
+    });
+
+  const { data: availableEvolutions } = api.jutsu.getEvolutions.useQuery(
+    { jutsuId: userjutsu?.jutsuId ?? "" },
+    { enabled: !!userjutsu },
+  );
+
+  const isFetching = l1 || l2;
+  const isPending =
+    isFetching ||
+    isToggling ||
+    isForgetting ||
+    isUpgrading ||
+    isUnequipping ||
+    isTransferring ||
+    isReskinning ||
+    isRemovingReskin ||
+    isEvolving ||
+    isReordering;
+
+  // Use the profile snapshot so hidden activated skills still satisfy use gates.
+  const activeSkills = userData?.userSkills;
+
+  // Categorize jutsu for organized display
+  const categorizedJutsus = useMemo(() => {
+    if (!userData) return null;
+    return categorizeJutsus(userJutsus, userData, userItems, activeSkills);
+  }, [userJutsus, userData, userItems, activeSkills]);
+
+  // Transform jutsu to action items with warnings
+  const transformToActionItems = useCallback(
+    (jutsus: UserJutsuWithRelations[]) => {
+      return jutsus.map((uj) => {
+        const warning = userData
+          ? jutsuRequirementWarning(uj.jutsu, userData, userItems, activeSkills)
+          : "";
+        return {
+          ...uj.jutsu,
+          ...uj,
+          type: "jutsu" as const,
+          highlight: !!uj.equipped,
+          warning,
+          isReskinned: !!uj.activeReskin,
+        };
+      });
+    },
+    [userData, userItems, activeSkills],
+  );
+
+  // Battle keys belong to the jutsu id; equipped tiles are keyed by the learned jutsu id.
+  const {
+    hotkeys,
+    assign: assignHotkey,
+    dialog: hotkeyDialog,
+  } = useHotkeyAssignment(
+    Object.fromEntries((userJutsus ?? []).map((uj) => [uj.jutsuId, uj.jutsu.name])),
+  );
+  const equippedHotkeys = Object.fromEntries(
+    (userJutsus ?? [])
+      .filter((uj) => uj.equipped && hotkeys.byAction[uj.jutsuId])
+      .map((uj) => [uj.id, hotkeys.byAction[uj.jutsuId] ?? ""]),
+  );
+
+  // Derived calculations
+  const curEquip = userJutsus?.filter((j) => j.equipped).length;
+  const maxEquip = userData && calcJutsuEquipLimit(userData);
+  const canEquip = curEquip !== undefined && maxEquip && curEquip < maxEquip;
+  const subtitle =
+    curEquip !== undefined && maxEquip
+      ? `Equipped ${curEquip}/${maxEquip}`
+      : "Loading jutsu…";
+  // A kept reskin row makes the next reskin of that jutsu a free update
+  const hasReskinRecord =
+    !!userjutsu && !!userReskins?.some((r) => r.jutsuId === userjutsu.jutsuId);
+
+  // Ryo from forgetting
+
+  const hasNoJutsu =
+    !!categorizedJutsus &&
+    Object.values(categorizedJutsus).every((arr) => arr.length === 0);
+
+  // Loaders
+  if (!userData) return <Loader explanation="Loading userdata" />;
+
+  // Can afford removing
+  const canUpgrade = userData.reputationPoints >= COST_EXTRA_JUTSU_SLOT;
+
+  // Calculate reskin cost based on permissions
+  const reskinCost = canReskinFreely(userData.role) ? 0 : COST_RESKIN_JUTSU;
+
+  return (
+    <>
+      <ContentBox
+        title="My Jutsu"
+        defaultBackHref="/profile"
+        subtitle={subtitle}
+        noRightAlign
+        topRightContent={
+          !isOpen && (
+            <div className="my-2 ml-3 flex min-w-0 items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <JutsuLoadoutSelector compact />
+              </div>
+              <JutsuFiltering state={state} compact />
+              <Popover open={isActionsOpen} onOpenChange={setIsActionsOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    ref={actionsTriggerRef}
+                    size="icon"
+                    aria-label="Jutsu options"
+                    hoverText="Jutsu options"
+                  >
+                    <List className="h-5 w-5" aria-hidden />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  aria-label="Jutsu options"
+                  align="end"
+                  collisionPadding={8}
+                  className="w-64 space-y-1 p-2"
+                  onCloseAutoFocus={(event) => {
+                    // A selected action transfers focus to its dialog.
+                    if (sharingMode || loadoutConfirmation) event.preventDefault();
+                  }}
+                >
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      setSharingMode("export");
+                    }}
+                  >
+                    <Download className="h-5 w-5" aria-hidden /> Export loadout
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      setSharingMode("import");
+                    }}
+                  >
+                    <Upload className="h-5 w-5" aria-hidden /> Import loadout
+                  </Button>
+                  <div className="my-1 border-t" />
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    disabled={isPending || !curEquip}
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      setLoadoutConfirmation("unequip");
+                    }}
+                  >
+                    <ListX className="h-5 w-5" aria-hidden /> Unequip all jutsu
+                  </Button>
+                  {userData.extraJutsuSlots < MAX_EXTRA_JUTSU_SLOTS && (
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2"
+                      disabled={isPending}
+                      onClick={() => {
+                        setIsActionsOpen(false);
+                        setLoadoutConfirmation("upgrade");
+                      }}
+                    >
+                      <CircleFadingArrowUp className="h-5 w-5" aria-hidden />
+                      Purchase extra jutsu slot
+                    </Button>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+          )
+        }
+      >
+        <JutsuLoadoutSharing
+          mode={sharingMode}
+          onClose={() => setSharingMode(null)}
+          returnFocusRef={actionsTriggerRef}
+        />
+        <Modal
+          title={
+            loadoutConfirmation === "unequip" ? "Unequip all jutsu" : "Extra Jutsu Slot"
+          }
+          isOpen={loadoutConfirmation !== null}
+          setIsOpen={(open) => {
+            if (!open) setLoadoutConfirmation(null);
+          }}
+          returnFocusRef={actionsTriggerRef}
+          proceed_label={
+            loadoutConfirmation === "unequip"
+              ? isUnequipping
+                ? undefined
+                : "Unequip all"
+              : isUpgrading
+                ? "Purchasing"
+                : canUpgrade
+                  ? `Purchase for ${COST_EXTRA_JUTSU_SLOT} reps`
+                  : `Need ${COST_EXTRA_JUTSU_SLOT - userData.reputationPoints} more reps`
+          }
+          keepOpenOnAccept={loadoutConfirmation === "upgrade"}
+          isLoading={loadoutConfirmation === "upgrade" && isUpgrading}
+          proceedDisabled={
+            isPending || (loadoutConfirmation === "unequip" ? !curEquip : !canUpgrade)
+          }
+          onAccept={(event) => {
+            event.preventDefault();
+            if (loadoutConfirmation === "unequip") unequipAll();
+            else if (
+              loadoutConfirmation === "upgrade" &&
+              canUpgrade &&
+              !buyJutsuSlotInFlightRef.current
+            ) {
+              buyJutsuSlotInFlightRef.current = true;
+              buyJutsuSlot();
+            }
+          }}
+        >
+          {loadoutConfirmation === "unequip" ? (
+            <p>
+              Remove all {curEquip} equipped jutsu from your current loadout? You can
+              equip them again at any time.
+            </p>
+          ) : (
+            <p>
+              You are about to purchase an extra jutsu slot for {COST_EXTRA_JUTSU_SLOT}{" "}
+              reputation points. You currently have {userData.reputationPoints} points.
+              Are you sure?
+            </p>
+          )}
+        </Modal>
+        <JutsuStatQuickFilters state={state} />
+
+        {/* Equipped Section - Always Visible */}
+        {categorizedJutsus && !hasNoJutsu && (
+          <div className="mb-4">
+            <h3 className="px-3 py-2 font-bold text-lg">
+              Equipped Jutsu ({categorizedJutsus.equipped.length}/{maxEquip})
+            </h3>
+            <ActionSelector
+              gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]"
+              items={transformToActionItems(
+                // Sort equipped by loadout order
+                [...categorizedJutsus.equipped].sort(
+                  compareByLoadoutOrder(userData?.loadout?.jutsuIds),
+                ),
+              )}
+              counts={userJutsuCounts?.filter((c) =>
+                categorizedJutsus.equipped.some((j) => j.id === c.id),
+              )}
+              labelSingles={true}
+              onClick={openJutsu}
+              showBgColor={false}
+              showLabels={true}
+              emptyText="No jutsu equipped. Select jutsu from the categories below to equip."
+              hotkeys={equippedHotkeys}
+              onAssignHotkey={(item) => {
+                const uj = userJutsus?.find((entry) => entry.id === item.id);
+                if (uj)
+                  assignHotkey({ id: uj.jutsuId, name: uj.jutsu.name, kind: "jutsu" });
+              }}
+            />
+            {hotkeyDialog}
+          </div>
+        )}
+
+        {/* Accordion Sections for Non-Equipped Jutsu */}
+        {categorizedJutsus && (
+          <div>
+            {JUTSU_SECTIONS.map(([key, title]) => (
+              <JutsuCategorySection
+                key={key}
+                section={key}
+                title={title}
+                jutsus={categorizedJutsus[key]}
+                isOpen={openSections.has(key)}
+                onToggle={toggleSection}
+                onClick={openJutsu}
+                counts={userJutsuCounts}
+                transformToActionItems={transformToActionItems}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Show message when no jutsu */}
+        {!isFetching && hasNoJutsu && (
+          <p className="py-4 text-center text-muted-foreground">
+            You have not learned any jutsu. Go to the training grounds in your village
+            to learn some.
+          </p>
+        )}
+
+        {isOpen && userjutsu && (
+          <Modal
+            title="Edit Jutsu"
+            isOpen={isOpen}
+            isLoading={isFetching}
+            setIsOpen={setIsOpen}
+            proceed_label={
+              !isToggling
+                ? userjutsu.equipped
+                  ? "Unequip"
+                  : canEquip
+                    ? "Equip"
+                    : "Unequip other first"
+                : undefined
+            }
+            keepOpenOnAccept
+            onAccept={() => {
+              if (canEquip || userjutsu.equipped) {
+                if (loadoutRequestInFlightRef.current) return;
+                loadoutRequestInFlightRef.current = true;
+                equip({ userJutsuId: userjutsu.id });
+              } else {
+                setIsOpen(false);
+              }
+            }}
+            confirmClassName={
+              canEquip
+                ? "bg-blue-600 text-white hover:bg-blue-700"
+                : "bg-red-600 text-white hover:bg-red-700"
+            }
+          >
+            <div>
+              <p>- You have {userData.money.toLocaleString()} ryo in your pocket</p>
+              <p>
+                {userjutsu.level >= getJutsuMaxLevel(userjutsu.jutsu)
+                  ? `- Maximum level (${getJutsuMaxLevel(userjutsu.jutsu)}) reached`
+                  : `- Need ${remainingXpToLevel(getJutsuXpToLevel(userjutsu.jutsu, userjutsu.level), userjutsu.experience).toLocaleString()} XP more to level`}
+              </p>
+            </div>
+            {!isPending && (
+              <>
+                <ItemWithEffects
+                  item={userjutsu.jutsu}
+                  key={userjutsu.id}
+                  showStatistic="jutsu"
+                  showEvolutions
+                />
+                {hasReskinRecord && !userjutsu.activeReskin && (
+                  <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2">
+                    <p className="text-blue-700 text-sm">
+                      <Palette className="mr-1 inline h-4 w-4" />
+                      This jutsu has been previously reskinned. You can create a new
+                      reskin for free.
+                    </p>
+                  </div>
+                )}
+                <div className="flex flex-row items-center gap-3">
+                  {userData.loadout?.jutsuIds.includes(userjutsu.jutsuId) && (
+                    <>
+                      <button
+                        type="button"
+                        className="rounded-sm hover:text-orange-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={isReordering}
+                        aria-label={`Move ${userjutsu.jutsu.name} earlier in loadout`}
+                        aria-busy={
+                          pendingOrder?.jutsuId === userjutsu.jutsuId &&
+                          !pendingOrder.moveForward
+                        }
+                        onClick={() => reorderJutsu(userjutsu.jutsuId, false)}
+                      >
+                        {pendingOrder?.jutsuId === userjutsu.jutsuId &&
+                        !pendingOrder.moveForward ? (
+                          <Loader2 className="h-8 w-8 animate-spin" />
+                        ) : (
+                          <SquareChevronLeft className="h-8 w-8" />
+                        )}
+                      </button>
+                      <p>Order</p>
+                      <button
+                        type="button"
+                        className="rounded-sm hover:text-orange-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={isReordering}
+                        aria-label={`Move ${userjutsu.jutsu.name} later in loadout`}
+                        aria-busy={
+                          pendingOrder?.jutsuId === userjutsu.jutsuId &&
+                          pendingOrder.moveForward
+                        }
+                        onClick={() => reorderJutsu(userjutsu.jutsuId, true)}
+                      >
+                        {pendingOrder?.jutsuId === userjutsu.jutsuId &&
+                        pendingOrder.moveForward ? (
+                          <Loader2 className="h-8 w-8 animate-spin" />
+                        ) : (
+                          <SquareChevronRight className="h-8 w-8" />
+                        )}
+                      </button>
+                      <span className="sr-only" aria-live="polite" aria-atomic="true">
+                        {pendingOrder?.jutsuId === userjutsu.jutsuId
+                          ? `Updating ${userjutsu.jutsu.name} loadout order`
+                          : ""}
+                      </span>
+                    </>
+                  )}
+
+                  <div className="grow"></div>
+                  {userjutsu.level >= JUTSU_TRANSFER_MINIMUM_LEVEL &&
+                    !userjutsu.jutsu.parentJutsuId && (
+                      <Confirm
+                        title="Transfer Level"
+                        button={
+                          <Button
+                            id="transfer"
+                            variant="secondary"
+                            aria-label="Transfer Level"
+                            hoverText="Transfer Level"
+                          >
+                            <ArrowRightLeft className="h-6 w-6 sm:mr-2" aria-hidden />
+                            <p className="hidden sm:block">Transfer Level</p>
+                          </Button>
+                        }
+                        proceed_label={transferTarget ? "Confirm Transfer" : null}
+                        onClose={() => {
+                          setTransferTarget(undefined);
+                          setTransferValue(1);
+                        }}
+                        keepOpenOnAccept
+                        onAccept={(e) => {
+                          e.preventDefault();
+                          if (transferTarget) {
+                            transferLevel({
+                              fromJutsuId: userjutsu.jutsuId,
+                              toJutsuId: transferTarget.jutsuId,
+                              transferLevels: transferValue,
+                            });
+                          }
+                        }}
+                      >
+                        {transferTarget ? (
+                          <>
+                            <p>
+                              Transfer{" "}
+                              <NumberInput
+                                min={1}
+                                max={Math.min(
+                                  userjutsu.level - 1,
+                                  JUTSU_TRANSFER_MAX_LEVEL - transferTarget.level,
+                                )}
+                                value={transferValue}
+                                onValueChange={setTransferValue}
+                                style={{
+                                  width: "50px",
+                                  margin: "0 5px",
+                                  backgroundColor: "white",
+                                  color: "black",
+                                  border: "1px solid #ccc",
+                                  padding: "2px 4px",
+                                }}
+                              />{" "}
+                              level(s) from {userjutsu.jutsu.name} to{" "}
+                              {transferTarget.jutsu.name}?
+                            </p>
+                            {Number.isFinite(transferValue) ? (
+                              <p>
+                                This will subtract {transferValue} level
+                                {transferValue > 1 ? "s" : ""} from{" "}
+                                {userjutsu.jutsu.name} (new level:{" "}
+                                {userjutsu.level - transferValue}) and add{" "}
+                                {transferValue} level
+                                {transferValue > 1 ? "s" : ""} to{" "}
+                                {transferTarget.jutsu.name} (new level:{" "}
+                                {transferTarget.level + transferValue}).
+                              </p>
+                            ) : (
+                              <p>Enter a valid number of levels.</p>
+                            )}
+                            <p>
+                              Cost:{" "}
+                              {usedTransfers < freeTransfers
+                                ? `Free (${Math.max(0, freeTransfers - usedTransfers)} remaining)`
+                                : `${transferCost} reputation points`}
+                            </p>
+                          </>
+                        ) : isJutsuInTraining(userjutsu, serverNow) ? (
+                          <p>
+                            {userjutsu.jutsu.name} is in training. Finish or cancel the
+                            training in the Training Grounds before transferring its
+                            levels.
+                          </p>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            <p>
+                              Select a jutsu to transfer the level to. Transfers can
+                              raise a jutsu to level {JUTSU_TRANSFER_MAX_LEVEL}.
+                            </p>
+                            <ActionSelector
+                              gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]"
+                              items={transferCandidates.map((uj) => ({
+                                id: uj.id,
+                                name: uj.jutsu.name,
+                                image: uj.jutsu.image,
+                                effects: uj.jutsu.effects,
+                                type: "jutsu" as const,
+                                warning: trainingTransferIds.includes(uj.id)
+                                  ? TRANSFER_TRAINING_REASON
+                                  : undefined,
+                              }))}
+                              greyedIds={trainingTransferIds}
+                              counts={userJutsuCounts}
+                              labelSingles={true}
+                              showBgColor={false}
+                              showLabels={true}
+                              onClick={(id) => {
+                                // The server refuses transfers into a jutsu in training.
+                                if (trainingTransferIds.includes(id)) return;
+                                setTransferTarget(
+                                  userJutsus?.find((uj) => uj.id === id),
+                                );
+                              }}
+                            />
+                            {trainingTransferIds.length > 0 && (
+                              <p className="text-muted-foreground text-sm">
+                                Greyed-out jutsu are in training.{" "}
+                                {TRANSFER_TRAINING_REASON}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </Confirm>
+                    )}
+                  {availableEvolutions &&
+                    availableEvolutions.length > 0 &&
+                    availableEvolutions.map((evo) => {
+                      const effectiveLevel = isJutsuInTraining(userjutsu, serverNow)
+                        ? userjutsu.level - 1
+                        : userjutsu.level;
+                      // Evolution ignores the weapon and skill use gates, like evolveJutsu.
+                      const evolveWarning =
+                        jutsuRequirementWarning(
+                          evo,
+                          userData,
+                          undefined,
+                          undefined,
+                          true,
+                        ) ||
+                        (meetsEvolutionStatRequirements(evo, userData)
+                          ? ""
+                          : "You do not meet the stat requirements for this evolution.");
+                      const evolutionLevel = getJutsuMaxLevel(userjutsu.jutsu);
+                      const canEvolve =
+                        effectiveLevel >= evolutionLevel && !evolveWarning;
+                      return (
+                        <Confirm
+                          key={evo.id}
+                          title={`Evolve to ${evo.name}`}
+                          confirmDisabled={!canEvolve}
+                          button={
+                            <Button
+                              id={`evolve-${evo.id}`}
+                              variant="secondary"
+                              disabled={isPending}
+                              aria-label={`Evolve to ${evo.name}`}
+                              hoverText={`Evolve to ${evo.name}`}
+                            >
+                              <CircleFadingArrowUp
+                                className="h-6 w-6 sm:mr-2"
+                                aria-hidden
+                              />
+                              <p className="hidden sm:block">Evolve</p>
+                            </Button>
+                          }
+                          onAccept={(e) => {
+                            e.preventDefault();
+                            if (!canEvolve) return;
+                            evolveJutsu({
+                              userJutsuId: userjutsu.id,
+                              evolutionJutsuId: evo.id,
+                            });
+                          }}
+                        >
+                          <p>
+                            Evolve <b>{userjutsu.jutsu.name}</b> into <b>{evo.name}</b>?
+                          </p>
+                          <p className="mt-2 text-muted-foreground text-sm">
+                            This will replace your current jutsu. The evolved jutsu
+                            starts at level 1, can be trained to level {JUTSU_LEVEL_CAP}{" "}
+                            in the Training Grounds, and reaches level{" "}
+                            {getJutsuMaxLevel(evo)} through combat.
+                          </p>
+                          {effectiveLevel < evolutionLevel && (
+                            <p className="text-destructive text-sm">
+                              Required Jutsu Level: <b>{evolutionLevel}</b> (current:{" "}
+                              {effectiveLevel})
+                            </p>
+                          )}
+                          {evo.requiredRank && (
+                            <p className="text-sm">
+                              Required Rank:{" "}
+                              <b>
+                                {showUserRank({
+                                  rank: evo.requiredRank,
+                                  isOutlaw: userData.isOutlaw,
+                                })}
+                              </b>
+                            </p>
+                          )}
+                          {evo.requiredLevel > 1 && (
+                            <p className="text-sm">
+                              Required Level: <b>{evo.requiredLevel}</b>
+                            </p>
+                          )}
+                          {EVOLUTION_STAT_FIELDS.filter(
+                            ({ id }) => evo[id] != null,
+                          ).map(({ id, label }) => (
+                            <p key={id} className="text-sm">
+                              Required {label}: <b>{evo[id]?.toLocaleString()}</b>
+                            </p>
+                          ))}
+                          {evolveWarning && (
+                            <p className="text-destructive text-sm">{evolveWarning}</p>
+                          )}
+                        </Confirm>
+                      );
+                    })}
+                  {userjutsu.activeReskin ? (
+                    <Confirm
+                      title="Remove Reskin"
+                      button={
+                        <Button
+                          id="remove-reskin"
+                          variant="destructive"
+                          aria-label="Remove Reskin"
+                          hoverText="Remove Reskin"
+                        >
+                          <Palette className="h-6 w-6 sm:mr-2" aria-hidden />
+                          <p className="hidden sm:block">Remove Reskin</p>
+                        </Button>
+                      }
+                      onAccept={(e) => {
+                        e.preventDefault();
+                        removeReskin({ userJutsuId: userjutsu.id });
+                      }}
+                    >
+                      <p>
+                        Are you sure you want to remove the reskin for this jutsu? This
+                        will restore the original name and description.
+                      </p>
+                    </Confirm>
+                  ) : (
+                    <Button
+                      id="reskin"
+                      variant="outline"
+                      aria-label="Reskin"
+                      hoverText="Reskin"
+                      onClick={() => {
+                        reskinForm.reset({
+                          jutsuId: userjutsu.jutsuId,
+                          name: userjutsu.jutsu.name,
+                          description: userjutsu.jutsu.description,
+                          battleDescription: userjutsu.jutsu.battleDescription,
+                          image: undefined,
+                        });
+                        setIsOpen(false);
+                        setIsReskinOpen(true);
+                      }}
+                      disabled={
+                        isPending ||
+                        userjutsu.jutsu.jutsuType === "SPECIAL" ||
+                        userjutsu.jutsu.jutsuType === "BLOODLINE"
+                      }
+                    >
+                      <Palette className="h-6 w-6 sm:mr-2" aria-hidden />
+                      <p className="hidden sm:block">Reskin</p>
+                    </Button>
+                  )}
+                  <Confirm
+                    title="Forget Jutsu"
+                    triggerLabel={`Forget ${userjutsu.jutsu.name}`}
+                    button={
+                      <Button
+                        id="return"
+                        variant="destructive"
+                        aria-label="Forget jutsu"
+                        hoverText="Forget jutsu"
+                      >
+                        <Trash2 className="h-6 w-6 sm:mr-2" aria-hidden />
+                        <p className="hidden sm:block">Forget</p>
+                      </Button>
+                    }
+                    tone="destructive"
+                    proceed_label="Forget jutsu"
+                    proceed_loading_label="Forgetting"
+                    isLoading={isForgetting}
+                    onAccept={(e) => {
+                      e.preventDefault();
+                      forget({ id: userjutsu.id });
+                    }}
+                  >
+                    <p>
+                      Forget {userjutsu.jutsu.name} and lose its {userjutsu.level}{" "}
+                      {userjutsu.level === 1 ? "level" : "levels"} of training? This
+                      cannot be undone.
+                    </p>
+                  </Confirm>
+                </div>
+              </>
+            )}
+            {isPending && <Loader explanation="Processing" />}
+          </Modal>
+        )}
+        {userjutsu && isReskinOpen && (
+          <Modal
+            title={hasReskinRecord ? "Update Jutsu Reskin" : "Create Jutsu Reskin"}
+            isOpen={isReskinOpen}
+            isLoading={isFetching}
+            setIsOpen={setIsReskinOpen}
+            proceed_label={hasReskinRecord ? "Update Reskin" : "Create Reskin"}
+            isValid={reskinForm.formState.isValid}
+            className="max-h-[99%] w-[800px] max-w-[99%]"
+            onAccept={() => {
+              if (!isReskinning && userjutsu) confirmReskin();
+            }}
+          >
+            <div className="flex flex-col gap-4">
+              <div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!isFetching && reskinForm.formState.isValid) confirmReskin();
+                  }}
+                  className="grid grid-cols-3 gap-4 space-y-4"
+                >
+                  <div className="row-span-3 space-y-2">
+                    <p className="text-muted-foreground text-sm">
+                      Optional: upload a new image for this reskin
+                    </p>
+                    <div className="flex flex-col items-center gap-3">
+                      <AvatarImage
+                        href={watchedReskinImage || userjutsu.jutsu.image}
+                        alt={userjutsu.jutsu.name}
+                        size={64}
+                        hover_effect={false}
+                      />
+                      <LazyUploadButton
+                        endpoint="imageUploader"
+                        onClientUploadComplete={(res) => {
+                          const url = readUploadResult(res)?.fileUrl;
+                          if (url) {
+                            reskinForm.setValue("image", url, {
+                              shouldValidate: true,
+                            });
+                          }
+                        }}
+                        onUploadError={showUploadError}
+                      />
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="name">Jutsu Name</Label>
+                    <Input
+                      placeholder="New jutsu name"
+                      defaultValue={userjutsu.jutsu.name}
+                      {...reskinForm.register("name")}
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <Label htmlFor="description">Jutsu Description</Label>
+                    <Textarea
+                      placeholder="New jutsu description"
+                      defaultValue={userjutsu.jutsu.description}
+                      {...reskinForm.register("description")}
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <Label htmlFor="battleDescription">Battle Description</Label>
+                    <Textarea
+                      placeholder="New battle description"
+                      defaultValue={userjutsu.jutsu.battleDescription}
+                      {...reskinForm.register("battleDescription")}
+                    />
+                  </div>
+                </form>
+              </div>
+              <div>
+                <div>
+                  <strong className="text-red-500">
+                    {hasReskinRecord
+                      ? "Updating a reskin is free."
+                      : `Creating a reskin costs ${reskinCost} reputation points!`}
+                  </strong>
+                  <br />
+                  <br />
+                  <strong>Reskin Usage:</strong>
+                  <br />
+                  You have used {userReskins?.length ?? 0}/
+                  {userData.extraReskinSlots + RESKIN_LIMIT} available reskins.
+                  <br />
+                  <br />
+                  Reskins are a way to personalize your jutsu&apos;s name, description,
+                  and in-combat flavor text. These are cosmetic only and must follow the
+                  rules below (as well as the overall game rules)
+                  <br />
+                  <br />
+                  <strong>What You Can Change:</strong>
+                  <br />
+                  You are allowed to modify only the following:
+                  <br />- Jutsu Name
+                  <br />- Jutsu Description (what shows outside of combat)
+                  <br />- Battle Description (what appears in combat, e.g., &quot;%user
+                  attacks %target&quot;)
+                  <br />
+                  <br />
+                  <ul className="list-disc pl-6">
+                    <li>
+                      <code>%user</code>: The acting user&apos;s username.
+                    </li>
+                    <li>
+                      <code>%target</code>: The targets&apos; usernames, separated by
+                      commas.
+                    </li>
+                    <li>
+                      <code>%user_subject</code> or <code>%target_subject</code>: (
+                      <span className="italic">&quot;he&quot; or &quot;she&quot;</span>
+                      ).
+                    </li>
+                    <li>
+                      <code>%user_object</code> or <code>%target_object</code>: (
+                      <span className="italic">&quot;him&quot; or &quot;her&quot;</span>
+                      ).
+                    </li>
+                    <li>
+                      <code>%user_posessive</code> or <code>%target_posessive</code>: (
+                      <span className="italic">
+                        &quot;his&quot; or &quot;hers&quot;
+                      </span>
+                      ).
+                    </li>
+                    <li>
+                      <code>%user_reflexive</code> or <code>%target_reflexive</code>: (
+                      <span className="italic">
+                        &quot;himself&quot; or &quot;herself&quot;
+                      </span>
+                      ).
+                    </li>
+                    <li>
+                      <code>%location</code>: The location of the action, formatted as{" "}
+                      <span className="italic">[row, col]</span>.
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <strong>Tone & Content Restrictions:</strong>
+                  <br />- No hostile, mocking, or negative wording toward other players,
+                  clans, villages, bloodlines, or jutsu.
+                  <br />- No profanity, slurs, or real-world political/religious
+                  references.
+                  <br />- No inappropriate humor or immersion-breaking language.
+                  <br />- No subtle digs or sarcasm aimed at others. If it could be
+                  taken negatively, it&apos;s not allowed.
+                  <br />
+                  <br />
+                  <strong>Example:</strong>
+                  <br />
+                  Original Name: Fireball Jutsu
+                  <br />
+                  Reskin Name: Blazing Verdict
+                  <br />
+                  Original Description: A sphere of fire launched at the target.
+                  <br />
+                  Reskin Description: A judgment cast in searing flame, leaving no room
+                  for appeal.
+                  <br />
+                  Original Battle Description: %user hurls a fireball at %target.
+                  <br />
+                  Reskin Battle Description: %user delivers the Blazing Verdict to
+                  %target, flames roaring with finality.
+                  <br />
+                  <br />
+                  <strong>Note:</strong> Violation of these rules may result in the
+                  modification or removal of the reskinned jutsu.
+                </div>
+              </div>
+            </div>
+          </Modal>
+        )}
+        {isConfirmOpen && reskinData && userjutsu && (
+          <Modal
+            isOpen={isConfirmOpen}
+            isLoading={isFetching}
+            setIsOpen={setIsConfirmOpen}
+            title={
+              hasReskinRecord ? "Confirm Jutsu Reskin Update" : "Confirm Jutsu Reskin"
+            }
+            proceed_label={"Confirm"}
+            onAccept={() => {
+              if (reskinData && userjutsu) {
+                reskin(reskinData);
+                setIsConfirmOpen(false);
+              }
+            }}
+          >
+            <div className="space-y-4">
+              <p className="text-muted-foreground text-sm">
+                By clicking &quot;Confirm&quot;, you acknowledge that you are{" "}
+                {hasReskinRecord ? "updating" : "creating"} a reskin{" "}
+                {hasReskinRecord ? "" : `that costs ${reskinCost} reputation points`}{" "}
+                and that your reskin follows all the outlined rules.
+                <br />
+                <br />
+                <strong>Note:</strong> Violations may result in the modification or
+                removal of your reskin.
+              </p>
+            </div>
+          </Modal>
+        )}
+        {/* Retained rows stay visible, but edits wait for the current inventory. */}
+        {isFetching && (
+          <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
+            <div className="sticky top-24 flex justify-center py-16">
+              <Loader explanation="Loading Jutsu" />
+            </div>
+          </div>
+        )}
+      </ContentBox>
+      {userJutsus && (
+        // Keep hotkey setup out of the way without a mouse or trackpad.
+        <div className="not-any-pointer-fine:hidden">
+          <ContentBox
+            title="Battle Hotkeys"
+            subtitle="Keys for your equipped jutsu and basic actions"
+            initialBreak={true}
+          >
+            <LoadoutHotkeysPanel
+              kind="jutsu"
+              actions={userJutsus
+                .filter((uj) => uj.equipped)
+                .map((uj) => ({
+                  id: uj.jutsuId,
+                  name: uj.jutsu.name,
+                  hidden: uj.jutsu.hidden,
+                }))}
+            />
+          </ContentBox>
+        </div>
+      )}
+      {/* Free Transfer Timer */}
+      {freeTransferResetTime &&
+        freeTransferResetTime > new Date() &&
+        usedTransfers > 0 && (
+          <ContentBox
+            title="Free Transfer Status"
+            subtitle="Free transfers will reset"
+            initialBreak={true}
+          >
+            <div className="space-y-2 text-center">
+              <p className="text-muted-foreground">
+                You have used {usedTransfers}/{freeTransfers} free transfers.
+                {usedTransfers >= freeTransfers &&
+                  " You must wait for transfers to reset or pay reputation points."}
+              </p>
+              <p className="font-semibold text-lg">
+                Next free transfer available:{" "}
+                <Countdown targetDate={freeTransferResetTime} />
+              </p>
+            </div>
+          </ContentBox>
+        )}
+    </>
+  );
+}
+
+/** Why a jutsu in training cannot take part in a level transfer. */
+const TRANSFER_TRAINING_REASON =
+  "Finish or cancel training in the Training Grounds first.";
+
+// Sub-component for rendering accordion-style jutsu category sections
+interface JutsuCategorySectionProps {
+  section: string;
+  title: string;
+  jutsus: UserJutsuWithRelations[];
+  isOpen: boolean;
+  onToggle: (section: string) => void;
+  onClick: (id: string) => void;
+  counts: { id: string; quantity: number }[] | undefined;
+  transformToActionItems: (jutsus: UserJutsuWithRelations[]) => {
+    id: string;
+    name: string;
+    image: string;
+    type: "jutsu";
+    highlight: boolean;
+    warning: string;
+    isReskinned: boolean;
+  }[];
+}
+
+const JutsuCategorySection = memo((props: JutsuCategorySectionProps) => {
+  const {
+    section,
+    title,
+    jutsus,
+    isOpen,
+    onToggle,
+    onClick,
+    counts,
+    transformToActionItems,
+  } = props;
+  if (jutsus.length === 0) return null;
+
+  return (
+    <div className="border-b-2 px-3 py-1">
+      <button
+        type="button"
+        className="flex w-full cursor-pointer flex-row items-center hover:bg-popover"
+        onClick={() => onToggle(section)}
+      >
+        <h2 className="mt-2 font-bold">
+          {title} ({jutsus.length})
+        </h2>
+        <div className="grow"></div>
+        <ChevronsDown
+          className={`h-6 w-6 hover:text-orange-500 ${isOpen ? "rotate-180 transform" : ""}`}
+        />
+      </button>
+      {isOpen && (
+        <div className="py-2">
+          <ActionSelector
+            gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]"
+            items={transformToActionItems(jutsus)}
+            counts={counts?.filter((c) => jutsus.some((j) => j.id === c.id))}
+            labelSingles={true}
+            onClick={onClick}
+            showBgColor={false}
+            showLabels={true}
+          />
+        </div>
+      )}
+    </div>
+  );
+});
+
+JutsuCategorySection.displayName = "JutsuCategorySection";
+
+// Helper types and functions
+/** Accordion sections for jutsu that are not equipped, in display order. */
+const JUTSU_SECTIONS = [
+  ["bloodline", "Bloodline Jutsu"],
+  ["pvpOnly", "PVP Jutsu"],
+  ["pveOnly", "PVE Jutsu"],
+  ["general", "General Jutsu"],
+  ["unavailable", "Unavailable Jutsu"],
+] as const;
+
+// Categorization types for organizing jutsu by usage type
+interface CategorizedJutsus {
+  equipped: UserJutsuWithRelations[];
+  bloodline: UserJutsuWithRelations[];
+  pvpOnly: UserJutsuWithRelations[];
+  pveOnly: UserJutsuWithRelations[];
+  general: UserJutsuWithRelations[];
+  unavailable: UserJutsuWithRelations[];
+}
+
+// Categorizes user jutsu into sections based on equipped status, bloodline, and battle usage type
+const categorizeJutsus = (
+  userJutsus: UserJutsuWithRelations[] | undefined,
+  userData: NonNullable<UserWithRelations>,
+  userItems: UserItemWithItem[] | undefined,
+  userSkills: MasterySources["userSkills"],
+): CategorizedJutsus => {
+  const result: CategorizedJutsus = {
+    equipped: [],
+    bloodline: [],
+    pvpOnly: [],
+    pveOnly: [],
+    general: [],
+    unavailable: [],
+  };
+
+  if (!userJutsus) return result;
+
+  for (const uj of userJutsus) {
+    // Equipped jutsu go to their own section
+    if (uj.equipped) {
+      result.equipped.push(uj);
+      continue;
+    }
+
+    // Same predicate as the per-jutsu warning label. Stricter than toggleEquip, which
+    // does not require the jutsu's weapon to be equipped.
+    if (jutsuRequirementWarning(uj.jutsu, userData, userItems, userSkills)) {
+      result.unavailable.push(uj);
+      continue;
+    }
+
+    // Bloodline jutsu have priority category
+    if (uj.jutsu.jutsuType === "BLOODLINE") {
+      result.bloodline.push(uj);
+    } else if (uj.jutsu.battleUsageType === "PVP") {
+      result.pvpOnly.push(uj);
+    } else if (uj.jutsu.battleUsageType === "PVE") {
+      result.pveOnly.push(uj);
+    } else {
+      // battleUsageType === "BOTH" or default
+      result.general.push(uj);
+    }
+  }
+
+  return result;
+};

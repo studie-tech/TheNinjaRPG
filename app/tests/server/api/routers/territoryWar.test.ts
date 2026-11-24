@@ -65,7 +65,10 @@ type Profile = RouterOutputs["profile"]["getUser"];
 const clients: QueryClient[] = [];
 const subscriptions: (() => void)[] = [];
 const page = readFileSync(
-  join(import.meta.dirname, "../../../../src/app/[shell]/territory-war/page.tsx"),
+  join(
+    import.meta.dirname,
+    "../../../../src/screens/territory-war/TerritoryWarScreen.tsx",
+  ),
   "utf8",
 );
 const onSuccessSource = page.slice(

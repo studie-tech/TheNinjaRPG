@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { ProfileEditScreen } from "@/screens/profile/edit/ProfileEditScreen";
 
 export default function Page() {
-  redirect("/profile?tab=edit");
+  return <ProfileEditScreen />;
 }

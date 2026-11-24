@@ -74,7 +74,7 @@ type ClaimCallbacks = {
 };
 
 const page = readFileSync(
-  join(import.meta.dirname, "../../../../src/app/[shell]/dungeon/page.tsx"),
+  join(import.meta.dirname, "../../../../src/screens/dungeon/DungeonScreen.tsx"),
   "utf8",
 );
 const prepareSource = page.slice(

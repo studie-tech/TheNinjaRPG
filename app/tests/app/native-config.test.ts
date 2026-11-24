@@ -73,7 +73,9 @@ describe("native release configuration", () => {
     );
     expect(audio).toContain('from "@/libs/native"');
     expect(settings).toContain("<NativeSettingsEntry");
-    const devicePage = readRepoFile("app/src/app/[shell]/settings/device/page.tsx");
+    const devicePage = readRepoFile(
+      "app/src/screens/settings/device/DeviceSettingsScreen.tsx",
+    );
     expect(devicePage).toContain("<DeviceSettings />");
     expect(audio).toContain("audioSession.onRemoteCommand");
   });

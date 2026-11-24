@@ -1,0 +1,37 @@
+import type { Metadata } from "next";
+import { cache } from "react";
+import { buildMetadata, metaDescription, noindexMetadata } from "@/libs/seo";
+import { fetchItem } from "@/queries/item";
+import { drizzleDB } from "@/server/db";
+import { capitalizeFirstLetter } from "@/utils/string";
+
+type Props = { params: Promise<{ itemid: string }> };
+
+/**
+ * Shared between generateMetadata and the render so each request hits the DB once.
+ * Hidden entries are treated as missing: `hidden` gates unreleased content to staff,
+ * and this route is public, so serving one would disclose it to anyone with the id.
+ */
+export const getItem = cache(async (id: string) => {
+  const item = await fetchItem(drizzleDB, id);
+  return item && !item.hidden ? item : undefined;
+});
+
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const { itemid } = await props.params;
+  const item = await getItem(itemid);
+  if (!item) return noindexMetadata("Item Not Found");
+  const name = item.name.trim();
+  const type = capitalizeFirstLetter(item.itemType);
+  const rarity = capitalizeFirstLetter(item.rarity);
+  return buildMetadata({
+    title: `${name} - ${rarity} ${type}`,
+    description: metaDescription(
+      item.description,
+      `${name} is a ${rarity.toLowerCase()} ${type.toLowerCase()} in TheNinja-RPG.`,
+    ),
+    path: `/manual/item/${itemid}`,
+    image: item.image || undefined,
+    type: "article",
+  });
+}

@@ -109,7 +109,7 @@ const seedUpgrade = async (source: "paypal" | "stripe") => {
 /** Use production upgrade callbacks so metadata forwarding is not a manual test merge. */
 const upgradeCallbacks = (cache: QueryClient, key: QueryKey) => {
   const source = readFileSync(
-    join(import.meta.dirname, "../../../src/app/[shell]/points/page.tsx"),
+    join(import.meta.dirname, "../../../src/screens/points/PaypalShopScreen.tsx"),
     "utf8",
   );
   const callbacks = source

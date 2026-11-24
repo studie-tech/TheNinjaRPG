@@ -47,11 +47,11 @@ const questRewardStatistics = resolverOf(dataRouter.getQuestRewardStatistics);
 // Exercise the editor's actual copy handler, including the payload it sends to validation.
 const copyExpression = readFileSync(
   new URL(
-    "../../src/app/[shell]/manual/quest/edit/[questid]/page.tsx",
+    "../../src/screens/manual/quest/edit/ManualQuestEditScreen.tsx",
     import.meta.url,
   ),
   "utf8",
-).match(/  const copyObjective = ([\s\S]*?\n  };)/)?.[1];
+).match(/ {2}const copyObjective = ([\s\S]*?\n {2}};)/)?.[1];
 if (!copyExpression) throw new Error("Quest objective copy handler was not found");
 const { Transpiler } = (
   globalThis as unknown as {

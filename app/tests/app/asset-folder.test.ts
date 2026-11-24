@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import FolderPage from "@/app/[shell]/manual/asset/[folder]/page";
+import { ManualAssetsFolderScreen as FolderPage } from "@/screens/manual/asset/ManualAssetsFolderScreen";
 
 describe("bookmarked asset folder redirects", () => {
   it.each([
@@ -8,9 +8,7 @@ describe("bookmarked asset folder redirects", () => {
     ["A%2520B", "A%2520B"],
     ["%E9%9B%AA", "%E9%9B%AA"],
   ])("decodes the framework parameter once: %s", async (folder, query) => {
-    await expect(
-      FolderPage({ params: Promise.resolve({ folder }) }),
-    ).rejects.toMatchObject({
+    await expect(FolderPage({ params: { folder } })).rejects.toMatchObject({
       digest: expect.stringContaining(`/manual/asset?folder=${query};`),
     });
   });

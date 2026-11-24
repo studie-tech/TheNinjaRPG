@@ -1,0 +1,163 @@
+"use client";
+
+import { ChartCandlestick, ChartPie, FilePlus, ListChecks } from "lucide-react";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { useContentListActions } from "@/hooks/useContentListActions";
+import ContentBox from "@/layout/ContentBox";
+import ItemFiltering, { getFilter, useFiltering } from "@/layout/ItemFiltering";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Link from "@/layout/Link";
+import ListLoader from "@/layout/ListLoader";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserDataSelector } from "@/utils/UserContext";
+
+/** Render the manual item screen independently of its route adapter. */
+export function ManualItemsScreen() {
+  // Settings
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
+
+  const utils = api.useUtils();
+
+  //Two-Way Filtering
+  const state = useFiltering({ allShopStatus: true, persistKey: "manual-item" });
+
+  // Data
+  const {
+    data: items,
+    isFetching,
+    isPending,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+  } = api.item.getAll.useInfiniteQuery(
+    {
+      limit: 10,
+      ...getFilter(state),
+    },
+    {
+      enabled: state.cf.isReady,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+    },
+  );
+  const allItems = items?.pages.flatMap((page) => page.data);
+  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
+
+  const { onCreated, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/item/edit",
+  );
+
+  // Mutations
+  const { mutate: create, isPending: load1 } = api.item.create.useMutation({
+    onSuccess: onCreated,
+  });
+
+  const { mutate: remove, isPending: load2 } = api.item.delete.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      await Promise.all([
+        refetch(),
+        // Remove deleted unlock tokens and their variants from content selectors.
+        data.success ? utils.item.getAllNames.invalidate() : undefined,
+        data.success ? utils.item.getVariantNames.invalidate() : undefined,
+      ]);
+    },
+  });
+
+  // Derived
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
+
+  return (
+    <>
+      <ContentBox
+        title="Items"
+        subtitle="Content"
+        defaultBackHref="/manual"
+        topRightContent={
+          <div className="flex flex-row gap-1">
+            <Link href="/manual/item/balance">
+              <Button id="item-statistics" hoverText="Balance Statistics">
+                <ChartCandlestick className="h-6 w-6" />
+              </Button>
+            </Link>
+            <Link href="/manual/item/completeness">
+              <Button id="item-completeness" hoverText="Content Completeness">
+                <ChartPie className="h-6 w-6" />
+              </Button>
+            </Link>
+          </div>
+        }
+      >
+        <p>
+          In the treacherous world of ninja warfare, the mastery of jutsu alone is not
+          enough to ensure victory. To become a truly formidable force, ninjas must
+          harness the power of a diverse array of tools, weapons, and armor. These
+          essential implements are instrumental in enhancing their combat prowess,
+          aiding their strategic maneuvers, and providing crucial defense in the face of
+          danger.
+        </p>
+      </ContentBox>
+      <br />
+      <ContentBox
+        title="Database"
+        initialBreak={true}
+        subtitle="All known items"
+        topRightContent={
+          <div className="flex flex-row items-center gap-1">
+            {userData && canChangeContent(userData.role) && (
+              <div className="flex flex-row gap-2">
+                <Button
+                  id={`create-${state.itemType}`}
+                  className="w-full"
+                  disabled={!state.cf.isReady || load1 || isOpeningCreated}
+                  loading={load1 || isOpeningCreated}
+                  onClick={() =>
+                    create({
+                      type: state.itemType !== "ANY" ? state.itemType : "WEAPON",
+                    })
+                  }
+                >
+                  <FilePlus className="mr-2 h-6 w-6" />
+                  New
+                </Button>
+                <Link href="/manual/item/mass_edit">
+                  <Button id="mass-edit-items" className="w-full">
+                    <ListChecks className="mr-2 h-6 w-6" />
+                    Edit
+                  </Button>
+                </Link>
+              </div>
+            )}
+            <div className="ml-1">
+              <ItemFiltering state={state} />
+            </div>
+          </div>
+        }
+      >
+        {allItems?.map((item, i) => (
+          <div key={item.id} ref={i === allItems.length - 1 ? setLastElement : null}>
+            <ItemWithEffects
+              item={item}
+              key={item.id}
+              detailHref={`/manual/item/${item.id}`}
+              onDelete={(id: string) => remove({ id })}
+              showEdit="item"
+              showStatistic="item"
+              showCopy="item"
+            />
+          </div>
+        ))}
+        <ListLoader
+          initialLoading={!state.cf.isReady || isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
+      </ContentBox>
+    </>
+  );
+}

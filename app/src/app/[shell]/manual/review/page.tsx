@@ -1,7 +1,5 @@
-"use client";
-
-import { ContentReviewDesk } from "@/layout/ContentReviewDesk";
+import { ContentReviewScreen } from "@/screens/manual/review/ContentReviewScreen";
 
 export default function ContentReviewPage() {
-  return <ContentReviewDesk />;
+  return <ContentReviewScreen />;
 }

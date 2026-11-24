@@ -1,5 +1,5 @@
-import { EventTournaments } from "@/layout/EventTournaments";
-/** List announced events and the current player's available registration actions. */
+import { TournamentsScreen } from "@/screens/tournaments/TournamentsScreen";
+
 export default function TournamentsPage() {
-  return <EventTournaments />;
+  return <TournamentsScreen />;
 }

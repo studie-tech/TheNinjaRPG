@@ -11,8 +11,6 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
-import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/ListingDetailsDialog";
-import { AuctionOffers } from "@/app/[shell]/auctionhouse/Offers";
 import Occupations from "@/app/[shell]/occupation/page";
 import { CRAFTING_REQUIRED_EXP, CRAFTING_TIMES_MINS } from "@/drizzle/constants";
 import * as AuctionBidCache from "@/hooks/useAuctionBidCacheUpdate";
@@ -21,6 +19,8 @@ import * as serviceLayout from "@/layout/CraftingServices";
 import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
 import * as pagination from "@/libs/pagination";
+import { AuctionDetailsDialog } from "@/screens/auctionhouse/ListingDetailsDialog";
+import { AuctionOffers } from "@/screens/auctionhouse/Offers";
 import { stubCraftingCache } from "../layout/helpers/craftingCatalog";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { mockUserContextValue } from "../setup/userContext";

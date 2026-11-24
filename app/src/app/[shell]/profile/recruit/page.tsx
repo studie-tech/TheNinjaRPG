@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { ProfileRecruitScreen } from "@/screens/profile/recruit/ProfileRecruitScreen";
 
 export default function Page() {
-  redirect("/profile?tab=sharing");
+  return <ProfileRecruitScreen />;
 }

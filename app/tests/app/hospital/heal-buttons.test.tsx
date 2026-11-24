@@ -2,8 +2,11 @@ import { afterEach, expect, it, vi } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as client from "@/app/_trpc/client";
-import Hospital, { HealOthersComponent } from "@/app/[shell]/hospital/page";
 import type { UserWithRelations } from "@/routers/profile";
+import {
+  HealOthersComponent,
+  HospitalScreen as Hospital,
+} from "@/screens/hospital/HospitalScreen";
 import * as UserContext from "@/utils/UserContext";
 import { mockUserContextValue } from "../../setup/userContext";
 

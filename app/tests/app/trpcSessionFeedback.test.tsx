@@ -14,21 +14,28 @@ const notices = () =>
 const messages = () => notices().map((notice) => notice.description ?? notice.title);
 
 const callbacks = [
-  { file: "support/[ticketId]", path: "support.updateTicket" },
-  { file: "points", path: "paypal.resolveSubscription", subscription: true },
-  { file: "points", path: "paypal.upgradeSubscription", subscription: true },
-  { file: "points", path: "paypal.subscribeWithReps", subscription: true },
+  { file: "support/TicketDetailScreen", path: "support.updateTicket" },
+  {
+    file: "points/PaypalShopScreen",
+    path: "paypal.resolveSubscription",
+    subscription: true,
+  },
+  {
+    file: "points/PaypalShopScreen",
+    path: "paypal.upgradeSubscription",
+    subscription: true,
+  },
+  {
+    file: "points/PaypalShopScreen",
+    path: "paypal.subscribeWithReps",
+    subscription: true,
+  },
 ] as const;
 
 // Run the pages' actual callback expressions.
 // Taking them from source makes a bypass in any one callback fail the feedback check.
 const pageOnError = (source: (typeof callbacks)[number]) => {
-  const file = join(
-    import.meta.dirname,
-    "../../src/app/[shell]",
-    source.file,
-    "page.tsx",
-  );
+  const file = join(import.meta.dirname, "../../src/screens", `${source.file}.tsx`);
   const expression = readFileSync(file, "utf8")
     .split(`api.${source.path}.useMutation`)[1]
     ?.match(/onError:\s*(\(error\) => \{[\s\S]*?\n\s*\}),/)?.[1];

@@ -13,7 +13,6 @@ import { getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
-import PetProfilePage from "@/app/[shell]/profile/pet/page";
 import * as toastUi from "@/components/ui/use-toast";
 import {
   getAssignExperienceUserUpdate,
@@ -43,6 +42,7 @@ import { getPetAbilityCapacity } from "@/libs/pets/abilities";
 import { getDailyPetOptions, PET_PALETTES } from "@/libs/pets/catalogue";
 import * as petGender from "@/libs/pets/gender";
 import * as toast from "@/libs/toast";
+import { PetProfileScreen as PetProfilePage } from "@/screens/profile/pet/PetProfileScreen";
 import {
   prepareUserUpdate as captureUserUpdate,
   updateUserCache,
@@ -1997,7 +1997,7 @@ it.each([
     });
     await expect(
       PetProfilePage({
-        searchParams: Promise.resolve(params as { petId?: string | string[] }),
+        searchParams: params as { petId?: string | string[] },
       }),
     ).rejects.toThrow(expected);
     expect(redirect).toHaveBeenCalledWith(expected);

@@ -1,0 +1,115 @@
+"use client";
+
+import { FilePlus } from "lucide-react";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { useContentListActions } from "@/hooks/useContentListActions";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import ListLoader from "@/layout/ListLoader";
+import SageModeFiltering, { getFilter, useFiltering } from "@/layout/SageModeFiltering";
+import { useInfinitePagination } from "@/libs/pagination";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserDataSelector } from "@/utils/UserContext";
+
+/** Public catalog of sage modes, with staff create/delete on the list. */
+export function ManualSageModesScreen() {
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
+  const state = useFiltering();
+  const {
+    data: sageModes,
+    isFetching,
+    isPending,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+  } = api.sageMode.getAll.useInfiniteQuery(
+    { limit: 10, ...getFilter(state) },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      placeholderData: (previousData) => previousData,
+    },
+  );
+  const allSageModes = sageModes?.pages.flatMap((page) => page.data);
+  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
+
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/sageMode/edit",
+  );
+
+  const { mutate: create, isPending: load1 } = api.sageMode.create.useMutation({
+    onSuccess: onCreated,
+  });
+
+  const { mutate: remove, isPending: load2 } = api.sageMode.delete.useMutation({
+    onSuccess: onDeleted,
+  });
+
+  const totalLoading = isFetching || load1 || load2;
+
+  return (
+    <>
+      <ContentBox title="Sage Mode" subtitle="What is it?" defaultBackHref="/manual">
+        <p>
+          Sage Mode is a powerful transformation that allows ninja to tap into natural
+          energy, combining it with their own chakra to dramatically enhance their
+          abilities. Unlike bloodlines which are passive abilities, Sage Mode must be
+          manually activated during combat and lasts for a limited number of rounds.
+        </p>
+        <p className="pt-4">
+          Once activated, Sage Mode grants powerful buffs to the user. However, when the
+          duration expires, the user will experience exhaustion effects as their body
+          recovers from channeling natural energy. Sage Mode effects cannot be cleared,
+          copied, or mirrored by opponents.
+        </p>
+        <p className="pt-4">
+          Sage Mode comes in two levels. Level 1 can be acquired through item rolls and
+          quests. Level 2 is automatically unlocked when you reach sufficient Sage
+          Mastery experience.
+        </p>
+      </ContentBox>
+      <ContentBox
+        title="Database"
+        subtitle="All sage modes"
+        initialBreak={true}
+        topRightContent={
+          <div className="flex flex-row gap-1 items-center">
+            {userData && canChangeContent(userData.role) && (
+              <Button
+                id="create-sagemode"
+                onClick={() => create()}
+                disabled={load1 || isOpeningCreated}
+                loading={load1 || isOpeningCreated}
+              >
+                <FilePlus className="h-5 w-5" />
+              </Button>
+            )}
+            <SageModeFiltering state={state} />
+          </div>
+        }
+      >
+        {allSageModes?.map((sageMode, i) => (
+          <div
+            key={sageMode.id}
+            ref={i === allSageModes.length - 1 ? setLastElement : null}
+          >
+            <ItemWithEffects
+              item={sageMode}
+              key={sageMode.id}
+              onDelete={(id: string) => remove({ id })}
+              showEdit="sageMode"
+            />
+          </div>
+        ))}
+        <ListLoader
+          initialLoading={isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
+      </ContentBox>
+    </>
+  );
+}

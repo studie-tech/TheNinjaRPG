@@ -2,10 +2,10 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
-import ConceptBox_ConceptImage from "@/app/[shell]/conceptart/[imageid]/conceptimage";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Report from "@/layout/Report";
 import * as toast from "@/libs/toast";
+import ConceptBox_ConceptImage from "@/screens/conceptart/conceptimage";
 import * as UserContext from "@/utils/UserContext";
 import { mockUserContextValue } from "../../setup/userContext";
 

@@ -1,5 +1,5 @@
-import { EventTournaments } from "@/layout/EventTournaments";
-/** Show the shared tournament list with staff creation and management controls. */
+import { StaffTournamentsScreen } from "@/screens/manual/tournaments/StaffTournamentsScreen";
+
 export default function StaffTournamentsPage() {
-  return <EventTournaments staff />;
+  return <StaffTournamentsScreen />;
 }

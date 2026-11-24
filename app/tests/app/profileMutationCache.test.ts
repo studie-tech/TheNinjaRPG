@@ -11,7 +11,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 const key = [["profile", "getUser"], { type: "query" }];
 const flows = [
   {
-    file: "app/[shell]/blackmarket/page.tsx",
+    file: "screens/blackmarket/BlackMarketScreen.tsx",
     procedure: "bloodline.pityRoll",
     patch: { bloodlineId: "new", bloodline: { id: "new" } },
     invalidations: 2,
@@ -72,7 +72,7 @@ const flows = [
     patch: { userSkills: [], skillPoints: 12 },
   },
   {
-    file: "app/[shell]/adminbuilding/page.tsx",
+    file: "screens/adminbuilding/AdministrationBuildingScreen.tsx",
     procedure: "quests.startQuest",
     patch: { userQuests: [], questData: [] },
   },
@@ -95,13 +95,13 @@ const flows = [
     invalidations: 2,
   },
   {
-    file: "app/[shell]/dungeon/page.tsx",
+    file: "screens/dungeon/DungeonScreen.tsx",
     procedure: "coop.dungeon.act",
     patch: { status: "BATTLE" },
     invalidations: 2,
   },
   {
-    file: "app/[shell]/territory-war/page.tsx",
+    file: "screens/territory-war/TerritoryWarScreen.tsx",
     procedure: "territoryWar.startBattle",
     patch: { status: "QUEUED" },
   },
@@ -502,13 +502,16 @@ describe.each(
 
 const admissionFlows = [
   { file: "layout/HuntingBoard.tsx", procedure: "hunting.start" },
-  { file: "app/[shell]/dungeon/page.tsx", procedure: "coop.dungeon.act" },
+  { file: "screens/dungeon/DungeonScreen.tsx", procedure: "coop.dungeon.act" },
   { file: "layout/ShrineBattleLobby.tsx", procedure: "shrine.initiateShrineBattle" },
   { file: "layout/Objective.tsx", procedure: "quests.retryBattle" },
   { file: "layout/Sector.tsx", procedure: "overworldAi.interactWithOverworldAi" },
   { file: "layout/RaidBrowser.tsx", procedure: "raids.startRaidBattle" },
   { file: "layout/clan/ClanBattles.tsx", procedure: "clan.initiateClanBattle" },
-  { file: "app/[shell]/territory-war/page.tsx", procedure: "territoryWar.startBattle" },
+  {
+    file: "screens/territory-war/TerritoryWarScreen.tsx",
+    procedure: "territoryWar.startBattle",
+  },
 ];
 
 describe.each(admissionFlows)("$procedure admission deltas", ({ file, procedure }) => {
@@ -576,7 +579,7 @@ describe.each(admissionFlows)("$procedure admission deltas", ({ file, procedure 
 });
 
 it("keeps a known patch-only dungeon party change local when no delta is returned", async () => {
-  const test = setup("app/[shell]/dungeon/page.tsx", "coop.dungeon.act");
+  const test = setup("screens/dungeon/DungeonScreen.tsx", "coop.dungeon.act");
   try {
     await test.options.onSuccess(
       { success: true, userPatch: {} },
@@ -592,7 +595,7 @@ it("keeps a known patch-only dungeon party change local when no delta is returne
 });
 
 it("adds confirmed dungeon navigation once without replaying consumed feedback", async () => {
-  const test = setup("app/[shell]/dungeon/page.tsx", "coop.dungeon.act");
+  const test = setup("screens/dungeon/DungeonScreen.tsx", "coop.dungeon.act");
   const unrelated: NavBarDropdownLink = { href: "/inbox", name: "Mail", color: "blue" };
   test.client.setQueryData(key, {
     ...test.profile,

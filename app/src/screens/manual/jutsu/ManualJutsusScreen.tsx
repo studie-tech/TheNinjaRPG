@@ -1,0 +1,160 @@
+"use client";
+
+import {
+  ChartCandlestick,
+  ChartPie,
+  FilePlus,
+  ListChecks,
+  Palette,
+} from "lucide-react";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { useContentListActions } from "@/hooks/useContentListActions";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
+import Link from "@/layout/Link";
+import ListLoader from "@/layout/ListLoader";
+import { useInfinitePagination } from "@/libs/pagination";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserDataSelector } from "@/utils/UserContext";
+
+/** Render the manual jutsu screen independently of its route adapter. */
+export function ManualJutsusScreen() {
+  // Settings
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
+
+  // Two-level filtering
+  const state = useFiltering(undefined, { persistKey: "manual-jutsu" });
+
+  // Get jutsus
+  const {
+    data: jutsus,
+    isFetching,
+    isPending,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+  } = api.jutsu.getAll.useInfiniteQuery(
+    { limit: 10, ...getFilter(state) },
+    {
+      enabled: state.cf.isReady,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      placeholderData: (previousData) => previousData,
+    },
+  );
+  const alljutsus = jutsus?.pages.flatMap((page) => page.data);
+  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
+
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/jutsu/edit",
+  );
+
+  // Mutations
+  const { mutate: create, isPending: load1 } = api.jutsu.create.useMutation({
+    onSuccess: onCreated,
+  });
+
+  const { mutate: remove, isPending: load2 } = api.jutsu.delete.useMutation({
+    onSuccess: onDeleted,
+  });
+
+  // Derived
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
+
+  return (
+    <>
+      <ContentBox
+        title="Jutsus"
+        subtitle="What are they?"
+        defaultBackHref="/manual"
+        topRightContent={
+          <div className="flex flex-row gap-1">
+            <Link href="/manual/jutsu/balance">
+              <Button id="jutsu-statistics" hoverText="Balance Statistics">
+                <ChartCandlestick className="h-6 w-6" />
+              </Button>
+            </Link>
+            <Link href="/manual/jutsu/completeness">
+              <Button id="jutsu-completeness" hoverText="Content Completeness">
+                <ChartPie className="h-6 w-6" />
+              </Button>
+            </Link>
+          </div>
+        }
+      >
+        <p>
+          In the world of ninja battles, jutsu refers to the mystical skills and
+          techniques that a ninja can use. These techniques require the ninja to harness
+          their inner chakra energy, which is released through a series of hand
+          movements known as hand seals. With countless combinations of hand seals and
+          chakra energies, there are endless possibilities for the types of jutsu that
+          can be created. Whether it is a technique for offence or defence, a skilled
+          ninja must master the art of jutsu to become a true warrior.
+        </p>
+        <p className="pt-4">
+          Jutsu can be trained at the training grounds in your village; here you can
+          find multiple teachers, who will teach you how to advance your jutsu for a
+          given price.
+        </p>
+      </ContentBox>
+      <ContentBox
+        title="Database"
+        subtitle="All known jutsu"
+        initialBreak={true}
+        topRightContent={
+          <div className="flex flex-row items-center gap-1">
+            {userData && canChangeContent(userData.role) && (
+              <>
+                <Button
+                  id="create-jutsu"
+                  onClick={() => create()}
+                  hoverText="New"
+                  disabled={load1 || isOpeningCreated}
+                  loading={load1 || isOpeningCreated}
+                >
+                  <FilePlus className="h-6 w-6" />
+                </Button>
+                <Link href="/manual/jutsu/mass_edit">
+                  <Button id="mass-edit-jutsu" hoverText="Edit">
+                    <ListChecks className="h-6 w-6" />
+                  </Button>
+                </Link>
+              </>
+            )}
+            <Link href="/manual/jutsu/reskins">
+              <Button id="jutsu-reskins" hoverText="Reskins">
+                <Palette className="h-6 w-6" />
+              </Button>
+            </Link>
+            <JutsuFiltering state={state} />
+          </div>
+        }
+      >
+        {alljutsus?.map((jutsu, i) => (
+          <div key={jutsu.id} ref={i === alljutsus.length - 1 ? setLastElement : null}>
+            <ItemWithEffects
+              item={jutsu}
+              detailHref={`/manual/jutsu/${jutsu.id}`}
+              onDelete={(id: string) => remove({ id })}
+              showEdit="jutsu"
+              showCopy="jutsu"
+              showStatistic="jutsu"
+            />
+          </div>
+        ))}
+        {!totalLoading && alljutsus?.length === 0 && (
+          <div>No jutsus found given the search criteria.</div>
+        )}
+        <ListLoader
+          initialLoading={!state.cf.isReady || isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
+      </ContentBox>
+    </>
+  );
+}

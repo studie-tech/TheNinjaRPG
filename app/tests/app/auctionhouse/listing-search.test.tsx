@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as client from "@/app/_trpc/client";
-import { AuctionListing } from "@/app/[shell]/auctionhouse/Listings";
 import * as pagination from "@/libs/pagination";
+import { AuctionListing } from "@/screens/auctionhouse/Listings";
 import * as UserContext from "@/utils/UserContext";
 import { mockUserContextValue } from "../../setup/userContext";
 

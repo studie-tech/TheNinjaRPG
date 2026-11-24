@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { getPageForumContext } from "@/app/[shell]/forum/pageData";
 import { buildMetadata, noindexMetadata } from "@/libs/seo";
 import { fetchThread } from "@/queries/forum";
+import { getPageForumContext } from "@/screens/forum/pageData";
 import { drizzleDB } from "@/server/db";
 
 /** Expose only published, publicly readable topics and derive the canonical URL from their actual board. */

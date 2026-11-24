@@ -1,22 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import { findUserRoleById } from "@/queries/profile";
-import { drizzleDB } from "@/server/db";
-import { canChangeContent } from "@/utils/permissions";
-import { ManualWorldEditor } from "./ManualWorldEditor";
+import { ManualWorldScreen } from "@/screens/manual/world/ManualWorldScreen";
 
 export const dynamic = "force-dynamic";
-
-/**
- * Staff map-editing hub. Player travel docs live at /guide/world.
- * The redirect is server-side so crawlers and no-JS clients do not stay on a 200 loader.
- */
-export default async function ManualWorld() {
-  const { userId } = await auth();
-  if (!userId) redirect("/guide/world");
-  const row = await findUserRoleById(drizzleDB, userId);
-  if (!row || !canChangeContent(row.role)) {
-    redirect("/guide/world");
-  }
-  return <ManualWorldEditor />;
+export default function ManualWorld() {
+  return <ManualWorldScreen />;
 }
