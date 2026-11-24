@@ -63,10 +63,13 @@ import {
 import {
   getDodgedPanelTop,
   getPanelPlaceOverDialog,
+  getSpotlightScene,
   getUsableHighlightElement,
   isSameBox,
+  isSameOptionalBox,
   isUnderModal,
   Spotlight,
+  type SpotlightBox,
   type SpotlightMark,
   SpotlightMarks,
   trackLayout,
@@ -1411,6 +1414,7 @@ const PlayerTutorialAssistant: React.FC<
           // The real control under the hole takes the press.
           <Spotlight
             box={highlight}
+            scene={highlight.scene}
             marks={marks}
             ping={showPointer}
             pointer={showPointer}
@@ -1597,6 +1601,7 @@ const GuidedLessonAssistant: React.FC<{ step: GuidedLessonStep }> = ({ step }) =
       {box && !step.blocking ? (
         <Spotlight
           box={box}
+          scene={box.scene}
           marks={marks}
           holeClassName="pointer-events-none bg-transparent"
         />
@@ -2080,6 +2085,8 @@ const useHighlightPlacement = <Step extends { id: string }>({
     left: number;
     width: number;
     height: number;
+    /** The scene the element is part of, which stays lit around it. */
+    scene: SpotlightBox | null;
   } | null>(null);
   // Placement of the current highlight, keyed by step, element and width. One owner
   // decides where a highlight belongs, so scrolling never fights itself.
@@ -2316,13 +2323,15 @@ const useHighlightPlacement = <Step extends { id: string }>({
         left: rect.left,
         width: rect.width,
         height: rect.height,
+        scene: getSpotlightScene(highlightInfo.element),
       };
       setHighlight((prev) =>
         prev &&
         prev.stepId === next.stepId &&
         prev.elementId === next.elementId &&
         prev.isRevealed === next.isRevealed &&
-        isSameBox(prev, next)
+        isSameBox(prev, next) &&
+        isSameOptionalBox(prev.scene, next.scene)
           ? prev
           : next,
       );
@@ -2764,7 +2773,7 @@ const findElementToHighlight = (
   // Return the element reference along with its dimensions
   return {
     element,
-    isInScene: step.isInScene,
+    isInScene: step.isInScene || !!getSpotlightScene(element),
   };
 };
 

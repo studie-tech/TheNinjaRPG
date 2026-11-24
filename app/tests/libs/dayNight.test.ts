@@ -7,7 +7,12 @@ import {
   WORLD_NIGHT_BRIGHTNESS,
   WORLD_NIGHT_SECONDS,
 } from "@/drizzle/constants";
-import { getWorldCycleBrightness, getWorldCycleState } from "@/libs/dayNight";
+import {
+  getMorningShift,
+  getWorldCycleBrightness,
+  getWorldCyclePosition,
+  getWorldCycleState,
+} from "@/libs/dayNight";
 
 describe("dayNight", () => {
   it("derives day/night cycle state and brightness", () => {
@@ -23,6 +28,19 @@ describe("dayNight", () => {
     expect(getWorldCycleBrightness(midDay)).toBeGreaterThan(
       getWorldCycleBrightness(midNight),
     );
+  });
+
+  it("starts a clock set back by the morning shift at dawn, from any time of day", () => {
+    const cycleMs = WORLD_CYCLE_SECONDS * 1000;
+    for (const share of [0, 0.2, 0.5, 0.75, 0.999]) {
+      const at = cycleMs * (5 + share);
+      const shown = new Date(at - getMorningShift(at));
+      expect(getWorldCyclePosition(shown)).toMatchObject({
+        phase: "day",
+        phaseOffset: 0,
+      });
+      expect(getWorldCycleBrightness(shown)).toBe(WORLD_DAY_BRIGHTNESS);
+    }
   });
 
   it("keeps the dawn transition continuous at the day boundary", () => {

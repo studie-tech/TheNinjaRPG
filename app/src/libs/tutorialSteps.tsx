@@ -176,19 +176,13 @@ const sectorTargetElements = ["tutorial-objective-marker", "tutorial-travel-sect
 const mapSceneTarget = {
   elementIds: ["tutorial-map-target"],
   revealId: "tutorial-travel-sector",
-  isInScene: true,
-  // What is said on the map stays readable in the dimmed page.
-  marks: [{ selector: "[data-map-speech-line]", label: "" }],
 };
 // A speaker's answers on the page: in the dialog they open, or under their words.
 const sceneAnswers = {
   elementIds: ["tutorial-npc-answers", "tutorial-story-answers"],
   isInScene: true,
-  marks: [
-    ...mapSceneTarget.marks,
-    { selector: "#tutorial-map-speaker", label: "" },
-    { selector: "[data-page-speech]", label: "" },
-  ],
+  // What is said on a page stays readable in the dimmed page; a map stays lit as a whole.
+  marks: [{ selector: "[data-page-speech]", label: "" }],
 };
 // The trip's confirmation and arrival timer, ahead of the controls that lead to them.
 const globalTravelElements = [

@@ -343,8 +343,6 @@ export const useStoryScene = (info: {
             onClose: () => setTalkingId(undefined),
           } satisfies ComponentProps<typeof NpcDialogModal>)
         : null,
-    /** Who speaks in a meeting, which a lesson keeps lit with their words. */
-    speaker: scene && speaker ? actorAnchor(speaker) : null,
     isAttacking: !!fight?.isPending,
     marker,
     target:

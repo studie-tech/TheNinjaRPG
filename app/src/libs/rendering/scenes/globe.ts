@@ -51,7 +51,11 @@ import {
 } from "@/libs/rendering/scenes/travelViewport";
 import { createSectorGenerator } from "@/libs/rendering/sectorGenerationClient";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
-import { getWorldWeather, type WorldWeather } from "@/libs/rendering/worldWeather";
+import {
+  getWorldWeather,
+  type WorldSky,
+  type WorldWeather,
+} from "@/libs/rendering/worldWeather";
 import type { GlobalMapData, GlobalPoint } from "@/libs/sector-map/world-types";
 import { getReadableVillageHexColor } from "@/utils/color";
 import type { GlobeJourney } from "@/validators/travel";
@@ -585,8 +589,8 @@ export const createGlobeScene = async (options: {
         lastClouds = state.layers.clouds;
         const now = Date.now() - state.timeDiff;
         updateLightColors(
-          worldSunlight(new Date(now)).day,
-          getWorldWeather("ground", now),
+          worldSunlight(new Date(now - (state.sky?.shiftMs ?? 0))).day,
+          state.sky?.weather ?? getWorldWeather("ground", now),
         );
       }
       const isRotating =
@@ -795,6 +799,8 @@ export type GlobeSceneState = {
   questSectors: number[];
   /** Client clock minus server clock, so daylight and weather follow the server's cycle. */
   timeDiff: number;
+  /** The sky a player in the tutorial sees in place of the world's. */
+  sky?: WorldSky | null;
   /** Destination the route arc keeps pointing at when nothing is hovered (a pending trip). */
   routeTarget?: number | null;
   journey?: GlobeJourney | null;

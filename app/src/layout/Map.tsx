@@ -17,6 +17,7 @@ import type { Village } from "@/drizzle/schema";
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useTutorialSky } from "@/hooks/useTutorialSky";
 import WebGlError from "@/layout/WebGLError";
 import { type GlobeQuestGoal, getGlobeQuestGoals } from "@/libs/mapLocations";
 import {
@@ -62,6 +63,7 @@ interface MapProps {
 
 const GlobalMap: React.FC<MapProps> = (props) => {
   const { data: userData, timeDiff } = useUserDataSelector(selectUserWithoutPosition);
+  const sky = useTutorialSky(userData, timeDiff);
   const { currentStep } = useTutorialStep();
   // Hover lives outside React state here so only the hover cards re-render per sector.
   const [hover] = useState(createHoverStore);
@@ -125,6 +127,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       focusSector: props.focusSector,
       questSectors,
       timeDiff,
+      sky,
       routeTarget: props.routeTarget,
       journey: props.journey,
       layers,
@@ -142,6 +145,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       props.focusSector,
       questSectors,
       timeDiff,
+      sky,
       props.routeTarget,
       props.journey,
       layers,

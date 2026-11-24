@@ -18,6 +18,7 @@ import { useCombatInspection } from "@/hooks/useCombatInspection";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
+import { useTutorialSky } from "@/hooks/useTutorialSky";
 import { CombatAggro } from "@/layout/CombatAggro";
 import { CombatLobby } from "@/layout/CombatLobby";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
@@ -187,6 +188,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     updateUser,
     prepareUserUpdate,
   } = useRequiredUserDataSelector(selectCombatViewer);
+  const sky = useTutorialSky(userData, timeDiff);
   const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
   const [isInLobby, setIsInLobby] = useState(
@@ -952,6 +954,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           aggro: config.showAggro ? aggro : undefined,
           timeDiff,
           cycleEnabled: true,
+          sky,
           assets: gameAssetsRef.current.assets,
           requestedIds: gameAssetsRef.current.requestedIds,
           active: isPageActive && !result,

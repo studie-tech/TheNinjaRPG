@@ -837,7 +837,7 @@ export function TravelView({
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
         <div
-          data-travel-viewport={immersive ? "" : undefined}
+          data-spotlight-scene=""
           className={userData.travelFinishAt ? "relative min-h-80" : "relative"}
         >
           {(showGlobal || (hasOpenedGlobal && villages && globe)) && (

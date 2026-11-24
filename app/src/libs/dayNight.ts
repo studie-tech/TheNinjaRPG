@@ -35,6 +35,10 @@ export const getWorldCyclePosition = (date: Date) => {
   };
 };
 
+/** How long after its cycle's dawn a timestamp falls: a clock set back by this starts at dawn. */
+export const getMorningShift = (ms: number) =>
+  ms - getWorldCyclePosition(new Date(ms)).cycleStart;
+
 /** Interpolate brightness near each phase boundary using the configured world-cycle timings. */
 export const getWorldCycleBrightness = (now = new Date()) => {
   const { phase, phaseOffset, phaseDuration } = getWorldCyclePosition(now);

@@ -25,14 +25,17 @@ import {
  * ring marks it and a hand points at it. The layer lets every tap through except where
  * `children` (placed inside the ring) take them, so the real control under the hole
  * receives the press. Around a control standing alone in the lit element, as an answer in
- * its box or a Claim in its row, the rest of the element presses it too. It is portalled into the body as a `data-battle-focus-layer`, so a
- * focus view keeps it interactive. The control under the hole is shown at full opacity:
- * pages fade a hovered card or the actions not selected, which would make the one control
- * the player is told to press look disabled. While the hole, its pointer or a mark sits
- * where toasts appear, the spotlight publishes `--tutorial-toast-top` so they arrive below.
+ * its box or a Claim in its row, the rest of the element presses it too. A control inside a
+ * scene (`data-spotlight-scene`: a map) leaves the whole scene lit. The layer is portalled
+ * into the body as a `data-battle-focus-layer`, so a focus view keeps it interactive. The
+ * control under the hole is shown at full opacity: pages fade a hovered card or the actions
+ * not selected, which would make the one control the player is told to press look disabled.
+ * While the hole, its pointer or a mark sits where toasts appear, the spotlight publishes
+ * `--tutorial-toast-top` so they arrive below.
  */
 export const Spotlight = ({
   box,
+  scene,
   marks = [],
   dim = true,
   ping = true,
@@ -42,6 +45,8 @@ export const Spotlight = ({
   children,
 }: {
   box: SpotlightBox;
+  /** The scene the control is part of (see `getSpotlightScene`), lit around it. */
+  scene?: SpotlightBox | null;
   /** Further elements the step refers to: uncovered, and named ones ringed with dashes. */
   marks?: SpotlightMark[];
   /** Dims the page around the hole; off for a scene the player must see whole. */
@@ -100,7 +105,9 @@ export const Spotlight = ({
       className="pointer-events-none fixed inset-0 z-[60]"
     >
       <style>{SPOTLIT_STYLE}</style>
-      {dim && <SpotlightDim box={box} extra={marks.map((mark) => mark.box)} />}
+      {dim && (
+        <SpotlightDim box={box} scene={scene} extra={marks.map((mark) => mark.box)} />
+      )}
       {marks.map((mark) => (
         <SpotlightMarkRing key={mark.key} mark={mark} />
       ))}
@@ -143,9 +150,12 @@ export const Spotlight = ({
  */
 export const SpotlightDim = ({
   box,
+  scene,
   extra = [],
 }: {
   box?: SpotlightBox;
+  /** A region lit as it is, without padding. */
+  scene?: SpotlightBox | null;
   /** Further holes, for marked elements. */
   extra?: SpotlightBox[];
 }) => {
@@ -165,6 +175,16 @@ export const SpotlightDim = ({
               width={box.width + HOLE_PADDING_PX * 2}
               height={box.height + HOLE_PADDING_PX * 2}
               rx={8}
+              fill="black"
+            />
+          ) : null}
+          {scene ? (
+            <rect
+              data-spotlight-lit-scene=""
+              x={scene.left}
+              y={scene.top}
+              width={scene.width}
+              height={scene.height}
               fill="black"
             />
           ) : null}
@@ -336,6 +356,22 @@ const SpotlightEdgePointer = ({
  */
 export const isSameBox = (a: SpotlightBox, b: SpotlightBox) =>
   a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
+
+/** Whether two boxes that may be missing are equal. */
+export const isSameOptionalBox = (a: SpotlightBox | null, b: SpotlightBox | null) =>
+  a && b ? isSameBox(a, b) : a === b;
+
+/**
+ * The box of the scene an element is part of, the nearest `data-spotlight-scene` around it,
+ * or null outside one. A lesson about something on a map keeps the map in view, so the
+ * spotlight dims only what surrounds it.
+ */
+export const getSpotlightScene = (element: Element): SpotlightBox | null => {
+  const rect = element.closest("[data-spotlight-scene]")?.getBoundingClientRect();
+  return rect
+    ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+    : null;
+};
 
 /**
  * Style for the hole cut around a highlighted element, padded by 8px. The hole follows its

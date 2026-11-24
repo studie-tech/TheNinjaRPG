@@ -39,6 +39,7 @@ import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { type StorySceneTap, useStoryScene } from "@/hooks/useStoryScene";
+import { useTutorialSky } from "@/hooks/useTutorialSky";
 import { useVillageDutyPursuit } from "@/hooks/useVillageDuty";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
@@ -448,9 +449,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const lightingPreviewRef = useRef<Date | null>(null);
   const [weatherPreview, setWeatherPreview] = useState<WorldWeather | null>(null);
   const weatherPreviewRef = useRef<typeof weatherPreview>(null);
-  // The render loop reads only an authorized local preview; gameplay keeps the server clock.
+  const sky = useTutorialSky(profile, timeDiff);
+  const skyRef = useRef(sky);
+  // The render loop reads only an authorized local preview, or the tutorial's own sky;
+  // gameplay keeps the server clock.
   lightingPreviewRef.current = isStaffRole(userData?.role) ? lightingPreviewDate : null;
   weatherPreviewRef.current = isStaffRole(userData?.role) ? weatherPreview : null;
+  skyRef.current = sky;
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
     {
@@ -2609,7 +2614,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           const snapshot = travelSnapshot.current;
           if (!snapshot) throw new Error("Travel snapshot unavailable");
           const lightDate =
-            lightingPreviewRef.current ?? new Date(Date.now() - timeDiffRef.current);
+            lightingPreviewRef.current ??
+            new Date(Date.now() - timeDiffRef.current - (skyRef.current?.shiftMs ?? 0));
           return {
             ...snapshot,
             actorRevision: actorRevisionRef.current,
@@ -2627,7 +2633,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
               !showSorroundingRef.current &&
               performance.now() >= ignoreMapClicksUntilRef.current,
             lightDate,
-            weather: weatherPreviewRef.current,
+            weather: weatherPreviewRef.current ?? skyRef.current?.weather,
             weatherTime: Date.now() - timeDiffRef.current,
             brightness: getWorldCycleBrightness(lightDate),
           };
@@ -2748,6 +2754,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     <div
       data-world-expanded={isWorldExpanded ? "true" : undefined}
       data-map-root=""
+      data-spotlight-scene=""
       className={isWorldExpanded ? "fixed inset-0 z-50 bg-[#263c36]" : "relative"}
     >
       <div className="relative">
@@ -2771,13 +2778,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           anchor={storyScene.target}
           box={storyTargetBox}
           id="tutorial-map-target"
-          onPlaced={announceTutorialLayout}
-        />
-        <MapAnchored
-          anchors={mapAnchors}
-          anchor={storyScene.speaker}
-          box={STORY_SPEAKER_BOX}
-          id="tutorial-map-speaker"
           onPlaced={announceTutorialLayout}
         />
         <MapAnchored
@@ -2847,13 +2847,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           data-map-hud=""
           className="absolute top-3 right-3 z-10 flex items-start gap-2"
         >
-          <DayNightIndicator
-            className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
-            previewDate={lightingPreviewDate}
-            onPreviewDateChange={setLightingPreviewDate}
-            previewWeather={weatherPreview}
-            onPreviewWeatherChange={setWeatherPreview}
-          />
+          {/* The tutorial's map has a sky of its own, which the world's clock would contradict. */}
+          {!isTutorialActive(profile) && (
+            <DayNightIndicator
+              className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
+              previewDate={lightingPreviewDate}
+              onPreviewDateChange={setLightingPreviewDate}
+              previewWeather={weatherPreview}
+              onPreviewWeatherChange={setWeatherPreview}
+            />
+          )}
           {isWorldExpanded && (
             <Button
               type="button"
@@ -3165,7 +3168,6 @@ const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
 
 /** What a lesson marks over a story's figure, with its control, and over its tile, in tiles. */
 const STORY_FIGURE_BOX = { width: 2.2, height: 1.7 };
-const STORY_SPEAKER_BOX = { width: 2.2, height: 1.9 };
 const STORY_TILE_BOX = { width: 1.5, height: 1 };
 const OBJECTIVE_ANCHOR: MapAnchor = { kind: "objective" };
 const announceTutorialLayout = () =>

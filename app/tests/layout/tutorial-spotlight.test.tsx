@@ -4,6 +4,7 @@ import * as image from "@/layout/Image";
 import {
   getDodgedPanelTop,
   getPanelPlaceOverDialog,
+  getSpotlightScene,
   getToastClearance,
   getUsableHighlightElement,
   Spotlight,
@@ -259,6 +260,39 @@ describe("a target under a modal", () => {
     });
     target.id = "marker";
     expect(getUsableHighlightElement("marker")).toBe(target);
+  });
+});
+
+describe("a spotlight inside a scene", () => {
+  const box = { top: 100, left: 50, width: 40, height: 40 };
+  const sceneBox = { top: 60, left: 20, width: 600, height: 400 };
+
+  it("finds the nearest scene around the target, and none for a target outside one", () => {
+    const page = place(document.body.appendChild(document.createElement("div")), {
+      ...sceneBox,
+      height: 900,
+    });
+    page.setAttribute("data-spotlight-scene", "");
+    const map = place(page.appendChild(document.createElement("div")), sceneBox);
+    map.setAttribute("data-spotlight-scene", "");
+    const tile = place(map.appendChild(document.createElement("div")), box);
+    const tab = place(document.body.appendChild(document.createElement("button")), box);
+
+    expect(getSpotlightScene(tile)).toEqual(sceneBox);
+    expect(getSpotlightScene(tab)).toBeNull();
+  });
+
+  it("leaves the scene undimmed around the control", () => {
+    document.elementsFromPoint = () => [];
+    const view = render(<Spotlight box={box} scene={sceneBox} pointer={false} />);
+    const hole = document.querySelector("mask [data-spotlight-lit-scene]");
+    expect(hole?.getAttribute("fill")).toBe("black");
+    expect(
+      ["x", "y", "width", "height"].map((name) => Number(hole?.getAttribute(name))),
+    ).toEqual([sceneBox.left, sceneBox.top, sceneBox.width, sceneBox.height]);
+
+    view.rerender(<Spotlight box={box} scene={null} pointer={false} />);
+    expect(document.querySelector("[data-spotlight-lit-scene]")).toBeNull();
   });
 });
 
