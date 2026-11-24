@@ -2079,6 +2079,7 @@ export const updateUserDataForFinishBattle = (
   );
   // LIMIT prevents merging these snapshots: multi-table SET order cannot preserve recovery clocks or XP thresholds.
   // Lock current rows so the snapshots cannot overwrite concurrent Energy or XP increments.
+  // Check battleId only in the locked release snapshot: clearing it must not filter out later joined jutsu rows.
   return client.execute(sql`
     UPDATE ${userData}
     INNER JOIN (
@@ -2096,7 +2097,6 @@ export const updateUserDataForFinishBattle = (
     SET ${sql.join(assignments, sql`, `)},
         ${userJutsu.experience} = IF(xp.experience + ${jutsuXp.experience} >= xp.xpToLevel, 0, xp.experience + ${jutsuXp.experience}),
         ${userJutsu.level} = xp.level + (xp.experience + ${jutsuXp.experience} >= xp.xpToLevel)
-    WHERE ${guard}
   `);
 };
 

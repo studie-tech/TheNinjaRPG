@@ -1017,17 +1017,18 @@ describeWithDatabase("CAS combat settlement", () => {
 
   it("keeps a failed raid release and jutsu award retryable under the battle guard", async () => {
     const db = await getTestDatabase();
-    await insertJutsus([{ id: "used" }]);
+    const ids = ["first", "second"];
+    await insertJutsus(ids.map((id) => ({ id })));
     await db
       .insert(userJutsu)
-      .values({ id: "owned", userId: "loser", jutsuId: "used" });
+      .values(ids.map((id) => ({ id, userId: "loser", jutsuId: id })));
     const snapshot = scenario(true);
     snapshot.battleType = "RAID";
-    snapshot.extraState.jutsus = {
-      used: makeJutsu({ id: "used" }),
-    };
+    snapshot.extraState.jutsus = Object.fromEntries(
+      ids.map((id) => [id, makeJutsu({ id })]),
+    );
     const teammate = snapshot.usersState[1]!;
-    teammate.usedActions = [{ id: "used", type: "jutsu" }];
+    teammate.usedActions = ids.map((id) => ({ id, type: "jutsu" }));
     const release = (client: typeof db) =>
       updateUserDataForFinishBattle(
         client,
@@ -1044,13 +1045,25 @@ describeWithDatabase("CAS combat settlement", () => {
       (await db.query.userData.findFirst({ where: eq(userData.userId, "loser") }))
         ?.battleId,
     ).toBe(snapshot.id);
-    expect((await db.query.userJutsu.findFirst())?.experience).toBe(0);
+    const experiences = async () =>
+      (await db.query.userJutsu.findMany()).map((row) => row.experience);
+    expect(await experiences()).toEqual([0, 0]);
     await Promise.all([release(db), release(db)]);
-    expect((await db.query.userJutsu.findFirst())?.experience).toBe(16);
+    expect(await experiences()).toEqual([16, 16]);
     expect(
       (await db.query.userData.findFirst({ where: eq(userData.userId, "loser") }))
         ?.battleId,
     ).toBeNull();
+    await db
+      .update(userData)
+      .set({ battleId: "replacement", status: "BATTLE" })
+      .where(eq(userData.userId, "loser"));
+    await release(db);
+    expect(await experiences()).toEqual([16, 16]);
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, "loser") }))
+        ?.battleId,
+    ).toBe("replacement");
   });
 
   it("orphan recovery credits base Energy without advancing queued stats or other pools", async () => {
