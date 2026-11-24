@@ -203,6 +203,7 @@ describe("responsive experimental menus", () => {
     isCombatPage: false,
     navbarMenuItems: [],
     shownNotifications: [],
+    gameMenuNotificationCount: 0,
     location: { name: "Horizon", href: "/village" },
     leftSideBarOpen: false,
     onLeftSideBarOpenChange: vi.fn(),
@@ -288,6 +289,23 @@ describe("responsive experimental menus", () => {
       expect(game.id).toBe("tutorial-gameBtn");
     },
   );
+
+  it.each([0, 1, 120])("shows the game-menu notification count (%s)", (count) => {
+    const input = { ...props(), gameMenuNotificationCount: count };
+    const view = render(<ExperimentalGameLayout {...input} />);
+    const label =
+      count > 0
+        ? `Open game menu (${count} ${count === 1 ? "notification" : "notifications"})`
+        : "Open game menu";
+    const button = view.getByRole("button", { name: label });
+    expect(button.querySelector('span[aria-hidden="true"]')?.textContent ?? null).toBe(
+      count > 0 ? (count > 99 ? "99+" : String(count)) : null,
+    );
+    expect(button.id).toBe("tutorial-gameBtn");
+    view.rerender(<ExperimentalGameLayout {...input} gameMenuNotificationCount={0} />);
+    expect(view.getByRole("button", { name: "Open game menu" })).toBe(button);
+    expect(button.querySelector('span[aria-hidden="true"]')).toBeNull();
+  });
 
   it("uses mobile corner menus and the shared configured bottom navigation", () => {
     const input = props();

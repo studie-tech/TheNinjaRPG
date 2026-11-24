@@ -9,7 +9,6 @@ import React, {
   useState,
 } from "react";
 import ReactDOM from "react-dom";
-import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
 import { useGameMenu } from "@/hooks/useGameMenu";
@@ -242,6 +241,22 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     userId,
     activeTerritoryWar,
   ]);
+  // Hidden notices feed link badges; count them once, excluding the player menu.
+  // Tavern unread activity is client-owned rather than part of profile notifications.
+  const gameMenuNotificationCount =
+    shownNotifications.reduce(
+      (count, notice) => count + Math.max(1, notice.notificationCount ?? 0),
+      0,
+    ) +
+    (notifications?.reduce(
+      (count, notice) =>
+        notice.color === "hidden" &&
+        !navbarMenuItems.some((link) => link.href === notice.href)
+          ? count + (notice.notificationCount ?? 0)
+          : count,
+      0,
+    ) ?? 0) +
+    (systems.find((link) => link.href === "/tavern")?.notificationCount ?? 0);
   const isSignedInLayout = isClerkLoaded ? isSignedIn : initialIsSignedIn;
   useEffect(() => {
     if (isSignedInLayout) preloadSignedInSidebar();
@@ -342,6 +357,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     isCombatPage,
     navbarMenuItems,
     shownNotifications,
+    gameMenuNotificationCount,
     location,
     leftSideBarOpen,
     onLeftSideBarOpenChange,

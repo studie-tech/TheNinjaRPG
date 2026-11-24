@@ -115,6 +115,7 @@ const renderProps = (
   isCombatPage: false,
   navbarMenuItems: [],
   shownNotifications: [],
+  gameMenuNotificationCount: 0,
   location: undefined,
   leftSideBarOpen: false,
   onLeftSideBarOpenChange: () => {},

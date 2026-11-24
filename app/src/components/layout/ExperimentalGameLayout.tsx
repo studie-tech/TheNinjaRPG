@@ -46,6 +46,7 @@ import "../../styles/layout-experimental.css";
 export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
   const {
     children,
+    gameMenuNotificationCount,
     handleRightSidebarClick,
     isCombatPage,
     leftSideBar,
@@ -125,13 +126,25 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
       modal={!isDesktop && !isGuidedTutorial}
     >
       <SheetTrigger
-        className="experimental-tool experimental-sidebar-toggle"
+        className="experimental-tool experimental-sidebar-toggle relative"
         hidden={rightSideBarOpen}
-        aria-label="Open game menu"
+        aria-label={
+          gameMenuNotificationCount > 0
+            ? `Open game menu (${gameMenuNotificationCount} ${gameMenuNotificationCount === 1 ? "notification" : "notifications"})`
+            : "Open game menu"
+        }
         id="tutorial-gameBtn"
       >
         <PanelRightOpen aria-hidden="true" />
         <span className="sr-only">Game menu</span>
+        {gameMenuNotificationCount > 0 && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] leading-none font-bold text-white shadow-md shadow-black/40"
+          >
+            {gameMenuNotificationCount > 99 ? "99+" : gameMenuNotificationCount}
+          </span>
+        )}
       </SheetTrigger>
       <SheetContent
         className="experimental-drawer"
