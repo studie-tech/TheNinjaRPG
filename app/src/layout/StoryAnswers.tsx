@@ -30,7 +30,7 @@ export const StoryAnswers = ({
         ]
       : (offer.dialog?.answers ?? []);
   return (
-    <div id="tutorial-story-answers" className="flex flex-wrap gap-2">
+    <div id="tutorial-story-answers" className="flex flex-wrap justify-end gap-2">
       {controls.map((control, index) => (
         <Button
           key={`${index}-${control.text}`}

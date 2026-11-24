@@ -31,7 +31,8 @@ describe("cache module boundary", () => {
           .map((specifier) => `${relative(sourceRoot, file)} imports ${specifier}`),
       );
     expect(violations).toEqual([]);
-  });
+    // Parses every source file, on a shared runner.
+  }, 20_000);
 
   it("gives each cache its own module, named after the cache, outside the router layer", () => {
     const violations = filesIn(cacheDirectory)
