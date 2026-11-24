@@ -51,11 +51,7 @@ export function SectorTravelHost({
       <div className="h-full" inert={isScreenOpen}>
         <TravelScreen immersive isInteractive={!isScreenOpen} />
       </div>
-      <div
-        ref={setPortalTarget}
-        className="sector-screen-layer"
-        data-sector-screen-layer
-      >
+      <div className="sector-screen-layer" data-sector-screen-layer>
         {/* Radix omits its backdrop for non-modal roots; shade only the sector. */}
         {isScreenOpen && (
           <div
@@ -64,6 +60,11 @@ export function SectorTravelHost({
             aria-hidden="true"
           />
         )}
+        <div
+          ref={setPortalTarget}
+          className="sector-screen-viewport"
+          data-sector-screen-viewport
+        />
       </div>
       <PortalContainerContext value={portalTarget}>
         {portalTarget && (

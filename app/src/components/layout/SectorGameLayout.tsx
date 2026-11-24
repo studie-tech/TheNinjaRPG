@@ -168,7 +168,12 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
 
   return (
     <TravelNavigationContext value={travelNavigation}>
-      <div data-world-page className="sector-game sector-game-map">
+      <div
+        data-world-page
+        className="sector-game sector-game-map"
+        data-player-menu-open={leftSideBarOpen || undefined}
+        data-game-menu-open={rightSideBarOpen || undefined}
+      >
         <a href="#game-content" className="theme-skip-link">
           Skip to game content
         </a>

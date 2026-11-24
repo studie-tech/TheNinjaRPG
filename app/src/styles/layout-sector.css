@@ -162,11 +162,18 @@ html[data-game-layout="sector"] {
   contain: layout paint;
   pointer-events: none;
 }
-.sector-screen-layer > * {
+.sector-screen-viewport {
+  position: absolute;
+  inset: 0;
+  contain: layout paint;
+  pointer-events: none;
+}
+.sector-screen-viewport > * {
   pointer-events: auto;
 }
 .sector-screen-backdrop {
   position: absolute;
+  pointer-events: auto;
   inset: 0;
   background: rgb(0 0 0 / 0.6);
 }
@@ -191,6 +198,16 @@ html[data-game-layout="sector"] {
 }
 
 @media (min-width: 768px) {
+  html[data-game-layout="sector"] {
+    /* Narrow desktops keep two readable menus and a usable center column. */
+    --sector-sidebar-width: clamp(16rem, 22vw, 20rem);
+  }
+  .sector-game[data-player-menu-open] .sector-screen-viewport {
+    left: calc(var(--sector-sidebar-width) + 2rem);
+  }
+  .sector-game[data-game-menu-open] .sector-screen-viewport {
+    right: calc(var(--sector-sidebar-width) + 2rem);
+  }
   .sector-drawer {
     top: calc(var(--sector-header-height) + 1rem);
     bottom: auto;

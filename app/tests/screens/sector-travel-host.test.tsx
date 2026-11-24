@@ -182,6 +182,7 @@ it("keeps page and nested dialogs inside the sector while navigation remains rea
   const layer = view.container.querySelector("[data-sector-screen-layer]");
   const page = view.getByRole("dialog", { name: "Game screen" });
   expect(page.closest("[data-sector-screen-layer]")).toBe(layer);
+  expect(page.closest("[data-sector-screen-viewport]")).toBeTruthy();
   const mainNavigation = view.getByRole("button", { name: "Main navigation" });
   expect(view.getByRole("button", { name: "Bottom navigation" })).toBeTruthy();
   fireEvent.pointerDown(mainNavigation);
@@ -359,6 +360,32 @@ describe("responsive sector menus", () => {
       expect(view.getByLabelText("Map host")).toBeTruthy();
       expect(view.container.querySelector("main.sector-map-main")).toBeTruthy();
       expect(view.queryByRole("link", { name: "Show global map" })).toBeNull();
+    },
+  );
+
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    "exposes each open sidebar to the desktop dialog columns (left=%s, right=%s)",
+    (left, right) => {
+      isDesktop = true;
+      const input = { ...props(), leftSideBarOpen: left, rightSideBarOpen: right };
+      const view = render(<SectorGameLayout {...input} />);
+      const frame = view.container.querySelector(".sector-game");
+      expect(frame?.getAttribute("data-player-menu-open")).toBe(left ? "true" : null);
+      expect(frame?.getAttribute("data-game-menu-open")).toBe(right ? "true" : null);
+      view.rerender(
+        <SectorGameLayout
+          {...input}
+          leftSideBarOpen={false}
+          rightSideBarOpen={false}
+        />,
+      );
+      expect(frame?.hasAttribute("data-player-menu-open")).toBe(false);
+      expect(frame?.hasAttribute("data-game-menu-open")).toBe(false);
     },
   );
 
