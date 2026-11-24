@@ -495,9 +495,11 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
     <>
       <CollapsibleNotifications notifications={notifications} />
       <div data-spotlight-panel="">
-        <SideBannerTitle break={notifications && notifications.length > 0}>
-          Main Menu
-        </SideBannerTitle>
+        {variant !== "sector" && (
+          <SideBannerTitle break={notifications && notifications.length > 0}>
+            Main Menu
+          </SideBannerTitle>
+        )}
         <div className="theme-menu-grid mt-1 grid grid-cols-2 gap-3">
           {systems.map((system) => {
             const disabled = system.requireAwake && userData.status !== "AWAKE";
@@ -535,7 +537,9 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
       </div>
       {location && (
         <div data-spotlight-panel="">
-          <SideBannerTitle break>Location Menu</SideBannerTitle>
+          <SideBannerTitle break={variant !== "sector"}>
+            {variant === "sector" ? "Location" : "Location Menu"}
+          </SideBannerTitle>
           <div className={inBattle && location.requireAwake ? "opacity-30" : ""}>
             <Link
               href={inBattle && location.requireAwake ? "/combat" : location.href}

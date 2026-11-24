@@ -85,9 +85,10 @@ export const createGlobeScene = async (options: {
     ...options,
     surface: "globe",
     height: (width) =>
-      options.fillViewport
+      options.mount.closest<HTMLElement>("[data-travel-viewport]")?.clientHeight ||
+      (options.fillViewport
         ? travelViewportHeight(options.mount, width * MIN_FILL_ASPECT, width)
-        : width,
+        : width),
   });
   if (options.fillViewport) game.own(watchTravelViewport(game.fit));
   try {

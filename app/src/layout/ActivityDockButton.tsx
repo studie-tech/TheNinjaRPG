@@ -19,13 +19,13 @@ export function ActivityDockButton({
     <button
       type="button"
       data-mobile-activity-trigger
-      aria-label="Activity"
+      aria-label={activity.hasNews ? "Activity, story news" : "Activity"}
       aria-expanded={activity.open}
       aria-controls={activity.panelId ?? undefined}
       disabled={!activity.panelId}
       title="Tutorial & quests"
       className={cn(
-        "focus-visible:outline-ring rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50",
+        "focus-visible:outline-ring relative rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50",
         className,
       )}
       onClick={() =>
@@ -37,6 +37,12 @@ export function ActivityDockButton({
       }
     >
       <ListChecks className={cn("size-5", iconClassName)} aria-hidden />
+      {activity.hasNews && (
+        <span
+          aria-hidden
+          className="absolute top-0 right-0 h-2.5 w-2.5 rounded-full bg-amber-500"
+        />
+      )}
     </button>
   );
 }

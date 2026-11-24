@@ -1719,9 +1719,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         publishMovementStatus(false);
         document.body.style.cursor = "default";
         continueMovement();
-        autoAttackRef.current();
+        if (!isEntryAtDestination) autoAttackRef.current();
         if (!movePendingRef.current) void completeTutorialAction("sectorWalk");
-      } else {
+      } else if (!context?.entryCommitted) {
         // Navigation can outlive a committed move. Refresh rather than apply an
         // older location over a later action in this account's profile cache.
         await utils.profile.getUser.invalidate();
@@ -2750,6 +2750,48 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const arrivalCta = arrivalNpc
     ? resolveArrivalPromptCta(arrivalNpc, arrivalBound?.objective.task ?? null)
     : null;
+  const weatherControls = (
+    <div
+      data-sector-weather
+      data-map-hud=""
+      className="absolute top-3 right-3 z-10 flex items-start gap-2"
+    >
+      {/* The tutorial's map has a sky of its own, which the world's clock would contradict. */}
+      {!isTutorialActive(profile) && (
+        <DayNightIndicator
+          className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
+          previewDate={lightingPreviewDate}
+          onPreviewDateChange={setLightingPreviewDate}
+          previewWeather={weatherPreview}
+          onPreviewWeatherChange={setWeatherPreview}
+        />
+      )}
+      {isWorldExpanded && (
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="bg-background/90"
+          ref={expandedExitRef}
+          aria-label="Exit expanded world"
+          onClick={() => setWorldExpanded(false)}
+        >
+          <Minimize2 className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
+  const actionStructure = hoveredStructure ?? currentStructure;
+  // A building's card would cover what a story scene or a lesson's target shows on the map.
+  const isMapHeldByScene =
+    !!storyScene.target || storyScene.lines.length > 0 || openSectorZoomedIn;
+  const actionServices = structures.filter(
+    (service) =>
+      (service.hasPage || service.id === currentStructure?.id) &&
+      service.route &&
+      service.longitude === actionStructure?.longitude &&
+      service.latitude === actionStructure?.latitude,
+  );
   const content = (
     <div
       data-world-expanded={isWorldExpanded ? "true" : undefined}
@@ -2813,64 +2855,39 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             </div>
           </div>
         )}
-        <aside
-          aria-label="Map compass and neighboring sectors"
-          data-map-hud=""
-          className="bg-background/90 pointer-events-none absolute top-3 left-3 z-10 rounded-lg border p-2 text-center text-xs shadow-md backdrop-blur-sm"
-        >
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
-            <span className="col-span-3">
-              N ·{" "}
-              {sectorGridNeighbors(sector)[0] < 0
-                ? "Polar boundary"
-                : sectorGridNeighbors(sector)[0]}
-            </span>
-            <span className="text-right whitespace-nowrap">
-              {sectorGridNeighbors(sector)[3]} · W
-            </span>
-            <span className="border-foreground/20 bg-muted min-w-8 rounded border px-1.5 py-0.5 font-bold">
-              <span className="sr-only">Current sector </span>
-              {sector}
-            </span>
-            <span className="text-left whitespace-nowrap">
-              E · {sectorGridNeighbors(sector)[1]}
-            </span>
-            <span className="col-span-3">
-              S ·{" "}
-              {sectorGridNeighbors(sector)[2] < 0
-                ? "Polar boundary"
-                : sectorGridNeighbors(sector)[2]}
-            </span>
-          </div>
-        </aside>
-        <div
-          data-map-hud=""
-          className="absolute top-3 right-3 z-10 flex items-start gap-2"
-        >
-          {/* The tutorial's map has a sky of its own, which the world's clock would contradict. */}
-          {!isTutorialActive(profile) && (
-            <DayNightIndicator
-              className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
-              previewDate={lightingPreviewDate}
-              onPreviewDateChange={setLightingPreviewDate}
-              previewWeather={weatherPreview}
-              onPreviewWeatherChange={setWeatherPreview}
-            />
-          )}
-          {isWorldExpanded && (
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              className="bg-background/90"
-              ref={expandedExitRef}
-              aria-label="Exit expanded world"
-              onClick={() => setWorldExpanded(false)}
-            >
-              <Minimize2 className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        {props.showCompass !== false && (
+          <aside
+            aria-label="Map compass and neighboring sectors"
+            data-map-hud=""
+            className="bg-background/90 pointer-events-none absolute top-3 left-3 z-10 rounded-lg border p-2 text-center text-xs shadow-md backdrop-blur-sm"
+          >
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
+              <span className="col-span-3">
+                N ·{" "}
+                {sectorGridNeighbors(sector)[0] < 0
+                  ? "Polar boundary"
+                  : sectorGridNeighbors(sector)[0]}
+              </span>
+              <span className="text-right whitespace-nowrap">
+                {sectorGridNeighbors(sector)[3]} · W
+              </span>
+              <span className="border-foreground/20 bg-muted min-w-8 rounded border px-1.5 py-0.5 font-bold">
+                <span className="sr-only">Current sector </span>
+                {sector}
+              </span>
+              <span className="text-left whitespace-nowrap">
+                E · {sectorGridNeighbors(sector)[1]}
+              </span>
+              <span className="col-span-3">
+                S ·{" "}
+                {sectorGridNeighbors(sector)[2] < 0
+                  ? "Polar boundary"
+                  : sectorGridNeighbors(sector)[2]}
+              </span>
+            </div>
+          </aside>
+        )}
+        {weatherControls}
       </div>
       {travel.error && <WebGlError />}
       {inspectedLocations && (
@@ -2893,25 +2910,37 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           ))}
         </Modal>
       )}
-      {currentStructure && (
-        <div
-          data-map-hud=""
-          className="absolute bottom-3 left-3 z-20 max-w-[calc(50%-40px)] rounded-lg bg-black/80 p-3 text-white shadow-lg sm:bottom-4 sm:left-4 sm:max-w-xs"
-        >
-          <h3 className="text-sm font-semibold">
-            {currentServices.map((service) => service.name).join(" · ")}
-          </h3>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {currentServices.map((service) => (
-              <Button key={service.id} asChild size="sm" className="min-h-10">
-                <Link href={service.route}>Enter {service.name}</Link>
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Stack corner actions so dungeon, hover and raid cards share the map without overlap. */}
+      {props.isActive &&
+        !isMapHeldByScene &&
+        actionStructure &&
+        actionStructure.id !== dismissedStructureId && (
+          <TravelBuildingCard
+            key={actionStructure.id}
+            structure={actionStructure}
+            services={actionServices}
+            onEnter={enterBuilding}
+            openingServiceId={openingServiceId}
+            getBounds={() =>
+              travel.scene.current?.structureBounds(actionStructure.id) ?? null
+            }
+            boundary={mountRef.current}
+            onGoTo={() =>
+              setTarget({
+                x: actionStructure.longitude,
+                y: actionStructure.latitude,
+              })
+            }
+            onClose={() => {
+              buildingEntryRef.current = null;
+              setOpeningServiceId(null);
+              hoveredStructureIdRef.current = null;
+              setDismissedStructureId(actionStructure.id);
+            }}
+          />
+        )}
+      {/* Stack location, dungeon and raid cards without overlap. */}
       <div
+        data-sector-corner-actions
         data-map-hud=""
         className="pointer-events-none absolute right-3 bottom-3 z-20 flex max-w-[calc(50%-40px)] flex-col items-end gap-2 sm:right-4 sm:bottom-4 sm:max-w-xs"
       >

@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, expect, it, mock, vi } from "bun:test";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
+import { MobileGameNav } from "@/components/layout/shared/MobileGameNav";
 import * as storyGuidanceHook from "@/hooks/useStoryGuidance";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { ActivityDockButton } from "@/layout/ActivityDockButton";
 import * as logbook from "@/layout/Logbook";
 import { activityDockPlaceAtom } from "@/layout/tutorial/dockPlacement";
 import { chatPanelAtom } from "@/libs/chatPanel";
+import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
 import { getQuestsTabLesson } from "@/libs/questsTabLesson";
 import * as storyGuidance from "@/libs/storyGuidance";
 import type * as TutorialSteps from "@/libs/tutorialSteps";
@@ -70,7 +72,7 @@ it("opens the same lesson from mobile navigation, closes chat, and retains a gui
     panelId &&
       document
         .getElementById(panelId)
-        ?.contains(view.getByRole("tab", { name: "Tutorial" })),
+        ?.contains(view.getByRole("tab", { name: "Story" })),
   ).toBe(true);
   fireEvent.click(toggle);
   expect(view.queryByText("Mobile lesson")).toBeNull();
@@ -78,7 +80,7 @@ it("opens the same lesson from mobile navigation, closes chat, and retains a gui
   fireEvent.click(toggle);
   expect(getDefaultStore().get(chatPanelAtom).owner).toBeNull();
   expect(view.getByText("Mobile lesson")).toBeTruthy();
-  expect(document.activeElement?.textContent).toBe("Tutorial");
+  expect(document.activeElement?.textContent).toBe("Story");
   fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
     button: 0,
     ctrlKey: false,
@@ -90,6 +92,33 @@ it("opens the same lesson from mobile navigation, closes chat, and retains a gui
   );
   expect(view.getByText("No active quests or missions.")).toBeTruthy();
   expect(document.activeElement?.textContent).toBe("Quests");
+});
+it("marks the mobile Activity control for story news and opens on it", () => {
+  user.rank = "GENIN";
+  vi.spyOn(storyGuidanceHook, "useStoryGuidance").mockReturnValue({
+    item: undefined,
+  } as never);
+  vi.spyOn(storyGuidance, "getDockAttentionKey").mockReturnValue("chapter");
+  user.tutorialStep = TUTORIAL_STEPS.length;
+  const matchMedia = window.matchMedia;
+  window.matchMedia = (() => ({
+    matches: true,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  })) as never;
+  try {
+    const view = render(
+      <>
+        <ActivityDockButton />
+        <ActivityDock>Story lesson</ActivityDock>
+      </>,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Activity, story news" }));
+    expect(view.getByText("Story lesson")).toBeTruthy();
+    expect(view.getByRole("button", { name: "Activity" })).toBeTruthy();
+  } finally {
+    window.matchMedia = matchMedia;
+  }
 });
 afterEach(() => {
   cleanup();

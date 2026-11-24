@@ -440,7 +440,7 @@ const PlayerTutorialAssistant: React.FC<
           showNextButton: true,
         }
       : savedStep,
-    { tripPhase, pathname, isSidebarShown: !isMobile, tookExpress },
+    { tripPhase, pathname, isSidebarShown: !usesGameMenuDrawer, tookExpress },
   );
 
   const { checkRewards, isCheckingRewards } = useCheckRewards();
@@ -467,7 +467,7 @@ const PlayerTutorialAssistant: React.FC<
   // Phones need the game menu for a step that points inside it, unless the player is
   // already on the page its entry opens.
   const needsGameMenu =
-    isMobile &&
+    usesGameMenuDrawer &&
     visibilityStep?.requiresGameMenu === true &&
     pathname !== visibilityStep.gameMenuEntryPage;
   // The menu prompt shows while the drawer is closed, the lesson once it is open.
@@ -506,7 +506,12 @@ const PlayerTutorialAssistant: React.FC<
       isActiveStep &&
       !onVisibilityStepPage &&
       visibilityStep &&
-      !visibilityStep.requiresGameMenu
+      !visibilityStep.requiresGameMenu &&
+      // A frame whose menu stays open beside the page on a wide screen keeps it open.
+      !(
+        sidebarBreakpoint === null &&
+        window.matchMedia(SIDEBAR_COLUMNS_SHOWN_QUERY).matches
+      )
     ) {
       setRightSideBarOpen(false);
     }
@@ -1049,7 +1054,7 @@ const PlayerTutorialAssistant: React.FC<
                 <StepDescription
                   description={
                     currentStep?.gameMenuLead ??
-                    "On phones, the location and main menus live in the game menu."
+                    "The location and main menus live in the game menu."
                   }
                 />
               </div>
@@ -2335,7 +2340,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
       // A target with no room above the lesson at the foot of the screen starts at the top,
       // and the lesson folds.
       // A dialog stays where it is however the page behind it scrolls.
-      const dialog = highlightInfo.element.closest<HTMLElement>(MODAL_DIALOG_SELECTOR);
+      const dialog = highlightInfo.element.closest<HTMLElement>(OPEN_DIALOG_SELECTOR);
       if (dialog && panel && !placement.gaveWay) {
         // Beside a wide screen's dialog there is room to leave its words readable too.
         const isBeside =
@@ -2705,10 +2710,20 @@ const waitForIdle = (
 };
 
 /** An open modal: Radix dialogs and alert dialogs portal to the body. */
-const MODAL_DIALOG_SELECTOR =
+const OPEN_DIALOG_SELECTOR =
   '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
-const hasOpenModalDialog = () => !!document.querySelector(MODAL_DIALOG_SELECTOR);
+/**
+ * Whether one of them holds the player. A popover does not, nor a frame's own panels beside
+ * the page: a menu left open, or the page a guided lesson is taught on.
+ */
+const hasOpenModalDialog = () =>
+  [...document.querySelectorAll(OPEN_DIALOG_SELECTOR)].some(
+    (dialog) => !dialog.closest(NON_MODAL_DIALOG_SELECTOR),
+  );
+
+const NON_MODAL_DIALOG_SELECTOR =
+  "[data-radix-popper-content-wrapper], [data-sector-sidebar], [data-guided-tutorial]";
 
 /** Follows dialogs mounting and unmounting, as portals directly under the body. */
 const subscribeToDialogs = (onChange: () => void) => {

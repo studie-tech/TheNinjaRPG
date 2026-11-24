@@ -73,6 +73,7 @@ import { nonCombatConsume } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
 import { hasRequiredRank } from "@/libs/rank";
 import { calcGlobalTravelTime, describeGlobalTravelTime } from "@/libs/travel";
+import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import { getReadableVillageHexColor } from "@/utils/color";
 
 /** Render travel maps, controls and dialogs from a single session. */
@@ -689,24 +690,26 @@ export function TravelView({
       ),
     },
     {
-      key: "tabs",
-      node: (
-        <NavTabs
-          current={isGlobal ? globalLink : activeTab}
-          options={sectorLink ? [sectorLink, globalLink] : [globalLink]}
-          labels={{ [sectorLink]: "Sector" }}
-          itemClassName={(option) => (option === globalLink ? "mr-0" : "")}
-          // The open Global tab is not the next thing to press, so tutorial rings skip it.
-          itemId={(option) =>
-            option === globalLink && isGlobal ? undefined : `tutorial-${option}`
-          }
-          disabledOptions={isTraveling ? [sectorLink] : undefined}
-          setValue={setActiveTab}
-          onChange={(value) => {
-            if (value !== globalLink)
-              setCameraFocusRevision((previous) => previous + 1);
-          }}
-        />
+      key: "caravans",
+      priority: 8,
+      node: !immersive && isSectorTools && !tutorialRunning && (
+        <CaravanControlsTrigger className={toolClassName} />
+      ),
+    },
+    {
+      key: "expand",
+      priority: 4,
+      node: !immersive && isSectorTools && (
+        <button
+          type="button"
+          aria-label="Expand world"
+          aria-expanded={isWorldExpanded}
+          disabled={!showSector || !SectorComponent}
+          className={toolClassName}
+          onClick={() => setWorldExpanded(true)}
+        >
+          <Maximize2 className="h-7 w-7" aria-hidden />
+        </button>
       ),
     },
   ];
@@ -717,6 +720,10 @@ export function TravelView({
       options={sectorLink ? [sectorLink, globalLink] : [globalLink]}
       labels={{ [sectorLink]: "Sector" }}
       itemClassName={(option) => (option === globalLink ? "mr-0" : "")}
+      // The open Global tab is not the next thing to press, so tutorial rings skip it.
+      itemId={(option) =>
+        option === globalLink && isGlobal ? undefined : `tutorial-${option}`
+      }
       disabledOptions={isTraveling ? [sectorLink] : undefined}
       setValue={setActiveTab}
       onChange={(value) => {
@@ -756,6 +763,8 @@ export function TravelView({
         createPortal(
           <button
             type="button"
+            // Opens the globe here as the Global tab does in other layouts.
+            id={isGlobal ? undefined : `tutorial-${globalLink}`}
             className="sector-nav-control"
             aria-label={isGlobal ? "Show sector map" : "Show global map"}
             title={isGlobal ? "Show sector map" : "Show global map"}
@@ -838,6 +847,7 @@ export function TravelView({
         {/* The countdown needs a viewport even while the destination scene is loading. */}
         <div
           data-spotlight-scene=""
+          data-travel-viewport={immersive ? "" : undefined}
           className={userData.travelFinishAt ? "relative min-h-80" : "relative"}
         >
           {(showGlobal || (hasOpenedGlobal && villages && globe)) && (

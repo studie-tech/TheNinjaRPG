@@ -183,6 +183,9 @@ export const ProfilePools: React.FC<{ compact?: boolean; onInspect?: () => void 
       <div id="tutorial-sidebar-energy">
         <StatusBar
           title="EP"
+          resourceName="Energy"
+          compact={compact}
+          onInspect={onInspect}
           tooltip="Energy continues recovering during combat and is credited when you leave."
           combatRegenerationPeriods={
             userData?.status === "BATTLE" && battle?.id === userData.battleId
@@ -286,36 +289,7 @@ const ProfileStanding: React.FC<{ hasLocation: boolean }> = ({ hasLocation }) =>
           </Link>
         </p>
       )}
-      {userData && (
-        <TooltipProvider delayDuration={50}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <p className="cursor-default">
-                <b>Bracket: </b>
-                {userData.bracket}/{MAX_PVP_BRACKET}
-              </p>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-72">
-              {userData.isEliteJonin ? (
-                <>
-                  Elite Jonin use bracket {ELITE_JONIN_BRACKET}. Your fights are limited
-                  to brackets {ELITE_JONIN_BRACKET - 1} and {ELITE_JONIN_BRACKET},
-                  including during wars or when immunity is lifted.
-                </>
-              ) : (
-                <>
-                  PvP bracket based on experience (Academy & Genin are bracket 0). You
-                  can freely attack players in your bracket, one bracket below, or
-                  higher. Attacking Elite Jonin requires bracket{" "}
-                  {ELITE_JONIN_BRACKET - 1} or {ELITE_JONIN_BRACKET}. Other players more
-                  than one bracket below are protected unless their immunity is lifted
-                  or both sides are active war participants.
-                </>
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
+      <ProfileBracket />
     </>
   );
 };
@@ -349,7 +323,7 @@ export const ProfileBracket: React.FC<{ compact?: boolean }> = ({
             </p>
           )}
         </TooltipTrigger>
-        <TooltipContent>
+        <TooltipContent className="max-w-72">
           {userData.isEliteJonin ? (
             <>
               Elite Jonin use bracket {ELITE_JONIN_BRACKET}. Your fights are limited to

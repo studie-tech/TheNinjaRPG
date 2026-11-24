@@ -589,6 +589,33 @@ describe("step overrides", () => {
 });
 
 describe("routing", () => {
+  it.each([false, true])(
+    "keeps drawer-only tutorial dismissal responsive (desktop=%s)",
+    (desktop) => {
+      const original = Object.getOwnPropertyDescriptor(window, "matchMedia");
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: () => ({
+          matches: desktop,
+          addEventListener() {},
+          removeEventListener() {},
+        }),
+      });
+      try {
+        state.pathname = "/not-the-lesson";
+        state.profile = makeProfile(0, { status: "HOSPITALIZED" });
+        render(assistant(null, true));
+        expect(state.push).toHaveBeenCalled();
+        if (desktop) expect(state.setRightSideBarOpen).not.toHaveBeenCalledWith(false);
+        else expect(state.setRightSideBarOpen).toHaveBeenCalledWith(false);
+      } finally {
+        cleanup();
+        if (original) Object.defineProperty(window, "matchMedia", original);
+        else Reflect.deleteProperty(window, "matchMedia");
+      }
+    },
+  );
+
   it("shows the way to a step's page instead of taking the player there", async () => {
     const index = TUTORIAL_STEPS.findIndex((step) => step.id === "combat-claim-reward");
     const view = show(index, {}, "/travel", <Target id="tutorial-profile" />);
@@ -1068,7 +1095,7 @@ describe("mobile game menu", () => {
     );
     const region = await waitFor(() => lesson(view, TUTORIAL_STEPS[travel]!.title));
     expect(region.textContent).toContain(
-      "On phones, the location and main menus live in the game menu.",
+      "The location and main menus live in the game menu.",
     );
     // The reason for the step comes first, as on a wide screen.
     expect(region.textContent).toContain(

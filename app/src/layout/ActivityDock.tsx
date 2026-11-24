@@ -1,6 +1,6 @@
 "use client";
 
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   ArrowLeftRight,
   BookOpen,
@@ -43,6 +43,7 @@ import {
   type SpotlightMark,
   trackLayout,
 } from "@/layout/tutorial/Spotlight";
+import { activityDockRequestAtom, activityDockStateAtom } from "@/libs/activityDock";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { getQuestsTabLesson, type QuestsTabLesson } from "@/libs/questsTabLesson";
 import { cn } from "@/libs/shadui";
@@ -153,6 +154,49 @@ export function ActivityDock({
     setTab("tutorial");
     setOpen(true);
   }, [attentionKey, seenAttention, setSeenAttention, setOpen, setTab]);
+  const request = useAtomValue(activityDockRequestAtom);
+  const reportState = useSetAtom(activityDockStateAtom);
+  const previousRequest = useRef(request.sequence);
+  const focusRequested = useRef(false);
+  useEffect(() => {
+    reportState({
+      userId: user?.userId ?? null,
+      panelId,
+      open,
+      hasNews: !open && hasStoryNews,
+    });
+  }, [user?.userId, panelId, open, hasStoryNews, reportState]);
+  useEffect(
+    () => () => {
+      reportState({ userId: null, panelId: null, open: false, hasNews: false });
+    },
+    [reportState],
+  );
+  useEffect(() => {
+    if (previousRequest.current === request.sequence) return;
+    previousRequest.current = request.sequence;
+    if (!user || request.userId !== user.userId) return;
+    focusRequested.current = request.open;
+    if (request.open) {
+      setChat((current) => ({ ...current, owner: null, openRequested: false }));
+      // Opened for its news, it shows the news.
+      if (hasStoryNews && attentionKey) {
+        setSeenAttention(attentionKey);
+        changeTab("tutorial");
+      }
+    }
+    changeOpen(request.open);
+  }, [request, user, changeOpen, setChat, hasStoryNews, attentionKey]);
+  useEffect(() => {
+    if (!open || !focusRequested.current) return;
+    const activeTab = document
+      .getElementById(panelId)
+      ?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]');
+    if (activeTab) {
+      focusRequested.current = false;
+      activeTab.focus();
+    }
+  }, [open, panelId, tab, request.sequence]);
   const previousTutorialOn = useRef(user?.tutorialOn);
   useEffect(() => {
     // Re-enabling lessons in Settings must also reveal them in a collapsed dock.
@@ -434,6 +478,8 @@ export function ActivityDock({
           className={cn(
             "bg-card pointer-events-auto h-11 gap-2 rounded-full shadow-lg",
             (isPulsing || hasStoryNews) && ATTENTION_PULSE,
+            // Guests and compact frames without a visible mobile bar keep a launcher.
+            user && "[[data-mobile-activity-nav=true]_&]:hidden",
           )}
           aria-expanded={false}
           aria-controls={panelId}

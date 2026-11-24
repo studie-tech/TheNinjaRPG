@@ -249,28 +249,18 @@ it("updates the Travel destination when the saved automatic-wake preference chan
   ).toBe("/home");
 });
 
-it("keeps the Sector and Global tabs in the header row while the tutorial runs", () => {
-  const priorities = (): Record<string, number> =>
-    Object.fromEntries(
-      Array.from(document.querySelectorAll<HTMLElement>("[data-header-item]")).map(
-        (element) => [
-          element.dataset.headerItem ?? "",
-          Number(element.dataset.priority),
-        ],
-      ),
-    );
-  const playing = render(<TravelPage />);
-  expect(priorities().tabs).toBe(3);
-  playing.unmount();
+it("keeps the standard Sector and Global tabs visible during the tutorial", () => {
   actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
   userRef.current = actor;
-  render(<TravelPage />);
-  const inTutorial = priorities();
-  const tabs = inTutorial.tabs ?? Number.NaN;
-  expect(Math.min(...Object.values(inTutorial))).toBe(tabs);
+  const view = render(<TravelScreen />);
+  expect(view.getByRole("button", { name: "Sector" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "Global" })).toBeTruthy();
   expect(
-    Object.entries(inTutorial).filter(([, priority]) => priority === tabs),
-  ).toEqual([["tabs", tabs]]);
+    view
+      .getByRole("button", { name: "Sector" })
+      .closest('[data-header-item="tabs"]')
+      ?.getAttribute("data-priority"),
+  ).toBe("0");
 });
 
 it("switches the retained tutorial map from the bottom bar and pauses its controls with a building", async () => {
