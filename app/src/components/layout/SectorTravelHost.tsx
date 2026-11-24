@@ -77,7 +77,7 @@ export function SectorTravelHost({
           >
             <DialogContent
               ref={contentRef}
-              className="sector-screen-dialog"
+              className="sector-screen-dialog top-2 translate-y-0"
               data-guided-tutorial={isGuidedTutorial || undefined}
               onOpenAutoFocus={() => {
                 returnFocus.current =
