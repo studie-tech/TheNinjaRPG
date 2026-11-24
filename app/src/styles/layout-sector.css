@@ -573,6 +573,8 @@ html[data-game-layout="sector"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
     min-width: 0;
+    border-right: 1px solid var(--theme-line);
+    padding-right: 1rem;
   }
   .player-status-combat section {
     min-width: 0;
