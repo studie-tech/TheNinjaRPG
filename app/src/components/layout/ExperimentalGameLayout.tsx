@@ -143,7 +143,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
             event.preventDefault();
         }}
       >
-        <SheetHeader className="experimental-drawer-header flex-row items-center space-y-0 text-left">
+        <SheetHeader className="experimental-drawer-header flex-row-reverse items-center space-y-0 text-right">
           <SheetClose
             className="experimental-drawer-close"
             aria-label="Close game menu"
