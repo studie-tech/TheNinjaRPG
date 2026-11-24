@@ -1,75 +1,61 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
 import { type UseFormReturn, useFormState, useWatch } from "react-hook-form";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { cardTextPlain, type KESSEN_TERMS, ROW_LABELS } from "@/libs/kessen/text";
-import { cn } from "@/libs/shadui";
+import { AbilityListEditor } from "@/layout/AbilityListEditor";
+import { EnumField, Field, TOUCH_FIELD } from "@/layout/cardEditorFields";
+import { type DraftAbility, parsedAbility } from "@/libs/kessen/abilityEditor";
+import {
+  cardTextPlain,
+  type KESSEN_TERMS,
+  keywordBudgetIssue,
+  ROW_LABELS,
+} from "@/libs/kessen/text";
 import type { ZodItemInput, ZodItemType } from "@/validators/combat";
 import {
   type CardData,
+  cardDataSchema,
   DEFAULT_CARD_DATA,
-  KESSEN_LEADER_ONLY_ABILITIES,
   KessenCardKinds,
   KessenCardVariants,
   KessenFactions,
   KessenRows,
-  kessenAbilitySchema,
 } from "@/validators/itemCard";
 
 /**
  * Staff editor for a card's Kessen stats (`Item.cardData`). Scalars use plain controls;
- * abilities are edited as JSON in printed order and previewed as printed card text.
+ * abilities are edited as a list in printed order and previewed as printed card text.
  * Item-level validation (keyword budget by rarity, tradeability) reports under this section.
  */
-export function CardDataEditor({ form, disabled }: CardDataEditorProps) {
+export function CardDataEditor({ form, groups, disabled }: CardDataEditorProps) {
   const watched = useWatch({ control: form.control, name: "cardData" });
+  const rarity = useWatch({ control: form.control, name: "rarity" });
   const { errors } = useFormState({ control: form.control, name: "cardData" });
   const card = { ...DEFAULT_CARD_DATA, ...(watched as Partial<CardData> | null) };
-  const [abilitiesDraft, setAbilitiesDraft] = useState({
-    source: stringify(card.abilities),
-    text: formatAbilities(card.abilities),
-    error: null as string | null,
-  });
-  // A saved or reset value replaces the draft; the draft's own valid edits keep their text.
-  const abilitiesText =
-    abilitiesDraft.source === stringify(card.abilities)
-      ? abilitiesDraft.text
-      : formatAbilities(card.abilities);
-  const abilitiesError =
-    abilitiesDraft.source === stringify(card.abilities) ? abilitiesDraft.error : null;
+  const abilities: DraftAbility[] = Array.isArray(card.abilities) ? card.abilities : [];
   const update = (patch: Partial<CardData>) =>
     form.setValue(
       "cardData",
       { ...card, ...patch },
       { shouldDirty: true, shouldValidate: true },
     );
-  const onAbilitiesChange = (text: string) => {
-    const parsed = parseAbilities(text);
-    if (parsed.abilities) {
-      setAbilitiesDraft({ source: stringify(parsed.abilities), text, error: null });
-      update({ abilities: parsed.abilities });
-    } else {
-      setAbilitiesDraft({
-        source: stringify(card.abilities),
-        text,
-        error: parsed.error,
-      });
-    }
-  };
-  const messages = collectErrorMessages(errors.cardData);
-  const preview = kessenAbilitySchema.array().safeParse(card.abilities).data;
+  const messages = collectErrorMessages({ ...errors.cardData, abilities: undefined });
+  // Entries report their own problems; these concern the list as a whole.
+  const abilityMessages = (
+    cardDataSchema
+      .safeParse(card)
+      .error?.issues.filter(
+        ({ path }) => path.length === 1 && path[0] === "abilities",
+      ) ?? []
+  ).map((issue) => issue.message);
+  const preview = abilities.flatMap((ability) => parsedAbility(ability) ?? []);
+  const overBudget =
+    card.kind === "LEADER" ? null : keywordBudgetIssue(preview, rarity);
+  if (overBudget) abilityMessages.push(overBudget);
+  const groupOptions = [...new Set([...card.summonGroups, ...(groups ?? [])])].sort();
   const isDisabled = disabled ?? false;
 
   return (
@@ -241,36 +227,18 @@ export function CardDataEditor({ form, disabled }: CardDataEditorProps) {
             onChange={(event) => update({ flavor: event.target.value })}
           />
         </Field>
-        <Field
-          id="card-abilities"
-          label="Abilities"
-          className="col-span-full @min-[900px]:col-span-2"
-        >
-          <Textarea
-            id="card-abilities"
-            rows={8}
-            spellCheck={false}
-            className="font-mono text-xs"
-            value={abilitiesText}
-            disabled={isDisabled}
-            aria-invalid={!!abilitiesError}
-            aria-describedby="card-abilities-help"
-            onChange={(event) => onAbilitiesChange(event.target.value)}
-          />
-          <p id="card-abilities-help" className="text-muted-foreground text-[11px]">
-            JSON list in printed order. Each entry has a verb <code>k</code>, e.g.{" "}
-            <code>{'{"k":"strike","x":3,"mode":"single"}'}</code>. Leader-only verbs:{" "}
-            {KESSEN_LEADER_ONLY_ABILITIES.join(", ")}.
-          </p>
-          {abilitiesError && (
-            <p role="alert" className="text-destructive text-sm">
-              {abilitiesError}
-            </p>
-          )}
-        </Field>
-        <div className="col-span-full grid gap-1.5 @min-[900px]:col-span-1">
+        <AbilityListEditor
+          className="col-span-full"
+          abilities={abilities}
+          cardKind={card.kind}
+          groups={groupOptions}
+          errors={[...new Set(abilityMessages)]}
+          disabled={isDisabled}
+          onChange={(next) => update({ abilities: next as CardData["abilities"] })}
+        />
+        <div className="col-span-full grid gap-1.5">
           <p className="text-sm leading-none font-medium">Card text</p>
-          {preview && preview.length > 0 ? (
+          {preview.length > 0 ? (
             <p className="text-sm">{cardTextPlain({ abilities: preview })}</p>
           ) : (
             <p className="text-muted-foreground text-sm">No abilities</p>
@@ -288,80 +256,6 @@ export function CardDataEditor({ form, disabled }: CardDataEditorProps) {
         )}
       </div>
     </section>
-  );
-}
-
-/** A label over its control, with optional help text below so every control starts level. */
-function Field({
-  id,
-  label,
-  help,
-  className,
-  children,
-}: {
-  id: string;
-  label: string;
-  help?: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={cn("grid min-w-0 content-start gap-1.5", className)}>
-      <Label htmlFor={id} className="truncate">
-        {label}
-      </Label>
-      {children}
-      {help && (
-        <p id={`${id}-help`} className="text-muted-foreground text-[11px]">
-          {help}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function EnumField<T extends string>({
-  id,
-  label,
-  value,
-  values,
-  labels,
-  help,
-  disabled,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: T;
-  values: readonly T[];
-  labels?: Partial<Record<T, string>>;
-  help?: string;
-  disabled: boolean;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <Field id={id} label={label} help={help}>
-      <Select
-        value={value}
-        disabled={disabled}
-        onValueChange={(next) => onChange(next as T)}
-      >
-        <SelectTrigger
-          id={id}
-          className={TOUCH_FIELD}
-          aria-describedby={help ? `${id}-help` : undefined}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {values.map((option) => (
-            <SelectItem key={option} value={option}>
-              {labels?.[option] ?? option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </Field>
   );
 }
 
@@ -395,9 +289,6 @@ function NumberField({
   );
 }
 
-/** Touch-sized controls: 40 px tall with 16 px text, so phones do not zoom on focus. */
-const TOUCH_FIELD = "pointer-coarse:h-[40px] pointer-coarse:text-[16px]";
-
 /** Select value standing for a card without a row (tactics and leaders). */
 const NO_ROW = "NONE";
 
@@ -405,28 +296,6 @@ const ROW_OPTION_LABELS = {
   ...ROW_LABELS,
   ANY: "Any row" satisfies keyof typeof KESSEN_TERMS,
   [NO_ROW]: "None",
-};
-
-const stringify = (value: unknown) => JSON.stringify(value ?? []);
-
-const formatAbilities = (abilities: unknown) =>
-  JSON.stringify(abilities ?? [], null, 2);
-
-/** Parse the abilities draft; schema problems surface through the item validator. */
-const parseAbilities = (
-  text: string,
-):
-  | { abilities: CardData["abilities"]; error: null }
-  | { abilities: null; error: string } => {
-  try {
-    const value: unknown = JSON.parse(text);
-    if (!Array.isArray(value)) {
-      return { abilities: null, error: "Abilities must be a JSON list" };
-    }
-    return { abilities: value as CardData["abilities"], error: null };
-  } catch {
-    return { abilities: null, error: "Abilities are not valid JSON yet" };
-  }
 };
 
 /** Every validation message under the card data, with the field path it belongs to. */
@@ -444,5 +313,7 @@ const collectErrorMessages = (error: unknown, path: string[] = []): string[] => 
 
 interface CardDataEditorProps {
   form: UseFormReturn<ZodItemInput, unknown, ZodItemType>;
+  /** Bond and Summon groups other cards use, suggested while typing one. */
+  groups?: readonly string[];
   disabled?: boolean;
 }

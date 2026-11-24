@@ -228,7 +228,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
           {isCard && (
             <div className="@container col-span-full">
               <div className="grid gap-3 @min-[560px]:grid-cols-[minmax(0,1fr)_160px]">
-                <CardDataEditor form={form} disabled={isUpdating || !props.canSave} />
+                <CardStats form={form} disabled={isUpdating || !props.canSave} />
                 <div className="order-first @min-[560px]:sticky @min-[560px]:top-2 @min-[560px]:order-none @min-[560px]:self-start">
                   <p className="mb-1 font-semibold text-sm">Card face preview</p>
                   {cardPreview ? (
@@ -337,6 +337,16 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
     </>
   );
 };
+
+/** The card stats editor with the groups of the card catalog as suggestions. */
+function CardStats(props: Omit<React.ComponentProps<typeof CardDataEditor>, "groups">) {
+  const { data: catalog } = useKessenCatalog();
+  const groups = catalog?.cards.flatMap((card) => [
+    ...card.summonGroups,
+    ...card.abilities.flatMap((ability) => ("group" in ability ? ability.group : [])),
+  ]);
+  return <CardDataEditor {...props} groups={groups} />;
+}
 
 /**
  * What a Kessen card pack opens: its slots, each tier's odds and the cards by name, with
