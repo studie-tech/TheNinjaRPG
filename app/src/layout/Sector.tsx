@@ -45,6 +45,7 @@ import Modal from "@/layout/Modal";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import { SurroundingUsers } from "@/layout/SurroundingUsers";
+import { TravelBuildingCard } from "@/layout/TravelBuildingCard";
 import { TravelUserCard } from "@/layout/TravelUserCard";
 import WebGlError from "@/layout/WebGLError";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
@@ -238,6 +239,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const [hoveredStructure, setHoveredStructure] = useState<VillageStructure | null>(
     null,
   );
+  const [dismissedStructureId, setDismissedStructureId] = useState<string | null>(null);
+  useEffect(() => setDismissedStructureId(null), [currentStructure?.id]);
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
   const [showRaidModal, setShowRaidModal] = useState<boolean>(false);
   const [npcDialog, setNpcDialog] = useState<NpcDialog | null>(null);
@@ -259,6 +262,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const showSorroundingRef = useRef<boolean>(props.showSorrounding);
   const ignoreMapClicksUntilRef = useRef<number>(0);
   const hoveredStructureIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    hoveredStructureIdRef.current = null;
+    setHoveredStructure(null);
+  }, [sector]);
   const structuresRef = useRef<VillageStructure[]>([]);
   const userRef = useUserDataRef(() => positionChangedRef.current());
   const positionChangedRef = useRef(() => {});
@@ -2246,11 +2253,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const hitLocation = questLocationsRef.current.find(
       (location) => location.id === locationId,
     );
-    if (structureId && structureId !== hoveredStructureIdRef.current) {
+    if (structureId) {
       hoveredStructureIdRef.current = structureId;
+      setDismissedStructureId(null);
       setHoveredStructure(
         structuresRef.current.find((structure) => structure.id === structureId) ?? null,
       );
+    }
+    if (!structureId) {
+      hoveredStructureIdRef.current = null;
+      setHoveredStructure(null);
+      setDismissedStructureId(currentStructureRef.current?.id ?? null);
     }
     const candidates: {
       type: string;
@@ -2506,8 +2519,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         onTap: (hit, client) => travelCallbacks.current.onTap(hit, client),
         onReady: () => travelCallbacks.current.onReady(),
         onHover: (structureId, locationId) => {
-          if (structureId !== hoveredStructureIdRef.current) {
+          // Keep the selection while the pointer travels from the canvas to its card.
+          if (structureId && structureId !== hoveredStructureIdRef.current) {
             hoveredStructureIdRef.current = structureId;
+            setDismissedStructureId(null);
             setHoveredStructure(
               structuresRef.current.find((structure) => structure.id === structureId) ??
                 null,
@@ -2618,6 +2633,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       )}
     </div>
   );
+  const actionStructure = hoveredStructure ?? currentStructure;
   const content = (
     <div
       data-world-expanded={isWorldExpanded ? "true" : undefined}
@@ -2695,24 +2711,29 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           ))}
         </Modal>
       )}
-      {currentStructure && (
-        <div
-          data-sector-corner-actions
-          className="absolute bottom-3 left-3 z-20 max-w-[calc(50%-40px)] rounded-lg bg-black/80 p-3 text-white shadow-lg sm:bottom-4 sm:left-4 sm:max-w-xs"
-        >
-          <h3 className="text-sm font-semibold">
-            {currentServices.map((service) => service.name).join(" · ")}
-          </h3>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {currentServices.map((service) => (
-              <Button key={service.id} asChild size="sm" className="min-h-10">
-                <Link href={service.route}>Enter {service.name}</Link>
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Stack corner actions so dungeon, hover and raid cards share the map without overlap. */}
+      {props.isActive &&
+        actionStructure &&
+        actionStructure.id !== dismissedStructureId && (
+          <TravelBuildingCard
+            key={actionStructure.id}
+            structure={actionStructure}
+            services={
+              actionStructure.id === currentStructure?.id ? currentServices : []
+            }
+            getBounds={() =>
+              travel.scene.current?.structureBounds(actionStructure.id) ?? null
+            }
+            boundary={mountRef.current}
+            onGoTo={() =>
+              setTarget({
+                x: actionStructure.longitude,
+                y: actionStructure.latitude,
+              })
+            }
+            onClose={() => setDismissedStructureId(actionStructure.id)}
+          />
+        )}
+      {/* Stack location, dungeon and raid cards without overlap. */}
       <div
         data-sector-corner-actions
         className="pointer-events-none absolute right-3 bottom-3 z-20 flex max-w-[calc(50%-40px)] flex-col items-end gap-2 sm:right-4 sm:bottom-4 sm:max-w-xs"
@@ -2729,32 +2750,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             setTarget({ x: location.longitude, y: location.latitude })
           }
         />
-        {hoveredStructure && hoveredStructure.id !== currentStructure?.id && (
-          <div className="pointer-events-auto w-full rounded-lg bg-black/80 p-3 text-white shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="min-w-0">
-                <h3
-                  className="truncate text-sm font-semibold"
-                  title={hoveredStructure.name}
-                >
-                  {hoveredStructure.name}
-                </h3>
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    setTarget({
-                      x: hoveredStructure.longitude,
-                      y: hoveredStructure.latitude,
-                    })
-                  }
-                  className="mt-2 min-h-10"
-                >
-                  Go to {hoveredStructure.name}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
         {activeRaid && (
           <div className="pointer-events-auto w-full rounded-lg bg-black/80 p-3 text-white shadow-lg">
             <div className="flex items-center gap-3">

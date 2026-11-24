@@ -1719,6 +1719,24 @@ describe("travel camera follow and inspection", () => {
     expect(onTap).toHaveBeenCalledTimes(1);
   });
 
+  it("anchors building actions to client-space artwork bounds through pan and zoom", async () => {
+    const { scene, game, event, advance } = await sceneFixture(undefined, 2);
+    game.canvas.getBoundingClientRect = () => new DOMRect(40, 80, 512, 300);
+    const before = scene.structureBounds("building")!;
+    expect(before.width).toBeGreaterThan(0);
+    expect(scene.structureBounds("missing")).toBeNull();
+    event("pointerdown", 296, 230);
+    event("pointermove", 311, 240);
+    event("pointerup", 311, 240);
+    advance(frame(1016));
+    const panned = scene.structureBounds("building")!;
+    expect(panned.x - before.x).toBeCloseTo(15);
+    expect(panned.y - before.y).toBeCloseTo(10);
+    game.canvas.dispatchEvent(new window.WheelEvent("wheel", { deltaY: -100 }));
+    advance(frame(1032));
+    expect(scene.structureBounds("building")!.width).toBeGreaterThan(panned.width);
+  });
+
   it("has the same follow response at 30 and 60 frames per second", async () => {
     const positions: number[] = [];
     for (const fps of [30, 60]) {

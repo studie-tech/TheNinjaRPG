@@ -1244,6 +1244,23 @@ export const createTravelScene = async (options: {
       fit: game.fit,
       updateWindow: requestWindowUpdate,
       setBackground,
+      /** Client-space artwork bounds for DOM actions that follow pan, zoom and resize. */
+      structureBounds: (id: string) => {
+        const entry = sectors
+          .get(options.getSnapshot().sector)
+          ?.art.entries.find((entry) => entry.description.structureId === id);
+        if (!entry) return null;
+        const bounds = entry.sprite.getBounds();
+        const canvas = game.canvas.getBoundingClientRect();
+        const sx = canvas.width / game.renderer.width;
+        const sy = canvas.height / game.renderer.height;
+        return new DOMRect(
+          canvas.left + bounds.x * sx,
+          canvas.top + bounds.y * sy,
+          bounds.width * sx,
+          bounds.height * sy,
+        );
+      },
       /** Resume smooth character tracking after inspecting the map with a drag. */
       recenter: () => {
         hasManualCamera = false;
