@@ -22,7 +22,7 @@ const TravelScreen = dynamic(
 );
 
 /** Keep one map session while route-backed building dialogs open and close. */
-export function ExperimentalTravelHost({
+export function SectorTravelHost({
   children,
   isGuidedTutorial,
 }: {
@@ -52,7 +52,7 @@ export function ExperimentalTravelHost({
         }}
       >
         <DialogContent
-          className="experimental-building-dialog"
+          className="sector-building-dialog"
           data-guided-tutorial={isGuidedTutorial || undefined}
           onOpenAutoFocus={() => {
             returnFocus.current =
@@ -66,7 +66,7 @@ export function ExperimentalTravelHost({
             const target = returnFocus.current?.isConnected
               ? returnFocus.current
               : document.querySelector<HTMLElement>(
-                  "[data-experimental-travel-link], .experimental-nav-map-controls button",
+                  "[data-sector-travel-link], .sector-nav-map-controls button",
                 );
             target?.focus({ preventScroll: true });
           }}

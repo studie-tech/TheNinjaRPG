@@ -86,9 +86,9 @@ export const MobileNavSettings: React.FC = () => {
     <div className="space-y-4 p-3">
       <p className="text-muted-foreground text-sm">
         Customize the 4 shortcuts around Activity and the center button. Activity always
-        opens your tutorial and quests. The center shows Village or Travel; Experimental
-        uses a destination compass outside villages. A Travel shortcut is hidden when
-        the center already links to Travel.
+        opens your tutorial and quests. The center shows Village or Travel; Sector
+        Layout uses a destination compass outside villages. A Travel shortcut is hidden
+        when the center already links to Travel.
       </p>
 
       <div className="space-y-3">

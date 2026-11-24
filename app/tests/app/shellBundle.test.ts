@@ -13,8 +13,8 @@ import { dirname, join, relative } from "node:path";
 const APP_ROOT = join(import.meta.dirname, "../..");
 const SHELL_LAYOUT = join(APP_ROOT, "src/app/[shell]/layout.tsx");
 const DEFERRED_FILES = [
-  "src/components/layout/ExperimentalGameLayout.tsx",
-  "src/components/layout/ExperimentalTravelHost.tsx",
+  "src/components/layout/SectorGameLayout.tsx",
+  "src/components/layout/SectorTravelHost.tsx",
   "src/screens/travel/TravelScreen.tsx",
   "src/components/layout/ClassicGameLayout.tsx",
   "src/components/layout/PanelGameLayout.tsx",

@@ -252,7 +252,7 @@ describe("game settings sections", () => {
     expect(screen.getByRole("combobox", { name: "Graphics quality" })).toBeTruthy();
   });
 
-  it("keeps labeled experimental account actions connected to their existing handlers", async () => {
+  it("keeps labeled sector account actions connected to their existing handlers", async () => {
     const account = vi.fn();
     const events = vi.fn();
     const theme = vi.fn();
@@ -265,7 +265,7 @@ describe("game settings sections", () => {
     );
     renderInAudio(
       <SignedInIcons
-        variant="experimental"
+        variant="sector"
         isSignedIn
         updateUser={async () => undefined}
         onEventClick={events}

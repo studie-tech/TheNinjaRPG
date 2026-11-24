@@ -1,9 +1,6 @@
 import { afterEach, expect, it, vi } from "bun:test";
 import { cleanup, renderHook } from "@testing-library/react";
-import {
-  useAvailableGameLayouts,
-  useCanUseExperimentalLayout,
-} from "@/hooks/useGameLayout";
+import { useAvailableGameLayouts, useCanUseSectorLayout } from "@/hooks/useGameLayout";
 import { mockUserContextValue } from "../setup/userContext";
 
 afterEach(() => {
@@ -20,7 +17,7 @@ it("withdraws character-only layouts across hydration, account switches and sign
   };
   mockUserContextValue(() => session);
   const { result, rerender } = renderHook(() => ({
-    allowed: useCanUseExperimentalLayout(),
+    allowed: useCanUseSectorLayout(),
     choices: useAvailableGameLayouts().map((layout) => layout.id),
   }));
   expect(result.current.allowed).toBe(false);
@@ -30,16 +27,16 @@ it("withdraws character-only layouts across hydration, account switches and sign
   session.data = { userId: "player" };
   rerender();
   expect(result.current.allowed).toBe(true);
-  expect(result.current.choices).toContain("experimental");
+  expect(result.current.choices).toContain("sector");
   session.userId = "other-player";
   rerender();
   expect(result.current.allowed).toBe(false);
-  expect(result.current.choices).not.toContain("experimental");
+  expect(result.current.choices).not.toContain("sector");
   session.data = { userId: "other-player" };
   rerender();
   expect(result.current.allowed).toBe(true);
   session.isSignedIn = false;
   rerender();
   expect(result.current.allowed).toBe(false);
-  expect(result.current.choices).not.toContain("experimental");
+  expect(result.current.choices).not.toContain("sector");
 });

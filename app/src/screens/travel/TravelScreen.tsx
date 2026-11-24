@@ -108,7 +108,7 @@ function TravelRoute({ immersive, isInteractive }: TravelScreenProps) {
       isInteractive={isInteractive}
     />
   );
-  return immersive ? <div className="experimental-travel">{view}</div> : view;
+  return immersive ? <div className="sector-travel">{view}</div> : view;
 }
 
 interface TravelScreenProps {

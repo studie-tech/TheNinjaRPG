@@ -752,7 +752,7 @@ export function TravelView({
         createPortal(
           <button
             type="button"
-            className="experimental-nav-control"
+            className="sector-nav-control"
             aria-label={isGlobal ? "Show sector map" : "Show global map"}
             title={isGlobal ? "Show sector map" : "Show global map"}
             disabled={!isInteractive || (isGlobal && (isTraveling || !sectorLink))}

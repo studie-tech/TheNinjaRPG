@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as dynamic from "next/dynamic";
 import { createRef, useEffect, useState } from "react";
-import * as playerStatus from "@/components/layout/ExperimentalPlayerStatus";
+import * as playerStatus from "@/components/layout/SectorPlayerStatus";
 import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTypes";
 import { layoutVariantClasses } from "@/components/layout/shared/layoutVariants";
 import * as compass from "@/components/layout/shared/TravelCompass";
@@ -32,19 +32,17 @@ function MapSession({ isInteractive }: { isInteractive: boolean }) {
   return (
     <>
       <p>Map {isInteractive ? "active" : "paused"}</p>
-      <div className="experimental-nav-map-controls">
+      <div className="sector-nav-map-controls">
         <button type="button">Sector</button>
       </div>
     </>
   );
 }
 const dynamicSpy = vi.spyOn(dynamic, "default").mockReturnValue(MapSession as never);
-const travelHost = await import("@/components/layout/ExperimentalTravelHost");
-const { ExperimentalTravelHost } = travelHost;
+const travelHost = await import("@/components/layout/SectorTravelHost");
+const { SectorTravelHost } = travelHost;
 dynamicSpy.mockRestore();
-const { ExperimentalGameLayout } = await import(
-  "@/components/layout/ExperimentalGameLayout"
-);
+const { SectorGameLayout } = await import("@/components/layout/SectorGameLayout");
 let pathname = "/travel";
 const replace = vi.fn();
 
@@ -89,18 +87,18 @@ afterEach(async () => {
 
 it("keeps one session across travel, direct building entries, back and forward", async () => {
   const view = render(
-    <ExperimentalTravelHost isGuidedTutorial={false}>
+    <SectorTravelHost isGuidedTutorial={false}>
       <p>Unused route</p>
-    </ExperimentalTravelHost>,
+    </SectorTravelHost>,
   );
   expect(view.queryByText("Unused route")).toBeNull();
   for (const path of ["/bank", "/travel", "/itemshop", "/bank", "/travel"]) {
     pathname = path;
     await act(async () => {
       view.rerender(
-        <ExperimentalTravelHost isGuidedTutorial={false}>
+        <SectorTravelHost isGuidedTutorial={false}>
           <Building />
-        </ExperimentalTravelHost>,
+        </SectorTravelHost>,
       );
       await flushRadixFocus();
     });
@@ -116,9 +114,9 @@ it("keeps one session across travel, direct building entries, back and forward",
 it("returns direct building visits to travel through their header and Escape", async () => {
   pathname = "/bank";
   const view = render(
-    <ExperimentalTravelHost isGuidedTutorial={false}>
+    <SectorTravelHost isGuidedTutorial={false}>
       <Building />
-    </ExperimentalTravelHost>,
+    </SectorTravelHost>,
   );
   expect(view.getByRole("dialog", { name: "Bank" })).toBeTruthy();
   fireEvent.click(view.getByRole("button", { name: "Leave building" }));
@@ -131,9 +129,9 @@ it("returns direct building visits to travel through their header and Escape", a
 it("dismisses nested confirmations without closing the building or clearing its form", async () => {
   pathname = "/bank";
   const view = render(
-    <ExperimentalTravelHost isGuidedTutorial={false}>
+    <SectorTravelHost isGuidedTutorial={false}>
       <Building />
-    </ExperimentalTravelHost>,
+    </SectorTravelHost>,
   );
   fireEvent.change(view.getByRole("textbox", { name: "Amount" }), {
     target: { value: "25" },
@@ -158,9 +156,9 @@ it("keeps tutorial controls outside a building reachable while the map is inert"
   const view = render(
     <>
       <button type="button">Tutorial next</button>
-      <ExperimentalTravelHost isGuidedTutorial>
+      <SectorTravelHost isGuidedTutorial>
         <Building />
-      </ExperimentalTravelHost>
+      </SectorTravelHost>
     </>,
   );
   expect(view.getByRole("button", { name: "Tutorial next" })).toBeTruthy();
@@ -170,9 +168,9 @@ it("keeps tutorial controls outside a building reachable while the map is inert"
 it("returns a direct desktop building visit to the persistent map navigation", async () => {
   pathname = "/bank";
   const view = render(
-    <ExperimentalTravelHost isGuidedTutorial={false}>
+    <SectorTravelHost isGuidedTutorial={false}>
       <Building />
-    </ExperimentalTravelHost>,
+    </SectorTravelHost>,
   );
   await act(async () => {
     await flushRadixFocus();
@@ -180,9 +178,9 @@ it("returns a direct desktop building visit to the persistent map navigation", a
   pathname = "/travel";
   await act(async () => {
     view.rerender(
-      <ExperimentalTravelHost isGuidedTutorial={false}>
+      <SectorTravelHost isGuidedTutorial={false}>
         <Building />
-      </ExperimentalTravelHost>,
+      </SectorTravelHost>,
     );
     await flushRadixFocus();
   });
@@ -193,11 +191,11 @@ it("returns a direct desktop building visit to the persistent map navigation", a
   );
 });
 
-describe("responsive experimental menus", () => {
+describe("responsive sector menus", () => {
   let isDesktop = false;
   const props = (): GameLayoutRenderProps => ({
     children: <p>Route content</p>,
-    variant: "experimental",
+    variant: "sector",
     userData: { userId: "actor", tutorialOn: true, tutorialStep: 0 } as never,
     isSignedInLayout: true,
     isCombatPage: false,
@@ -223,10 +221,10 @@ describe("responsive experimental menus", () => {
     lightLayout: false,
     toggleLightLayout: vi.fn(),
     imageset: {} as never,
-    variantClasses: layoutVariantClasses.experimental,
+    variantClasses: layoutVariantClasses.sector,
   });
   beforeEach(() => {
-    vi.spyOn(playerStatus, "ExperimentalPlayerStatus").mockReturnValue(
+    vi.spyOn(playerStatus, "SectorPlayerStatus").mockReturnValue(
       <div aria-label="Character status" />,
     );
     vi.spyOn(compass, "TravelCompass").mockReturnValue(
@@ -240,7 +238,7 @@ describe("responsive experimental menus", () => {
         {children}
       </button>
     ));
-    vi.spyOn(travelHost, "ExperimentalTravelHost").mockReturnValue(
+    vi.spyOn(travelHost, "SectorTravelHost").mockReturnValue(
       <div aria-label="Map host" />,
     );
   });
@@ -248,7 +246,7 @@ describe("responsive experimental menus", () => {
   it("uses corner sidebar toggles and bottom Activity navigation on desktop", () => {
     isDesktop = true;
     const input = props();
-    const view = render(<ExperimentalGameLayout {...input} />);
+    const view = render(<SectorGameLayout {...input} />);
     fireEvent.click(view.getByRole("button", { name: "Open player menu" }));
     expect(input.onLeftSideBarOpenChange).toHaveBeenCalledWith(true);
     fireEvent.click(view.getByRole("button", { name: "Open game menu" }));
@@ -262,27 +260,27 @@ describe("responsive experimental menus", () => {
     expect(
       view.queryByRole("button", { name: /Open notifications|Settings/ }),
     ).toBeNull();
-    expect(getGameLayout("experimental").sidebarBreakpoint).toBeNull();
+    expect(getGameLayout("sector").sidebarBreakpoint).toBeNull();
   });
   it.each([false, true])(
     "shows only the closed sidebar's overlay toggle (desktop=%s)",
     async (desktop) => {
       isDesktop = desktop;
       const input = props();
-      const view = render(<ExperimentalGameLayout {...input} />);
+      const view = render(<SectorGameLayout {...input} />);
       const player = view.getByRole("button", { name: "Open player menu" });
       const game = view.getByRole("button", { name: "Open game menu" });
       expect(player.closest("header")).toBeNull();
       expect(game.closest("header")).toBeNull();
-      view.rerender(<ExperimentalGameLayout {...input} leftSideBarOpen />);
+      view.rerender(<SectorGameLayout {...input} leftSideBarOpen />);
       await act(async () => flushRadixFocus());
       expect(player.hidden).toBe(true);
       expect(game.hidden).toBe(false);
-      view.rerender(<ExperimentalGameLayout {...input} rightSideBarOpen />);
+      view.rerender(<SectorGameLayout {...input} rightSideBarOpen />);
       await act(async () => flushRadixFocus());
       expect(player.hidden).toBe(false);
       expect(game.hidden).toBe(true);
-      view.rerender(<ExperimentalGameLayout {...input} />);
+      view.rerender(<SectorGameLayout {...input} />);
       await act(async () => flushRadixFocus());
       expect(player.hidden).toBe(false);
       expect(game.hidden).toBe(false);
@@ -292,7 +290,7 @@ describe("responsive experimental menus", () => {
 
   it.each([0, 1, 120])("shows the game-menu notification count (%s)", (count) => {
     const input = { ...props(), gameMenuNotificationCount: count };
-    const view = render(<ExperimentalGameLayout {...input} />);
+    const view = render(<SectorGameLayout {...input} />);
     const label =
       count > 0
         ? `Open game menu (${count} ${count === 1 ? "notification" : "notifications"})`
@@ -302,7 +300,7 @@ describe("responsive experimental menus", () => {
       count > 0 ? (count > 99 ? "99+" : String(count)) : null,
     );
     expect(button.id).toBe("tutorial-gameBtn");
-    view.rerender(<ExperimentalGameLayout {...input} gameMenuNotificationCount={0} />);
+    view.rerender(<SectorGameLayout {...input} gameMenuNotificationCount={0} />);
     expect(view.getByRole("button", { name: "Open game menu" })).toBe(button);
     expect(button.querySelector('span[aria-hidden="true"]')).toBeNull();
   });
@@ -310,7 +308,7 @@ describe("responsive experimental menus", () => {
   it("uses mobile corner menus and the shared configured bottom navigation", () => {
     const input = props();
     input.mobileNavConfig = { left: ["bank"], right: ["itemshop", "items", "tavern"] };
-    const view = render(<ExperimentalGameLayout {...input} />);
+    const view = render(<SectorGameLayout {...input} />);
     expect(view.getByRole("button", { name: "Open player menu" })).toBeTruthy();
     const game = view.getByRole("button", { name: "Open game menu" });
     expect(game.id).toBe("tutorial-gameBtn");
@@ -331,20 +329,20 @@ describe("responsive experimental menus", () => {
   it("shows the compass outside a village while keeping Activity reachable", () => {
     const input = props();
     input.location = undefined;
-    const view = render(<ExperimentalGameLayout {...input} />);
+    const view = render(<SectorGameLayout {...input} />);
     expect(view.getByRole("button", { name: "Destination compass" })).toBeTruthy();
     expect(view.getByRole("button", { name: "Activity" })).toBeTruthy();
     expect(view.queryByRole("link", { name: "Village" })).toBeNull();
   });
   it("keeps an open sidebar and its tutorial target through desktop/mobile resizing", async () => {
     const input = { ...props(), rightSideBarOpen: true };
-    const view = render(<ExperimentalGameLayout {...input} />);
+    const view = render(<SectorGameLayout {...input} />);
     expect(view.getByRole("dialog", { name: "Game menu" })).toBeTruthy();
     expect(
       input.rightSideBarRef.current?.querySelector("#tutorial-village"),
     ).toBeTruthy();
     isDesktop = true;
-    view.rerender(<ExperimentalGameLayout {...input} />);
+    view.rerender(<SectorGameLayout {...input} />);
     await act(async () => {
       await flushRadixFocus();
     });
@@ -362,7 +360,7 @@ describe("responsive experimental menus", () => {
     const view = render(
       <>
         <button type="button">Map surface</button>
-        <ExperimentalGameLayout {...input} />
+        <SectorGameLayout {...input} />
       </>,
     );
     await act(async () => flushRadixFocus());

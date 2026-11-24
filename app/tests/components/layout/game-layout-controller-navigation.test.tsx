@@ -139,7 +139,7 @@ it("counts game alerts and unread items once, excluding player-menu news and toa
     { href: "/tavern", name: "Tavern", notificationCount: 5 },
   ];
   const view = render(
-    <GameLayoutController variant="experimental" renderer={Renderer}>
+    <GameLayoutController variant="sector" renderer={Renderer}>
       <div />
     </GameLayoutController>,
   );
@@ -164,13 +164,13 @@ it("marks only the battle page as the combat page", () => {
 it.each([
   ["default", false],
   ["default", true],
-  ["experimental", false],
-  ["experimental", true],
+  ["sector", false],
+  ["sector", true],
 ] as const)(
   "keeps navigation dismissal specific to %s (desktop=%s)",
   async (variant, desktop) => {
     isDesktop = desktop;
-    const keepOpen = variant === "experimental" && desktop;
+    const keepOpen = variant === "sector" && desktop;
     const view = render(
       <GameLayoutController variant={variant} renderer={Renderer}>
         <div />

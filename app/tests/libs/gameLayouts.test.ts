@@ -11,6 +11,15 @@ import {
 import { storedValueToLayout } from "@/libs/layoutPreference";
 
 describe("unified game layout identity", () => {
+  it("normalizes saved Sector Layout preferences to its canonical identity", () => {
+    expect(toGameLayoutId("experimental")).toBe("sector");
+    expect(storedValueToLayout("experimental")).toBe("sector");
+    expect(storedValueToLayout('"experimental"')).toBe("sector");
+    expect(GAME_LAYOUTS.find((layout) => layout.id === "sector")?.name).toBe(
+      "Sector Layout",
+    );
+  });
+
   it.each([...GAME_LAYOUTS])(
     "restores $name from either preference representation",
     ({ id }) => {
@@ -67,12 +76,12 @@ describe("layout before first paint", () => {
     },
   );
 
-  it.each(["default", "experimental"] as const)(
+  it.each(["default", "sector"] as const)(
     "honors %s saved color mode without changing layout identity",
     (id) => {
       expect(run(id, () => "dark")).toEqual({
         id,
-        frame: id === "default" ? "classic" : "experimental",
+        frame: id === "default" ? "classic" : "sector",
         dark: true,
       });
     },
@@ -90,6 +99,6 @@ describe("layout before first paint", () => {
 it.each([...GAME_LAYOUTS])(
   "prerenders $name without assuming a created character",
   ({ id }) => {
-    expect(getInitialGameLayout(id)).toBe(id === "experimental" ? "default" : id);
+    expect(getInitialGameLayout(id)).toBe(id === "sector" ? "default" : id);
   },
 );

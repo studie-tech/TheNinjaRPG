@@ -154,18 +154,18 @@ describe("sidebars before character creation", () => {
   });
 });
 
-it("uses distinct Experimental navigation sections and preserves the location tutorial target", () => {
+it("uses distinct Sector navigation sections and preserves the location tutorial target", () => {
   const navigate = vi.fn();
   const view = render(
     <>
       <LayoutMainMenu
-        variant="experimental"
+        variant="sector"
         navbarMenuItems={[{ href: "/news", name: "News" }]}
         signedInIcons={<button type="button">Account controls</button>}
         onNavigate={navigate}
       />
       <LayoutRightSidebarContent
-        variant="experimental"
+        variant="sector"
         isSignedInLayout
         accountState={null}
         userData={{ userId: "actor", username: "Actor", status: "AWAKE" }}

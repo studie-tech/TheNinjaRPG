@@ -28,9 +28,9 @@ import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import { usePublicPathname } from "@/utils/routing";
-import { ExperimentalPlayerStatus } from "./ExperimentalPlayerStatus";
-import { ExperimentalTravelHost } from "./ExperimentalTravelHost";
 import { type GameFrameProps, GameLayout } from "./GameLayout";
+import { SectorPlayerStatus } from "./SectorPlayerStatus";
+import { SectorTravelHost } from "./SectorTravelHost";
 import { CHAT_BUTTON_LAYER, MobileSidebarStack } from "./shared/LayoutChrome";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
 import {
@@ -40,10 +40,10 @@ import {
 } from "./shared/layoutUtils";
 import { MobileGameNav } from "./shared/MobileGameNav";
 import { TravelCompass } from "./shared/TravelCompass";
-import "../../styles/layout-experimental.css";
+import "../../styles/layout-sector.css";
 
 /** A compact frame that gives travel the viewport and keeps other pages reachable. */
-export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
+export function SectorGameLayout(props: GameLayoutRenderProps) {
   const {
     children,
     gameMenuNotificationCount,
@@ -82,30 +82,27 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
       modal={!isDesktop}
     >
       <SheetTrigger
-        className="experimental-tool experimental-sidebar-toggle"
+        className="sector-tool sector-sidebar-toggle"
         hidden={leftSideBarOpen}
         aria-label="Open player menu"
-        data-experimental-travel-link={isMapPage || undefined}
+        data-sector-travel-link={isMapPage || undefined}
       >
         <PanelLeftOpen aria-hidden="true" />
         <span className="sr-only">Player</span>
       </SheetTrigger>
       <SheetContent
         side="left"
-        className="experimental-drawer"
+        className="sector-drawer"
         showCloseButton={false}
-        data-experimental-sidebar="player"
+        data-sector-sidebar="player"
         data-reading-surface
         onInteractOutside={(event) => {
           if (isDesktop) event.preventDefault();
           else keepSheetOpenForClerk(event);
         }}
       >
-        <SheetHeader className="experimental-drawer-header flex-row items-center space-y-0 text-left">
-          <SheetClose
-            className="experimental-drawer-close"
-            aria-label="Close player menu"
-          >
+        <SheetHeader className="sector-drawer-header flex-row items-center space-y-0 text-left">
+          <SheetClose className="sector-drawer-close" aria-label="Close player menu">
             <PanelLeftClose aria-hidden="true" />
           </SheetClose>
           <SheetTitle>Player menu</SheetTitle>
@@ -126,7 +123,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
       modal={!isDesktop && !isGuidedTutorial}
     >
       <SheetTrigger
-        className="experimental-tool experimental-sidebar-toggle relative"
+        className="sector-tool sector-sidebar-toggle relative"
         hidden={rightSideBarOpen}
         aria-label={
           gameMenuNotificationCount > 0
@@ -147,20 +144,17 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
         )}
       </SheetTrigger>
       <SheetContent
-        className="experimental-drawer"
+        className="sector-drawer"
         showCloseButton={false}
-        data-experimental-sidebar="game"
+        data-sector-sidebar="game"
         data-reading-surface
         onInteractOutside={(event) => {
           if (isDesktop || isGuidedTutorial || isClerkElement(event.target))
             event.preventDefault();
         }}
       >
-        <SheetHeader className="experimental-drawer-header flex-row-reverse items-center space-y-0 text-right">
-          <SheetClose
-            className="experimental-drawer-close"
-            aria-label="Close game menu"
-          >
+        <SheetHeader className="sector-drawer-header flex-row-reverse items-center space-y-0 text-right">
+          <SheetClose className="sector-drawer-close" aria-label="Close game menu">
             <PanelRightClose aria-hidden="true" />
           </SheetClose>
           <SheetTitle>Game menu</SheetTitle>
@@ -180,15 +174,15 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
     <TravelNavigationContext value={travelNavigation}>
       <div
         data-world-page
-        className={cn("experimental-game", isMapPage && "experimental-game-map")}
+        className={cn("sector-game", isMapPage && "sector-game-map")}
       >
         <a href="#game-content" className="theme-skip-link">
           Skip to game content
         </a>
-        <header className="experimental-header">
-          {userData && <ExperimentalPlayerStatus hasLocation={!!location} />}
+        <header className="sector-header">
+          {userData && <SectorPlayerStatus hasLocation={!!location} />}
         </header>
-        <div className="experimental-sidebar-controls">
+        <div className="sector-sidebar-controls">
           <div>{playerMenu}</div>
           <div>{gameMenu}</div>
         </div>
@@ -196,25 +190,25 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
         <main
           id="game-content"
           tabIndex={-1}
-          className={isMapPage ? "experimental-map-main" : "experimental-page"}
+          className={isMapPage ? "sector-map-main" : "sector-page"}
           data-reading-surface={!isMapPage || undefined}
         >
           {isMapPage ? (
-            <ExperimentalTravelHost isGuidedTutorial={isGuidedTutorial}>
+            <SectorTravelHost isGuidedTutorial={isGuidedTutorial}>
               {children}
-            </ExperimentalTravelHost>
+            </SectorTravelHost>
           ) : (
             children
           )}
         </main>
         <div
           className={cn(
-            "experimental-chat-launcher",
+            "sector-chat-launcher",
             CHAT_BUTTON_LAYER,
             swapSides ? "left-4 md:left-5" : "right-4 md:right-5",
           )}
         >
-          <LowerRightHelpBtn className="experimental-tool bg-background rounded-full border shadow-md">
+          <LowerRightHelpBtn className="sector-tool bg-background rounded-full border shadow-md">
             <MessageCircle aria-hidden="true" />
             <span className="sr-only">Chat</span>
           </LowerRightHelpBtn>
@@ -225,17 +219,17 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
             location={location}
             yellowButtonClassName={variantClasses.yellowButton}
             mobileNavbarButtonClassName={variantClasses.mobileNavbarButton}
-            className="experimental-mobile-nav"
+            className="sector-mobile-nav"
             centerControl={location ? undefined : <TravelCompass />}
             travelControls={{
               menu: (
-                <div ref={setControlsTarget} className="experimental-nav-map-controls">
+                <div ref={setControlsTarget} className="sector-nav-map-controls">
                   {!isMapPage && (
                     <Link
                       href="/travel?controls=open"
                       aria-label="Map controls"
                       title="Map controls"
-                      className="experimental-nav-control"
+                      className="sector-nav-control"
                     >
                       <MapPinSearch aria-hidden />
                     </Link>
@@ -243,13 +237,13 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
                 </div>
               ),
               view: (
-                <div ref={setViewTarget} className="experimental-nav-view">
+                <div ref={setViewTarget} className="sector-nav-view">
                   {!isMapPage && (
                     <Link
                       href="/travel?view=global"
                       aria-label="Show global map"
                       title="Show global map"
-                      className="experimental-nav-control"
+                      className="sector-nav-control"
                     >
                       <Globe aria-hidden />
                     </Link>
@@ -264,7 +258,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
   );
 }
 
-/** Load the experimental frame only for an explicit layout selection. */
-export const ExperimentalGame = (props: GameFrameProps) => (
-  <GameLayout renderer={ExperimentalGameLayout} {...props} />
+/** Load the sector frame only for an explicit layout selection. */
+export const SectorGame = (props: GameFrameProps) => (
+  <GameLayout renderer={SectorGameLayout} {...props} />
 );

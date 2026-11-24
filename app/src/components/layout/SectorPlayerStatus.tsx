@@ -25,7 +25,7 @@ import { modalScrollableBodyClassName, modalViewportClassName } from "@/layout/M
 import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Live character shortcuts with detailed resources and timers available on demand. */
-export function ExperimentalPlayerStatus({ hasLocation }: { hasLocation: boolean }) {
+export function SectorPlayerStatus({ hasLocation }: { hasLocation: boolean }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const resources = useRef<HTMLFieldSetElement>(null);
   const detailsFocus = useRef<string | null>(null);
@@ -47,7 +47,7 @@ export function ExperimentalPlayerStatus({ hasLocation }: { hasLocation: boolean
 
   return (
     <>
-      <section className="experimental-player-status" aria-label="Character status">
+      <section className="sector-player-status" aria-label="Character status">
         <Link
           href="/profile"
           className="player-status-avatar"
@@ -150,7 +150,7 @@ export function ExperimentalPlayerStatus({ hasLocation }: { hasLocation: boolean
               <ProfilePools />
               <ProfileLevel />
             </div>
-            <section className="experimental-character-timers">
+            <section className="sector-character-timers">
               <h3 className="mb-2 font-semibold">Effects and training</h3>
               <div className="flex flex-col gap-2">
                 <ProfileTimers compact />

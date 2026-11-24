@@ -79,7 +79,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const pathname = usePublicPathname();
   const isPageActive = usePageActive();
   const isDesktop = useMediaQuery(SIDEBAR_COLUMNS_SHOWN_QUERY);
-  const keepSidebarsOpen = variant === "experimental" && isDesktop;
+  const keepSidebarsOpen = variant === "sector" && isDesktop;
   const { systems, location } = useGameMenu();
   const [leftSideBarOpen, setLeftSideBarOpen] = useState(false);
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);

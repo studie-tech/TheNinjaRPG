@@ -55,7 +55,7 @@ describe("mobile game navigation cookie settings", () => {
     ]);
   });
   it.each([false, true, undefined])(
-    "places four experimental controls on each side of the location action (native=%s)",
+    "places four sector controls on each side of the location action (native=%s)",
     (native) => {
       vi.spyOn(nativeShell, "useNativeShell").mockReturnValue(native);
       const view = render(

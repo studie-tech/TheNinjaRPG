@@ -22,13 +22,13 @@ const require = createRequire(import.meta.url);
 const { c } = require("react/compiler-runtime") as { c: (size: number) => unknown[] };
 
 const targets = [
-  ["components/layout/ExperimentalPlayerStatus.tsx", ["ExperimentalPlayerStatus"]],
+  ["components/layout/SectorPlayerStatus.tsx", ["SectorPlayerStatus"]],
   ["layout/StatusBar.tsx", ["StatusBar"]],
   [
     "layout/ContentBoxHeaderActions.tsx",
     ["ContentBoxHeaderActions", "ContentBoxPriorityActions"],
   ],
-  ["components/layout/ExperimentalGameLayout.tsx", ["ExperimentalGameLayout"]],
+  ["components/layout/SectorGameLayout.tsx", ["SectorGameLayout"]],
   [
     "components/layout/shared/TravelCompass.tsx",
     ["TravelCompass", "CharacterTravelCompass"],
@@ -37,7 +37,7 @@ const targets = [
     "components/layout/shared/MobileGameNav.tsx",
     ["MobileGameNav", "MobileGameNavButton"],
   ],
-  ["components/layout/ExperimentalTravelHost.tsx", ["ExperimentalTravelHost"]],
+  ["components/layout/SectorTravelHost.tsx", ["SectorTravelHost"]],
   ["screens/travel/TravelScreen.tsx", ["TravelScreen", "TravelRoute"]],
   [
     "layout/MenuBoxProfile.tsx",

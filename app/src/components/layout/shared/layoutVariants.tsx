@@ -48,7 +48,7 @@ const PANEL_MENU_CLASSES = {
 };
 
 export const layoutVariantClasses = {
-  experimental: PANEL_MENU_CLASSES,
+  sector: PANEL_MENU_CLASSES,
   "20-eclipse-observatory": PANEL_MENU_CLASSES,
   "17-obsidian-council": PANEL_MENU_CLASSES,
   "3-sakura-courtyard": PANEL_MENU_CLASSES,

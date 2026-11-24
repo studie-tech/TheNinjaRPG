@@ -116,8 +116,8 @@ html[data-game-layout="20-eclipse-observatory"]
   display: block;
 }
 
-/* The experimental frame uses the same semantic palette as Classic, including dark mode. */
-html[data-game-layout="experimental"] {
+/* The sector frame uses the same semantic palette as Classic, including dark mode. */
+html[data-game-layout="sector"] {
   --theme-bg: hsl(var(--background));
   --theme-surface: hsl(var(--card));
   --theme-text: hsl(var(--foreground));
@@ -127,6 +127,6 @@ html[data-game-layout="experimental"] {
   --theme-heading-font: ui-sans-serif, system-ui, sans-serif;
   --theme-body-font: ui-sans-serif, system-ui, sans-serif;
 }
-html[data-game-layout="experimental"] .theme-welcome-copy[data-theme-id="experimental"] {
+html[data-game-layout="sector"] .theme-welcome-copy[data-theme-id="sector"] {
   display: block;
 }

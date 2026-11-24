@@ -165,7 +165,7 @@ describe("game layout picker", () => {
       allowed: false,
     },
   ])(
-    "admits experimental selection only for a signed-in character: $label",
+    "admits sector selection only for a signed-in character: $label",
     async ({ allowed, ...session }) => {
       const router = getRouter();
       router.replace.mockClear();
@@ -173,27 +173,25 @@ describe("game layout picker", () => {
       function SelectExperiment() {
         const selectLayout = useSelectGameLayout();
         return (
-          <button type="button" onClick={() => selectLayout("experimental")}>
-            Try experimental
+          <button type="button" onClick={() => selectLayout("sector")}>
+            Try sector
           </button>
         );
       }
       const view = render(<SelectExperiment />);
-      fireEvent.click(view.getByRole("button", { name: "Try experimental" }));
+      fireEvent.click(view.getByRole("button", { name: "Try sector" }));
       if (allowed) {
         expect(router.replace).toHaveBeenCalledWith("/travel");
-        expect(document.cookie).toContain(`${LAYOUT_PREFERENCE_COOKIE}=experimental`);
+        expect(document.cookie).toContain(`${LAYOUT_PREFERENCE_COOKIE}=sector`);
       } else {
         expect(router.replace).not.toHaveBeenCalled();
         expect(localStorage.getItem(LAYOUT_PREFERENCE_COOKIE)).toBeNull();
-        expect(document.cookie).not.toContain(
-          `${LAYOUT_PREFERENCE_COOKIE}=experimental`,
-        );
+        expect(document.cookie).not.toContain(`${LAYOUT_PREFERENCE_COOKIE}=sector`);
       }
     },
   );
 
-  it("omits the experimental choice before character creation", async () => {
+  it("omits the sector choice before character creation", async () => {
     mockUserContextValue({
       isClerkLoaded: true,
       isSignedIn: true,
@@ -201,9 +199,7 @@ describe("game layout picker", () => {
       status: "success",
     });
     const view = await openPicker();
-    expect(
-      view.queryByRole("option", { name: "Experimental sector layout" }),
-    ).toBeNull();
+    expect(view.queryByRole("option", { name: "Sector Layout" })).toBeNull();
     expect(view.getByRole("option", { name: "Classic" })).toBeTruthy();
   });
 
@@ -216,7 +212,7 @@ describe("game layout picker", () => {
       "Eclipse Observatory",
       "Obsidian Council",
       "Sakura Courtyard",
-      "Experimental sector layout",
+      "Sector Layout",
     ]);
   });
 

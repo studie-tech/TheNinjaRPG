@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
-import { ExperimentalPlayerStatus } from "@/components/layout/ExperimentalPlayerStatus";
+import { SectorPlayerStatus } from "@/components/layout/SectorPlayerStatus";
 import { MAX_PVP_BRACKET, MISSIONS_PER_DAY } from "@/drizzle/constants";
 import * as Avatar from "@/layout/Avatar";
 import * as userContext from "@/utils/UserContext";
@@ -75,15 +75,15 @@ afterEach(async () => {
 });
 
 it("keeps five live HUD meters while profile pools update", () => {
-  const view = render(<ExperimentalPlayerStatus hasLocation />);
+  const view = render(<SectorPlayerStatus hasLocation />);
   expect(view.getAllByRole("button", { name: /^(HP|CP|SP|EP|XP):/ })).toHaveLength(5);
   user = { ...user, curHealth: 35, maxHealth: 90 };
-  view.rerender(<ExperimentalPlayerStatus hasLocation />);
+  view.rerender(<SectorPlayerStatus hasLocation />);
   expect(view.getByRole("button", { name: "HP: 35 / 90" })).toBeTruthy();
 });
 
 it("opens full character readings from each meter and returns keyboard focus on close", async () => {
-  const view = render(<ExperimentalPlayerStatus hasLocation />);
+  const view = render(<SectorPlayerStatus hasLocation />);
   const meters = view.getAllByRole("button", { name: /^(HP|CP|SP|EP|XP):/ });
   for (const meter of meters) {
     await act(async () => {
@@ -114,7 +114,7 @@ it.each([
 ])(
   "returns focus to the current %s meter after a live pool update",
   async (title, pool) => {
-    const view = render(<ExperimentalPlayerStatus hasLocation />);
+    const view = render(<SectorPlayerStatus hasLocation />);
     const meter = view.getByRole("button", { name: new RegExp(`^${title}:`) });
     await act(async () => {
       meter.focus();
@@ -124,7 +124,7 @@ it.each([
     await act(async () => flushRadixFocus());
 
     user = { ...user, [`cur${pool}`]: 35, [`max${pool}`]: 90 };
-    view.rerender(<ExperimentalPlayerStatus hasLocation />);
+    view.rerender(<SectorPlayerStatus hasLocation />);
     expect(meter.isConnected).toBe(false);
     expect(
       within(view.getByRole("dialog", { name: "Character details" })).getByText(
@@ -144,7 +144,7 @@ it.each([
 );
 
 it("keeps profile, status, village, balances and daily destinations accessible", () => {
-  const view = render(<ExperimentalPlayerStatus hasLocation />);
+  const view = render(<SectorPlayerStatus hasLocation />);
   expect(
     view.getByRole("link", { name: "Shinobi's profile" }).getAttribute("href"),
   ).toBe("/profile");
@@ -166,7 +166,7 @@ it("keeps profile, status, village, balances and daily destinations accessible",
     view.getByRole("link", { name: "Reputation points: 7" }).getAttribute("href"),
   ).toBe("/points");
   user = { ...user, status: "ASLEEP", dailyMissions: MISSIONS_PER_DAY };
-  view.rerender(<ExperimentalPlayerStatus hasLocation={false} />);
+  view.rerender(<SectorPlayerStatus hasLocation={false} />);
   expect(view.getByRole("link", { name: "ASLEEP" }).getAttribute("href")).toBe("/home");
   expect(
     view.getByRole("link", { name: "Money on hand: 1,200" }).getAttribute("href"),
@@ -176,7 +176,7 @@ it("keeps profile, status, village, balances and daily destinations accessible",
 
 it("shortens HUD balances while retaining their exact accessible values", () => {
   user = { ...user, money: 1_234_567, reputationPoints: 100_000 };
-  const view = render(<ExperimentalPlayerStatus hasLocation />);
+  const view = render(<SectorPlayerStatus hasLocation />);
   expect(
     view.getByRole("link", { name: "Money on hand: 1,234,567" }).textContent,
   ).toContain("1.2M");
@@ -186,7 +186,7 @@ it("shortens HUD balances while retaining their exact accessible values", () => 
 });
 
 it("shows the bracket and game clock alongside the other character shortcuts", () => {
-  const view = render(<ExperimentalPlayerStatus hasLocation />);
+  const view = render(<SectorPlayerStatus hasLocation />);
   const shortcuts = within(view.getByRole("region", { name: "Character shortcuts" }));
   expect(
     shortcuts.getByRole("button", { name: `PvP bracket: 0/${MAX_PVP_BRACKET}` }),

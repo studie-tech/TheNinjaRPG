@@ -19,7 +19,7 @@ interface MobileGameNavProps {
   yellowButtonClassName: string;
   mobileNavbarButtonClassName: string;
   className?: string;
-  /** Experimental frames use a destination compass in place of the location link. */
+  /** Sector frames use a destination compass in place of the location link. */
   centerControl?: ReactNode;
   /** Travel hosts reserve the first and fourth left slots for their session controls. */
   travelControls?: { menu: ReactNode; view: ReactNode };

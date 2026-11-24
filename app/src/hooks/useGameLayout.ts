@@ -30,7 +30,7 @@ export const applyGameLayout = (id: GameLayoutId) => {
 };
 
 /** Enable the sector frame only for the authenticated account’s created character. */
-export const useCanUseExperimentalLayout = () => {
+export const useCanUseSectorLayout = () => {
   const {
     data: characterId,
     userId,
@@ -42,10 +42,8 @@ export const useCanUseExperimentalLayout = () => {
 
 /** Layout choices available to the current account without exposing a character-only frame. */
 export const useAvailableGameLayouts = () => {
-  const canUseExperimentalLayout = useCanUseExperimentalLayout();
-  return GAME_LAYOUTS.filter(
-    (layout) => layout.id !== "experimental" || canUseExperimentalLayout,
-  );
+  const canUseSectorLayout = useCanUseSectorLayout();
+  return GAME_LAYOUTS.filter((layout) => layout.id !== "sector" || canUseSectorLayout);
 };
 
 /**
@@ -60,17 +58,17 @@ export const useAvailableGameLayouts = () => {
  */
 export const useSelectGameLayout = () => {
   const changeLayout = useChangeLayout();
-  const canUseExperimentalLayout = useCanUseExperimentalLayout();
+  const canUseSectorLayout = useCanUseSectorLayout();
   const router = useNavigationRouter();
   return useCallback(
     (layout: GameLayoutId) => {
-      if (layout === "experimental" && !canUseExperimentalLayout) return;
+      if (layout === "sector" && !canUseSectorLayout) return;
       safeLocalStorageSetItem(LAYOUT_PREFERENCE_COOKIE, JSON.stringify(layout));
       persistLayoutPreferenceCookie(layout);
       changeLayout(layout);
       router.refresh();
-      if (layout === "experimental") router.replace("/travel");
+      if (layout === "sector") router.replace("/travel");
     },
-    [changeLayout, router, canUseExperimentalLayout],
+    [changeLayout, router, canUseSectorLayout],
   );
 };

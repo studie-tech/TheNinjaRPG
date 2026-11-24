@@ -165,7 +165,7 @@ it("exposes global tools directly and retains the guided Global tab", () => {
   expect(setActiveTab).toHaveBeenCalledWith("Global");
 });
 
-it("keeps labeled map actions behind the experimental layout's own bottom-menu trigger", () => {
+it("keeps labeled map actions behind the sector layout's own bottom-menu trigger", () => {
   const controls = document.createElement("div");
   document.body.append(controls);
   try {

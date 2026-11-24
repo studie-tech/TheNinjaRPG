@@ -743,7 +743,7 @@ it.each([false, true])(
   },
 );
 
-/** Render the same retained footer slots supplied by the experimental frame. */
+/** Render the same retained footer slots supplied by the sector frame. */
 function TravelNavigationHarness({ children }: { children: ReactNode }) {
   const [controls, setControls] = useState<HTMLDivElement | null>(null);
   const [view, setView] = useState<HTMLDivElement | null>(null);

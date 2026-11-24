@@ -108,21 +108,21 @@ export const GAME_LAYOUTS = [
       "Some journeys are remembered for their battles. Others, for the people along the way. Make friends, join a village, and write a character story of your own.",
   },
   {
-    id: "experimental",
-    name: "Experimental sector layout",
+    id: "sector",
+    name: "Sector Layout",
     art: IMG_FRONTPAGE_SCREENSHOT_SECTOR,
-    audience: "Players trying the sector as their main game interface",
+    audience: "Players using the sector as their main game interface",
     rationale:
       "Explore a full-screen sector map and visit the Bank and Item Shop in dialogs. Other destinations open as pages through the game menu.",
     composition:
       "A full-height map with sliding sidebars, centered bottom shortcuts and building dialogs.",
     tone: "light",
-    frame: "experimental",
+    frame: "sector",
     publicFrame: "page",
     welcome: "illustrated",
     sidebarBreakpoint: null,
     supportsColorMode: true,
-    visualLanguage: "Sector exploration · Experimental",
+    visualLanguage: "Sector exploration",
     welcomeTitle: "Your next adventure is out there.",
     welcomeIntro:
       "Explore Seichi, train your shinobi and find your place in the village.",
@@ -135,8 +135,11 @@ export const DEFAULT_GAME_LAYOUT: GameLayoutId = "default";
 export const GAME_LAYOUT_ATTRIBUTE = "data-game-layout";
 export const GAME_LAYOUT_FRAME_ATTRIBUTE = "data-game-frame";
 
+/** Normalize saved preferences to the canonical layout identity. */
 export const toGameLayoutId = (value: unknown): GameLayoutId | undefined =>
-  GAME_LAYOUTS.find((layout) => layout.id === value)?.id;
+  GAME_LAYOUTS.find(
+    (layout) => layout.id === (value === "experimental" ? "sector" : value),
+  )?.id;
 
 export const getGameLayout = (id: GameLayoutId): GameLayout =>
   GAME_LAYOUTS.find((layout) => layout.id === id) ?? GAME_LAYOUTS[0];
@@ -159,4 +162,4 @@ export const getGameLayoutScript = (id: GameLayoutId) => {
 
 /** Prerender a character-only preference with Classic until its account is confirmed. */
 export const getInitialGameLayout = (id: GameLayoutId): GameLayoutId =>
-  id === "experimental" ? DEFAULT_GAME_LAYOUT : id;
+  id === "sector" ? DEFAULT_GAME_LAYOUT : id;
