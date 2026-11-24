@@ -35,6 +35,7 @@ import MissionPicker, {
   MISSION_TILE_CLASSES,
   MISSION_TILE_IMAGE_CLASSES,
 } from "@/layout/MissionPicker";
+import { PvpWinLocations } from "@/layout/PvpWinLocations";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   filterMissionHallQuests,
@@ -313,6 +314,14 @@ export default function MissionHall({ userData }: MissionHallProps) {
                 image: q.image || undefined,
               }));
 
+              const missionsCountingPvpWins = new Set(
+                available
+                  .filter((q) =>
+                    q.content.objectives.some((o) => o.task === "pvp_kills"),
+                  )
+                  .map((q) => q.id),
+              );
+
               const typeName = isPvp ? "PvP" : isMedical ? "medical" : "";
               const dialogTitle = isPvp
                 ? "Accept PvP Mission"
@@ -347,6 +356,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         {typeName ? `${typeName} ` : ""}mission &quot;
                         {mission.name}&quot;? You can only have one active{" "}
                         {setting.rank === "A" ? "mission" : classifier} at a time.
+                        {isPvp && missionsCountingPvpWins.has(mission.id) && (
+                          <>
+                            <br />
+                            <br />
+                            <PvpWinLocations />
+                          </>
+                        )}
                         {isReducedRewards && (
                           <>
                             <br />

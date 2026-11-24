@@ -878,6 +878,7 @@ export const QuestObjectives: React.FC<{
       <Objective
         objective={objective}
         tracker={tracker}
+        questType={quest.questType}
         checkRewards={checkRewards}
         key={objective.id}
         titlePrefix={quest.consecutiveObjectives ? "Objective: " : `${i + 1}. `}

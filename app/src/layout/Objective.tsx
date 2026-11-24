@@ -20,6 +20,7 @@ import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Modal from "@/layout/Modal";
+import { PvpWinLocations } from "@/layout/PvpWinLocations";
 import StatusBar from "@/layout/StatusBar";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
@@ -51,6 +52,8 @@ interface ObjectiveProps {
   titlePrefix?: string | number;
   objective: AllObjectivesType;
   tracker: QuestTrackerType;
+  /** Type of the quest the objective belongs to, which decides where PvP wins count. */
+  questType?: Quest["questType"];
   checkRewards: () => void;
   tier?: number;
   grayedOut?: boolean;
@@ -280,6 +283,14 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
               <div>{indicatorIcons}</div>
             </div>
           )}
+          {props.questType === "pvp" &&
+            parsed.task === "pvp_kills" &&
+            !done &&
+            !props.grayedOut && (
+              <p className="mt-2 pr-3 text-sm">
+                <PvpWinLocations />
+              </p>
+            )}
           {/* Point to the page that progresses the objective, e.g. Home > Farm for seeds */}
           {actionGuide && !done && !props.grayedOut && (
             <div className="@container mt-2 pr-3">
