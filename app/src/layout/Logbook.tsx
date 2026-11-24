@@ -803,7 +803,11 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         </div>
       }
     >
-      <div className="flex h-full flex-col gap-3" id={`logbook-entry-${quest.id}`}>
+      <div
+        className="flex h-full flex-col gap-3"
+        id={`logbook-entry-${quest.id}`}
+        data-spotlight-panel=""
+      >
         {isPaused && (
           <p role="status" className="p-3 text-orange-500">
             {hasQuestContentChanged(userQuest)

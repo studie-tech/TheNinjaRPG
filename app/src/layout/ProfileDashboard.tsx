@@ -312,7 +312,11 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
       ),
       content: (
         <>
-          <div id="tutorial-dashboard-now" className="rounded-md border bg-card px-4">
+          <div
+            id="tutorial-dashboard-now"
+            data-spotlight-panel=""
+            className="rounded-md border bg-card px-4"
+          >
             {streaks.isError && (
               <div className="border-t py-3 first:border-t-0">
                 <QueryError

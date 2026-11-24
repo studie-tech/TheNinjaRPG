@@ -166,7 +166,7 @@ export const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> =
   const badgeClass = hasCritical ? "bg-red-500 text-white" : "bg-slate-500 text-white";
 
   return (
-    <div>
+    <div data-spotlight-panel="">
       <button
         type="button"
         data-sidebar-keep-open="true"

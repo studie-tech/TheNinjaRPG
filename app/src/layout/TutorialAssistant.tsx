@@ -63,6 +63,7 @@ import {
 import {
   getDodgedPanelTop,
   getPanelPlaceOverDialog,
+  getSpotlightPanel,
   getSpotlightScene,
   getUsableHighlightElement,
   isSameBox,
@@ -2085,7 +2086,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
     left: number;
     width: number;
     height: number;
-    /** The scene the element is part of, which stays lit around it. */
+    /** The scene or panel the element is part of, which stays lit around it. */
     scene: SpotlightBox | null;
   } | null>(null);
   // Placement of the current highlight, keyed by step, element and width. One owner
@@ -2198,9 +2199,14 @@ const useHighlightPlacement = <Step extends { id: string }>({
             ?.getBoundingClientRect().top
         : undefined;
       const isTimerAbove = timerTop !== undefined && timerTop < 0;
+      const isOffscreen =
+        before.bottom < 80 ||
+        before.top > window.innerHeight - 80 ||
+        before.right < 0 ||
+        before.left > window.innerWidth;
       // Content that renders after the latch (a fight's jutsu row, say) can push a
-      // placed target under the panel, its action tiles below the screen, or the AP bar
-      // off the top, without the player scrolling; place it again. A page that shrank
+      // placed target off the screen or under the panel, its action tiles below the
+      // screen, or the AP bar off the top, without the player scrolling; place it again. A page that shrank
       // below the latched position pulls the scroll up to its new bottom, which is not
       // the player scrolling either.
       const isScrollClamped =
@@ -2211,6 +2217,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
         placement.settled &&
         (window.scrollY === placement.settledScrollY || isScrollClamped) &&
         ((panel && rectsOverlap(clear, panel)) ||
+          (isOffscreen && placement.attempts < 5) ||
           isTimerAbove ||
           (isCombat && clear.bottom > window.innerHeight))
       ) {
@@ -2255,13 +2262,29 @@ const useHighlightPlacement = <Step extends { id: string }>({
         (isCombat ||
           canPositionTutorialHighlight(before.height, window.innerHeight, panel?.top))
       ) {
-        const preferredCentre = getPreferredHighlightCentre(before.height);
-        const centre = before.top + before.height / 2;
-        const isOffscreen =
-          before.bottom < 80 ||
-          before.top > window.innerHeight - 80 ||
-          before.right < 0 ||
-          before.left > window.innerWidth;
+        // The panel a control is used in comes into view with it, where there is room.
+        const lit = highlightInfo.isInPanel
+          ? getSpotlightPanel(highlightInfo.element)
+          : null;
+        const litFloor =
+          lit && panel && lit.left < panel.right && lit.left + lit.width > panel.left
+            ? panel.top
+            : window.innerHeight;
+        const isLitInView = !!lit && lit.height + 32 <= litFloor;
+        const aim = isLitInView ? lit : before;
+        const preferredCentre = isLitInView
+          ? litFloor / 2
+          : getPreferredHighlightCentre(before.height);
+        let aimOffset = aim.top + aim.height / 2 - preferredCentre;
+        let isAimMisplaced = Math.abs(aimOffset) > 100;
+        if (isLitInView && !isOffscreen) {
+          // A panel partly in view moves no further than it needs, with room below it for
+          // the pointer where there is any.
+          const room = Math.min(72, litFloor - lit.height - 16);
+          const below = lit.top + lit.height - (litFloor - room);
+          aimOffset = below > 0 ? below : Math.min(0, lit.top - 16);
+          isAimMisplaced = Math.abs(aimOffset) > 1;
+        }
         const isCovered = !!panel && rectsOverlap(clear, panel);
         // A scene revealed only (a fight, a card table) must stay in view around the
         // target, so there a visible, uncovered target is left where it is, unless in a
@@ -2272,7 +2295,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
           isCovered ||
           isCutOff ||
           isTimerAbove ||
-          (!isRevealOnly && Math.abs(centre - preferredCentre) > 100);
+          (!isRevealOnly && isAimMisplaced);
         if (!isMisplaced) {
           placement.settled = true;
           placement.settledScrollY = window.scrollY;
@@ -2292,7 +2315,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
                 ? clear.bottom + 16 - floor
                 : clear.top - 80;
           const offset = !isRevealOnly
-            ? centre - preferredCentre
+            ? aimOffset
             : Math.min(
                 revealOffset,
                 timerTop === undefined ? revealOffset : timerTop - 16,
@@ -2323,7 +2346,9 @@ const useHighlightPlacement = <Step extends { id: string }>({
         left: rect.left,
         width: rect.width,
         height: rect.height,
-        scene: getSpotlightScene(highlightInfo.element),
+        scene:
+          getSpotlightScene(highlightInfo.element) ??
+          (highlightInfo.isInPanel ? getSpotlightPanel(highlightInfo.element) : null),
       };
       setHighlight((prev) =>
         prev &&
@@ -2774,6 +2799,7 @@ const findElementToHighlight = (
   return {
     element,
     isInScene: step.isInScene || !!getSpotlightScene(element),
+    isInPanel: true,
   };
 };
 
@@ -2811,6 +2837,8 @@ type HighlightTarget = {
   isRevealed?: boolean;
   /** Part of a scene that must stay in view around it, so it is only uncovered. */
   isInScene?: boolean;
+  /** The panel around it is lit and comes into view with it. */
+  isInPanel?: boolean;
 };
 
 /** A quest the assistant guides after the tutorial, with its live tracker. */

@@ -26,8 +26,9 @@ import {
  * `children` (placed inside the ring) take them, so the real control under the hole
  * receives the press. Around a control standing alone in the lit element, as an answer in
  * its box or a Claim in its row, the rest of the element presses it too. A control inside a
- * scene (`data-spotlight-scene`: a map) leaves the whole scene lit. The layer is portalled
- * into the body as a `data-battle-focus-layer`, so a focus view keeps it interactive. The
+ * scene (`data-spotlight-scene`: a map) leaves the whole scene lit, and one inside a panel
+ * (`data-spotlight-panel`) that fits the screen the whole panel, so the player sees the
+ * system they use. The layer is portalled into the body as a `data-battle-focus-layer`, so a focus view keeps it interactive. The
  * control under the hole is shown at full opacity: pages fade a hovered card or the actions
  * not selected, which would make the one control the player is told to press look disabled.
  * While the hole, its pointer or a mark sits where toasts appear, the spotlight publishes
@@ -45,7 +46,7 @@ export const Spotlight = ({
   children,
 }: {
   box: SpotlightBox;
-  /** The scene the control is part of (see `getSpotlightScene`), lit around it. */
+  /** The scene or panel the control is part of, lit around it. */
   scene?: SpotlightBox | null;
   /** Further elements the step refers to: uncovered, and named ones ringed with dashes. */
   marks?: SpotlightMark[];
@@ -185,6 +186,7 @@ export const SpotlightDim = ({
               y={scene.top}
               width={scene.width}
               height={scene.height}
+              rx={4}
               fill="black"
             />
           ) : null}
@@ -367,10 +369,44 @@ export const isSameOptionalBox = (a: SpotlightBox | null, b: SpotlightBox | null
  * spotlight dims only what surrounds it.
  */
 export const getSpotlightScene = (element: Element): SpotlightBox | null => {
-  const rect = element.closest("[data-spotlight-scene]")?.getBoundingClientRect();
-  return rect
-    ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
-    : null;
+  const scene = element.closest("[data-spotlight-scene]");
+  return scene && boxOf(scene);
+};
+
+/**
+ * The panel an element is used in: the largest `data-spotlight-panel` around it that leaves
+ * enough of the screen to dim, or null with none. Larger ones, such as a whole page of
+ * buildings, give way to the panels inside them.
+ */
+export const getSpotlightPanel = (element: Element): SpotlightBox | null => {
+  let found: SpotlightBox | null = null;
+  for (
+    let panel = element.closest("[data-spotlight-panel]");
+    panel;
+    panel = panel.parentElement?.closest("[data-spotlight-panel]") ?? null
+  ) {
+    const box = boxOf(panel);
+    const litArea = box.width * Math.min(box.height, window.innerHeight);
+    if (
+      box.height > window.innerHeight * PANEL_MAX_SCREENS ||
+      litArea > window.innerWidth * window.innerHeight * PANEL_SCREEN_SHARE
+    )
+      break;
+    found = box;
+  }
+  return (
+    found && {
+      top: found.top - PANEL_PADDING_PX,
+      left: found.left - PANEL_PADDING_PX,
+      width: found.width + PANEL_PADDING_PX * 2,
+      height: found.height + PANEL_PADDING_PX * 2,
+    }
+  );
+};
+
+const boxOf = (element: Element): SpotlightBox => {
+  const rect = element.getBoundingClientRect();
+  return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
 };
 
 /**
@@ -742,6 +778,12 @@ const TRACK_LAYOUT_SETTLED_RUNS = 4;
 
 /** Space between a highlighted element and the edge of its hole. */
 const HOLE_PADDING_PX = 8;
+/** Space lit around a panel. */
+const PANEL_PADDING_PX = 6;
+/** Largest panel lit as a whole, as a share of the screen. */
+const PANEL_SCREEN_SHARE = 0.65;
+/** Tallest panel lit as a whole, in screens. */
+const PANEL_MAX_SCREENS = 1.3;
 /** Space between a marked element and its dashed ring. */
 const MARK_PADDING_PX = 3;
 

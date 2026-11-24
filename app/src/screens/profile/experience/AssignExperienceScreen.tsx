@@ -68,7 +68,7 @@ export function AssignExperienceScreen() {
   // Masteries and elements stay out of the tutorial: only combat stats count
   // towards a level, which is what its assignment lessons build up to.
   return (
-    <>
+    <div data-spotlight-panel="">
       <LevelUpBtn id="tutorial-level-up-experience" className="mb-6" />
       <DistributeStatsForm
         includeMasteries={!isTutorialActive(userData)}
@@ -82,7 +82,7 @@ export function AssignExperienceScreen() {
         isPending={isPending}
         pendingLabel="Assigning"
       />
-    </>
+    </div>
   );
 }
 

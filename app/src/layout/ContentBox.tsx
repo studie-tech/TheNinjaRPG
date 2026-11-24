@@ -105,7 +105,12 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   return (
     <>
       {props.initialBreak && <div className="h-4"></div>}
-      <div className="sm:container" data-content-box id={props.id}>
+      <div
+        className="sm:container"
+        data-content-box
+        data-spotlight-panel=""
+        id={props.id}
+      >
         <div
           ref={headerRef}
           data-content-box-header

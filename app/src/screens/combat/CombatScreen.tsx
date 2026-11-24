@@ -963,7 +963,12 @@ export function CombatScreen() {
   const tabbedIds: CombatLayoutComponentId[] = ["actions", "timeline", "battlelog"];
 
   return (
-    <div ref={layoutRef} tabIndex={-1} className="flex flex-col gap-1 sm:container">
+    <div
+      ref={layoutRef}
+      tabIndex={-1}
+      data-spotlight-panel=""
+      className="flex flex-col gap-1 sm:container"
+    >
       {config.useTabs ? (
         // Tabs mode: render non-tabbed components in order, then tabs
         <>

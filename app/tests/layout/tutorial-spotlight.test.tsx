@@ -4,6 +4,7 @@ import * as image from "@/layout/Image";
 import {
   getDodgedPanelTop,
   getPanelPlaceOverDialog,
+  getSpotlightPanel,
   getSpotlightScene,
   getToastClearance,
   getUsableHighlightElement,
@@ -293,6 +294,54 @@ describe("a spotlight inside a scene", () => {
 
     view.rerender(<Spotlight box={box} scene={null} pointer={false} />);
     expect(document.querySelector("[data-spotlight-lit-scene]")).toBeNull();
+  });
+});
+
+describe("a spotlight inside a panel", () => {
+  const button = { top: 300, left: 420, width: 200, height: 40 };
+  /** A button in nested panels, outermost first. */
+  const nest = (...boxes: (typeof button)[]) => {
+    let parent: Element = document.body;
+    for (const box of boxes) {
+      parent = place(parent.appendChild(document.createElement("div")), box);
+      parent.setAttribute("data-spotlight-panel", "");
+    }
+    return place(parent.appendChild(document.createElement("button")), button);
+  };
+  const card = { top: 260, left: 400, width: 640, height: 200 };
+  const padded = (box: typeof button) => ({
+    top: box.top - 6,
+    left: box.left - 6,
+    width: box.width + 12,
+    height: box.height + 12,
+  });
+
+  it("lights the largest panel around the control that leaves the page dimmed", () => {
+    viewport(1440, 900);
+    const page = { top: 100, left: 380, width: 690, height: 500 };
+    expect(getSpotlightPanel(nest(page, card))).toEqual(padded(page));
+  });
+
+  it("gives way to the panels inside one that fills a phone or runs on for screens", () => {
+    viewport(390, 844);
+    const phoneCard = { top: 260, left: 20, width: 350, height: 300 };
+    expect(
+      getSpotlightPanel(
+        nest({ top: 90, left: 9, width: 372, height: 1600 }, phoneCard),
+      ),
+    ).toEqual(padded(phoneCard));
+    viewport(1440, 900);
+    expect(
+      getSpotlightPanel(nest({ top: 90, left: 380, width: 690, height: 1500 }, card)),
+    ).toEqual(padded(card));
+  });
+
+  it("lights none where every panel is too large, or there is none", () => {
+    viewport(390, 844);
+    expect(
+      getSpotlightPanel(nest({ top: 0, left: 0, width: 390, height: 840 })),
+    ).toBeNull();
+    expect(getSpotlightPanel(nest())).toBeNull();
   });
 });
 
