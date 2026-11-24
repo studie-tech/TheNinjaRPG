@@ -42,17 +42,10 @@ loopback or Compose database proxies before Next starts. Existing designs and st
 are preserved; remote database URLs and deployed/production processes skip this step.
 It uses the committed CDN references without generating, uploading or downloading artwork.
 An incomplete local schema or invalid existing LPC design fails preparation with a recovery
-message. Apply schema migrations explicitly; startup never migrates, pushes schema or resets
-player data. `dev-doctor` reports LPC readiness without inserting designs.
+message. Apply schema migrations explicitly; startup never migrates, pushes schema or runs
+other content seeds. `dev-doctor` reports LPC readiness without inserting designs.
 After manually backfilling a running server, restart that worktree with `make dev-down`
 then `make dev-up` so it drops any cached empty scene catalog.
-Preparation also syncs the checked-in public building definitions for canonical settlements,
-including their CDN images, physical-art metadata, map positions, service links and the
-shared structure-asset catalog. Missing
-buildings are added; existing IDs, levels, health, bonuses and additional QA structures are
-preserved. Village names are resolved to local IDs. This uses no production credentials or
-production connection at startup. `make seed` applies the same definitions after village seeding.
-Restart a running server after `make dev-prepare` to refresh its retained map and caches.
 Use a deliberately configured throwaway database for schema changes or destructive SQL
 tests. Do not stop/recreate shared Docker to repair a single worktree.
 

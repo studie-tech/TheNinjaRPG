@@ -1,12 +1,9 @@
 /**
  * Database access for map asset; authorization and transaction scopes stay in callers.
  */
-import { asc, eq, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { actionLog, mapAsset } from "@/drizzle/schema";
+import { eq } from "drizzle-orm";
+import { mapAsset } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import type { ZodMapAssetType } from "@/validators/mapAsset";
 
 /** COMMON QUERIES WHICH ARE REUSED */
 
@@ -15,37 +12,17 @@ export const fetchMapAsset = async (client: DrizzleClient, id: string) => {
   return await client.query.mapAsset.findFirst({ where: eq(mapAsset.id, id) });
 };
 
+import { asc } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { actionLog } from "@/drizzle/schema";
+
 /** Build the `mapAsset` listing for `getAll`. */
 export const listMapAssetForGetAll = (client: Pick<DrizzleClient, "query">) =>
   client.query.mapAsset.findMany({
     columns: { createdByUserId: false },
     orderBy: [asc(mapAsset.category), asc(mapAsset.key)],
   });
-
-/** Sync a published building asset by key while keeping local IDs and editor attribution. */
-export const upsertMapAssetsForSeed = (
-  client: DrizzleClient,
-  rows: Omit<
-    typeof mapAsset.$inferSelect,
-    "createdByUserId" | "createdAt" | "updatedAt"
-  >[],
-) =>
-  client
-    .insert(mapAsset)
-    .values(rows)
-    .onDuplicateKeyUpdate({
-      set: {
-        name: sql`VALUES(name)`,
-        category: sql`VALUES(category)`,
-        imageUrl: sql`VALUES(imageUrl)`,
-        windAffected: sql`VALUES(windAffected)`,
-        small: sql`VALUES(small)`,
-        randomRotation: sql`VALUES(randomRotation)`,
-        renderScale: sql`VALUES(renderScale)`,
-        licenseDetails: sql`VALUES(licenseDetails)`,
-        updatedAt: new Date(),
-      },
-    });
 
 /** Build the `mapAsset` lookup for `get`, using predicates on `id`. */
 export const findMapAssetForGet = (
@@ -87,7 +64,7 @@ export const findMapAssetForUpdate = (
 /** Build the `mapAsset` update for `update`, setting `updatedAt`, using predicates on `id`. */
 export const updateMapAssetForUpdate = (
   client: Pick<DrizzleClient, "update">,
-  input: { data: ZodMapAssetType },
+  input: { data: import("@/validators/mapAsset").ZodMapAssetType },
   entry: { id: string },
 ) =>
   client
