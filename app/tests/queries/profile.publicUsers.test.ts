@@ -155,3 +155,47 @@ describeWithDatabase("public user substring search", () => {
     expect(rows.map((row) => row.userId)).toEqual(["new-match", "old-match"]);
   });
 });
+
+describeWithDatabase("public user occupation filter", () => {
+  beforeEach(async () => {
+    await resetTables(userData);
+    await insertUsers([
+      { userId: "gatherer", username: "Gatherer", occupation: "GATHERING", level: 10 },
+      { userId: "crafter-a", username: "CrafterA", occupation: "CRAFTING", level: 20 },
+      { userId: "crafter-b", username: "CrafterB", occupation: "CRAFTING", level: 5 },
+      { userId: "jobless", username: "Jobless", occupation: null, level: 30 },
+    ]);
+  });
+
+  it("keeps only players with the occupation, in the requested order", async () => {
+    const input = getPublicUsersSchema.parse({
+      limit: 10,
+      orderBy: "Strongest",
+      occupation: "CRAFTING",
+    });
+    const rows = await listPublicUserRows(await getTestDatabase(), input, 0);
+    expect(rows.map((row) => row.userId)).toEqual(["crafter-a", "crafter-b"]);
+  });
+
+  it("combines with the other filters", async () => {
+    const input = getPublicUsersSchema.parse({
+      limit: 10,
+      orderBy: "Strongest",
+      occupation: "CRAFTING",
+      username: "rB",
+    });
+    const rows = await listPublicUserRows(await getTestDatabase(), input, 0);
+    expect(rows.map((row) => row.userId)).toEqual(["crafter-b"]);
+  });
+
+  it("lists everyone, including players without an occupation, when unset", async () => {
+    const input = getPublicUsersSchema.parse({ limit: 10, orderBy: "Strongest" });
+    const rows = await listPublicUserRows(await getTestDatabase(), input, 0);
+    expect(rows.map((row) => row.userId)).toEqual([
+      "jobless",
+      "crafter-a",
+      "gatherer",
+      "crafter-b",
+    ]);
+  });
+});

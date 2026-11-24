@@ -77,7 +77,7 @@ const Button = ({
   const isPulse = animation === "pulse" && !isDisabled;
   const badge =
     count !== undefined && count > 0 ? (
-      <div className="absolute top-0 right-[-3] z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-xs">
+      <div className="pointer-events-none absolute -top-1.5 -right-1.5 z-50 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-orange-100 text-xs leading-none">
         {count}
       </div>
     ) : null;

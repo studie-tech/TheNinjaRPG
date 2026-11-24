@@ -1,3 +1,4 @@
+import { OCCUPATIONS } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -6,6 +7,7 @@ import {
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import { canSeeIps } from "@/utils/permissions";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserDataSelector } from "@/utils/UserContext";
 import { tagTypes } from "@/validators/combat";
 
@@ -51,6 +53,20 @@ const USER_FILTERING_SCHEMA = defineFilteringSchema({
       includeNone: true,
       emptyValues: ["None"],
       dataSource: "villages",
+    },
+    {
+      id: "occupation",
+      label: "Occupation",
+      type: "single-select",
+      defaultValue: "None",
+      includeNone: true,
+      emptyValues: ["None"],
+      options: OCCUPATIONS.map((occupation) => ({
+        value: occupation,
+        label: capitalizeFirstLetter(occupation),
+      })),
+      // AIs have no occupation
+      visibleIf: (ctx) => !(ctx as { aiToggles?: boolean } | undefined)?.aiToggles,
     },
     {
       id: "effect",

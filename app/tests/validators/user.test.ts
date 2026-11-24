@@ -3,6 +3,7 @@ import {
   BasicElementName,
   ELEMENTAL_MASTERY_CAP,
   GeneralTypes,
+  OCCUPATIONS,
   TavernColorPresets,
 } from "@/drizzle/constants";
 import { getBloodlineElements } from "@/libs/userElements";
@@ -67,6 +68,25 @@ describe("getPublicUsersSchema", () => {
 
     expect(result.orderBy).toBe("Farming");
   });
+
+  it.each([...OCCUPATIONS])("accepts the %s occupation", (occupation) => {
+    const result = getPublicUsersSchema.parse({
+      limit: 30,
+      orderBy: "Online",
+      occupation,
+    });
+
+    expect(result.occupation).toBe(occupation);
+  });
+
+  it.each(["None", "MEDICAL", "BANDIT", ""])(
+    "rejects %p, which is not an occupation",
+    (occupation) => {
+      const input = { limit: 30, orderBy: "Online", occupation };
+
+      expect(getPublicUsersSchema.safeParse(input).success).toBe(false);
+    },
+  );
 });
 
 describe("getSearchValidator", () => {

@@ -404,6 +404,9 @@ export const listPublicUserRows = (
         : []),
       ...(input.ip ? [like(userData.lastIp, `%${input.ip}%`)] : []),
       ...(input.village !== undefined ? [eq(userData.villageId, input.village)] : []),
+      ...(input.occupation !== undefined
+        ? [eq(userData.occupation, input.occupation)]
+        : []),
       ...(input.recruiterId ? [eq(userData.recruiterId, input.recruiterId)] : []),
       // A positive role list lets the planner range-scan the few staff rows on UserData_role_idx.
       ...(input.orderBy === "Staff" ? [inArray(userData.role, STAFF_ROLES)] : []),
