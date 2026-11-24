@@ -29,7 +29,7 @@ const Footer: React.FC = () => {
       <p className="mb-7 text-xs" data-footer-address>
         Rådhusstræde 15 - 1466 København K - Denmark
         <span data-footer-contact-wrapper>
-          {" - "}
+          <span data-footer-separator> - </span>
           <a href="mailto:contact@theninja-rpg.com" data-footer-contact>
             Contact
           </a>

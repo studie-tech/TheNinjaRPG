@@ -128,6 +128,7 @@ const MenuBoxProfile: React.FC<MenuBoxProfileProps> = ({ presentation = "full" }
               target="_blank"
               href={social.url}
               key={social.url}
+              title={social.alt}
               className="hover:opacity-80"
               rel="noopener"
             >
