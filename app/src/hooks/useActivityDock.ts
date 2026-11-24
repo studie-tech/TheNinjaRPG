@@ -10,17 +10,17 @@ import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Keep chat and activities on opposite sides, following the player's display preference.
- * In the tutorial Activity takes the right and chat the left, whatever the preference: on a
- * wide screen, where its lessons stand beside what they point at and the menus are, so it
- * need not cross the page; and in a fight, whose action bar leaves its right end free.
+ * Only on a screen too small for a lesson clear of a tutorial fight does Activity take the
+ * right and chat the left, whatever the preference: the action bar starts at the field's
+ * left edge and leaves its right end free.
  */
 export function useActivityDock() {
   const [stored, setSwapSides] = useLocalStorage("swapChatAndActivity", false);
   const { data: isInTutorial } = useUserDataSelector(isTutorialActive);
   const prefersSwapSides = stored === true;
-  const isWide = useMediaQuery(WIDE_LESSON_QUERY);
-  const isInFight = usePublicPathname() === "/combat";
-  const isSideFixed = (isWide || isInFight) && isInTutorial === true;
+  const hasRoomForFight = useMediaQuery(ROOMY_FIGHT_QUERY);
+  const isSideFixed =
+    usePublicPathname() === "/combat" && isInTutorial === true && !hasRoomForFight;
   return {
     swapSides: isSideFixed || prefersSwapSides,
     prefersSwapSides,
@@ -31,41 +31,35 @@ export function useActivityDock() {
 
 /**
  * On a wide screen, the width that keeps the open dock beside the page's centre column
- * instead of over it and, with `nearColumn`, the space from the screen's edge that stands it
- * next to the column; null for either keeps the dock's own. The dock never narrows below a
- * readable lesson column for it, so a screen with too little gutter is only overlapped less.
+ * instead of over it, or null to keep the dock's own width. The dock never narrows below
+ * a readable lesson column for it, so a screen with too little gutter is only overlapped
+ * less.
  */
-export function useActivityDockFit(
+export function useActivityDockFitWidth(
   dockRef: RefObject<HTMLElement | null>,
   enabled: boolean,
   swapSides: boolean,
-  nearColumn: boolean,
 ) {
-  const [fit, setFit] = useState<{ width: number | null; edge: number | null }>(NO_FIT);
+  const [fitWidth, setFitWidth] = useState<number | null>(null);
   useEffect(() => {
     const dock = dockRef.current;
     if (!enabled || !dock || typeof window.matchMedia !== "function") {
-      setFit(NO_FIT);
+      setFitWidth(null);
       return;
     }
     const wide = window.matchMedia(WIDE_SCREEN_QUERY);
     const column = getCentreColumn();
     const measure = () => {
       if (!wide.matches || !column) {
-        setFit(NO_FIT);
+        setFitWidth(null);
         return;
       }
+      const dockBox = dock.getBoundingClientRect();
       const columnBox = column.getBoundingClientRect();
-      const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
-      const gutter =
-        (swapSides ? viewportWidth - columnBox.right : columnBox.left) -
-        DOCK_COLUMN_GAP_PX;
-      const edge =
-        DOCK_EDGE_REM *
-        (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 12);
-      const width = Math.floor(Math.max(DOCK_MIN_FIT_WIDTH_PX, gutter - edge));
-      const inset = Math.floor(gutter - ACTIVITY_DOCK_WIDTH_PX);
-      setFit({ width, edge: nearColumn && inset > edge ? inset : null });
+      const room = swapSides
+        ? dockBox.right - columnBox.right - DOCK_COLUMN_GAP_PX
+        : columnBox.left - dockBox.left - DOCK_COLUMN_GAP_PX;
+      setFitWidth(Math.floor(Math.max(DOCK_MIN_FIT_WIDTH_PX, room)));
     };
     measure();
     window.addEventListener("resize", measure);
@@ -80,8 +74,8 @@ export function useActivityDockFit(
       wide.removeEventListener("change", measure);
       observer?.disconnect();
     };
-  }, [dockRef, enabled, swapSides, nearColumn]);
-  return fit;
+  }, [dockRef, enabled, swapSides]);
+  return fitWidth;
 }
 
 /**
@@ -151,23 +145,17 @@ export const resetCharacterPresentation = (userId: string) => {
   }
 };
 
-/** Screens on which a lesson stands beside its target. */
-const WIDE_LESSON_QUERY = "(min-width: 768px)";
+/** Screens with room for a lesson beside a fight or in a strip under it. */
+const ROOMY_FIGHT_QUERY = "(min-width: 768px) and (min-height: 600px)";
 /** Screens this wide fit the open dock to the gutter beside the centre column. */
 const WIDE_SCREEN_QUERY = "(min-width: 1280px)";
 /** Narrowest fitted dock, which still reads as a lesson column. */
-const DOCK_MIN_FIT_WIDTH_PX = 320;
-/** The dock's own width. */
-export const ACTIVITY_DOCK_WIDTH_PX = 420;
-/** The dock's space from the screen's edge (`md:left-5`). */
-const DOCK_EDGE_REM = 1.25;
-/** A dock that keeps its own width and place. */
-const NO_FIT = { width: null, edge: null };
+const DOCK_MIN_FIT_WIDTH_PX = 256;
 /** Space kept between a fitted dock and the centre column. */
 const DOCK_COLUMN_GAP_PX = 8;
 
 /** The page's centre column: the widest reading surface on screen. */
-export const getCentreColumn = () => {
+const getCentreColumn = () => {
   let widest: HTMLElement | null = null;
   let widestWidth = 0;
   for (const surface of document.querySelectorAll<HTMLElement>(

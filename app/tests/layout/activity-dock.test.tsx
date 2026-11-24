@@ -6,7 +6,6 @@ import * as storyGuidanceHook from "@/hooks/useStoryGuidance";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { ActivityDockButton } from "@/layout/ActivityDockButton";
 import * as logbook from "@/layout/Logbook";
-import { activityDockPlaceAtom } from "@/layout/tutorial/dockPlacement";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
 import { getQuestsTabLesson } from "@/libs/questsTabLesson";
@@ -178,7 +177,27 @@ it("persists the chosen side and collapsed state without disabling the tutorial"
   expect(reopened.getByText("Saved lesson")).toBeTruthy();
 });
 
-it("sits on the right in a tutorial fight, beside the free end of the action bar", () => {
+it("keeps its side in a tutorial fight with room around it", () => {
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/combat");
+  const matchMedia = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: query === "(min-width: 768px) and (min-height: 600px)",
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  })) as never;
+  try {
+    const view = render(<ActivityDock>Fight lesson</ActivityDock>);
+    const dock = view.getByRole("complementary", { name: "Activity" });
+    expect([...dock.classList]).toContain("left-4");
+    expect(
+      view.getByRole("button", { name: "Swap Chat and Activity sides" }),
+    ).toBeTruthy();
+  } finally {
+    window.matchMedia = matchMedia;
+  }
+});
+
+it("sits on the right in a tutorial fight on a small screen, beside the free end of the action bar", () => {
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/combat");
   const view = render(<ActivityDock>Fight lesson</ActivityDock>);
   const dock = view.getByRole("complementary", { name: "Activity" });
@@ -575,7 +594,6 @@ it("fits the open dock to the gutter beside the centre column on a wide screen",
         : { left: 15, right: 435, width: 420 }
     ) as DOMRect;
   });
-  document.documentElement.style.fontSize = "12px";
   try {
     const view = render(<ActivityDock>Lesson</ActivityDock>);
     const panel = view.container.querySelector<HTMLElement>(
@@ -583,44 +601,9 @@ it("fits the open dock to the gutter beside the centre column on a wide screen",
     );
     expect(panel?.style.width).toBe("min(var(--activity-dock-width, 420px), 335px)");
   } finally {
-    document.documentElement.style.fontSize = "";
     window.matchMedia = matchMedia;
     column.remove();
   }
-});
-
-it("stands where the lesson is placed, on both tabs, until the player collapses it", () => {
-  const view = render(<ActivityDock>Lesson</ActivityDock>);
-  const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
-  expect(dock.style.transform).toBe("");
-  act(() =>
-    getDefaultStore().set(activityDockPlaceAtom, { left: 120, top: 200, width: 360 }),
-  );
-  expect(dock.style.transform).toBe("translate(120px, 200px)");
-  // The bottom bar's own place for the dock leaves it alone.
-  expect(dock.hasAttribute("data-dock-placed")).toBe(true);
-  expect(dock.querySelector<HTMLElement>(":scope > div")?.style.width).toBe("360px");
-  // The sides it could swap have no bearing on a lesson beside its subject.
-  expect(view.queryByRole("button", { name: /Swap/ })).toBeNull();
-  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
-    button: 0,
-    ctrlKey: false,
-  });
-  expect(dock.style.transform).toBe("translate(120px, 200px)");
-  fireEvent.click(view.getByRole("button", { name: "Collapse Activity" }));
-  expect(dock.style.transform).toBe("");
-  view.unmount();
-  expect(getDefaultStore().get(activityDockPlaceAtom)).toBeNull();
-});
-
-it("leaves Activity at rest for a player past the tutorial", () => {
-  user.tutorialStep = TUTORIAL_STEPS.length;
-  const view = render(<ActivityDock>Lesson</ActivityDock>);
-  act(() =>
-    getDefaultStore().set(activityDockPlaceAtom, { left: 120, top: 200, width: 360 }),
-  );
-  const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
-  expect(dock.style.transform).toBe("");
 });
 
 it("returns from Quests to the lesson when the step moves on there", () => {

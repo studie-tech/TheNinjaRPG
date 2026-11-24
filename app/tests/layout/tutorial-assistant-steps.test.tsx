@@ -720,80 +720,24 @@ describe("highlight placement", () => {
     }
   });
 
-  it("moves the lesson aside on a phone when scrolling cannot uncover the target", async () => {
-    const width = window.innerWidth;
-    window.innerWidth = 600;
-    try {
-      const view = show(
-        index,
-        {},
-        "/village",
-        <Target id={target()} box={new DOMRect(40, 600, 160, 48)} />,
-      );
-      const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
-      dock.getBoundingClientRect = () => new DOMRect(0, 500, 420, 300);
-      await waitFor(
-        () =>
-          expect(
-            lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute(
-              "data-dodge-highlight",
-            ),
-          ).toBe("true"),
-        { timeout: 3000 },
-      );
-    } finally {
-      window.innerWidth = width;
-    }
-  });
-
-  it.each([
-    { where: "stays clear of the page", columnLeft: 700, transform: "translate(214px" },
-    { where: "leaves the page it covers", columnLeft: 200, transform: "" },
-  ])("$where once nothing is marked", async ({ columnLeft, transform }) => {
-    const middle = (80 + window.innerHeight) / 2;
+  it("moves the lesson aside when scrolling cannot uncover the target", async () => {
     const view = show(
       index,
       {},
       "/village",
-      <>
-        <div
-          data-reading-surface=""
-          ref={(element) => {
-            if (element)
-              element.getBoundingClientRect = () =>
-                new DOMRect(columnLeft, 0, 300, 2000);
-          }}
-        />
-        <Target id={target()} box={new DOMRect(40, middle - 24, 160, 48)} />
-      </>,
+      <Target id={target()} box={new DOMRect(40, 600, 160, 48)} />,
     );
     const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
-    await waitFor(() => expect(dock.style.transform).toStartWith("translate(214px"));
-    document.getElementById(target())!.style.display = "none";
-    await new Promise((done) => setTimeout(done, 1300));
-    if (transform) expect(dock.style.transform).toStartWith(transform);
-    else expect(dock.style.transform).toBe("");
-  });
-
-  it("keeps its resting place while what is lit fills the screen", async () => {
-    const view = show(
-      index,
-      {},
-      "/village",
-      <div
-        data-spotlight-scene=""
-        ref={(element) => {
-          if (element)
-            element.getBoundingClientRect = () =>
-              new DOMRect(0, 0, window.innerWidth, window.innerHeight);
-        }}
-      >
-        <Target id={target()} box={new DOMRect(40, 300, 160, 48)} />
-      </div>,
+    dock.getBoundingClientRect = () => new DOMRect(0, 500, 420, 300);
+    await waitFor(
+      () =>
+        expect(
+          lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute(
+            "data-dodge-highlight",
+          ),
+        ).toBe("true"),
+      { timeout: 3000 },
     );
-    const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
-    await new Promise((done) => setTimeout(done, 1500));
-    expect(dock.style.transform).toBe("");
   });
 });
 
