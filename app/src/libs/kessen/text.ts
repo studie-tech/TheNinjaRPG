@@ -2,6 +2,7 @@
  * Card text generated from the structured ability list, so the printed text and the
  * engine cannot diverge. Keyword segments are marked for colouring and tooltips.
  */
+import { type ItemRarity, KESSEN_MAX_KEYWORDS } from "@/drizzle/constants";
 import type { KessenAbility, KessenFaction } from "@/validators/itemCard";
 import { DEFAULT_KNOBS, permafrostHolds } from "./rules";
 import type { KessenCard, KessenKnobs, Row } from "./types";
@@ -139,6 +140,17 @@ export const cardKeywords = (abilities: readonly KessenAbility[]): KessenKeyword
     if (keyword && !out.includes(keyword)) out.push(keyword);
   }
   return out;
+};
+
+/** Why a deck card of this rarity prints too many keywords, or null when it does not. */
+export const keywordBudgetIssue = (
+  abilities: readonly KessenAbility[],
+  rarity: ItemRarity,
+): string | null => {
+  const max = KESSEN_MAX_KEYWORDS[rarity];
+  return cardKeywords(abilities).length > max
+    ? `A ${rarity.toLowerCase()} card may print at most ${max} keyword${max === 1 ? "" : "s"}`
+    : null;
 };
 
 /**

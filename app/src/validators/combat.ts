@@ -25,7 +25,6 @@ import {
   JutsuTypes,
   KESSEN_AUCTION_FLOORS,
   KESSEN_FORBIDDEN_AUCTION_FLOOR,
-  KESSEN_MAX_KEYWORDS,
   KESSEN_TRADEABLE_RARITIES,
   LetterRanks,
   MAX_ACTIVITY_REDUCTION_PERCENT,
@@ -56,7 +55,7 @@ import {
   WeaponTypes,
 } from "@/drizzle/constants";
 import type { Item, UserData } from "@/drizzle/schema";
-import { cardKeywords } from "@/libs/kessen/text";
+import { keywordBudgetIssue } from "@/libs/kessen/text";
 import { isWarehouseStorable } from "@/libs/warehouse";
 import {
   CACHE_RESTRICTED_REWARD_MESSAGE,
@@ -1794,13 +1793,12 @@ const SuperRefineCardItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
   }
   const card = data.cardData;
   if (!card) return;
-  const keywords = cardKeywords(card.abilities).length;
-  const maxKeywords = KESSEN_MAX_KEYWORDS[data.rarity];
-  if (card.kind !== "LEADER" && keywords > maxKeywords) {
+  const overBudget = keywordBudgetIssue(card.abilities, data.rarity);
+  if (card.kind !== "LEADER" && overBudget) {
     ctx.addIssue({
       code: "custom",
       path: ["cardData", "abilities"],
-      message: `A ${data.rarity.toLowerCase()} card may print at most ${maxKeywords} keyword${maxKeywords === 1 ? "" : "s"}`,
+      message: overBudget,
     });
   }
   const isTradeableRarity = (KESSEN_TRADEABLE_RARITIES as readonly string[]).includes(

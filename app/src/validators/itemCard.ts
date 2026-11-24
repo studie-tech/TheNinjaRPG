@@ -80,6 +80,13 @@ export const kessenAbilitySchema = z.discriminatedUnion("k", [
 export type KessenAbility = z.output<typeof kessenAbilitySchema>;
 export type KessenAbilityKind = KessenAbility["k"];
 
+/** Every ability verb, in schema order. */
+export const KESSEN_ABILITY_KINDS: readonly KessenAbilityKind[] =
+  kessenAbilitySchema.options.map((option) => option.shape.k.value);
+
+/** Abilities one card can carry. */
+export const KESSEN_MAX_ABILITIES = 4;
+
 /** Verbs only a leader may carry. */
 export const KESSEN_LEADER_ONLY_ABILITIES = [
   "draw",
@@ -99,7 +106,7 @@ export const cardDataSchema = z
     power: z.coerce.number().int().min(0).max(30),
     /** Deck-building cost; leaders carry 0 and grant `leaderBonus` instead. */
     provision: z.coerce.number().int().min(0).max(20),
-    abilities: z.array(kessenAbilitySchema).max(4),
+    abilities: z.array(kessenAbilitySchema).max(KESSEN_MAX_ABILITIES),
     /** Summon groups this card belongs to, e.g. ["Crew"]. */
     summonGroups: z.array(groupName).max(3).prefault([]),
     leaderBonus: z.coerce.number().int().min(0).max(40).prefault(0),
