@@ -1,8 +1,14 @@
 "use client";
 
-import { useRef } from "react";
+import { DoorOpen, Footprints, X } from "lucide-react";
+import { useId, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverArrow,
+  PopoverContent,
+} from "@/components/ui/popover";
 import type { VillageStructure } from "@/drizzle/schema";
 import Link from "@/layout/Link";
 
@@ -24,6 +30,7 @@ export const TravelBuildingCard = ({
   onGoTo: () => void;
   onClose: () => void;
 }) => {
+  const titleId = useId();
   const anchorRef = useRef({
     getBoundingClientRect: () =>
       getBounds() ?? DOMRect.fromRect({ x: -10000, y: -10000 }),
@@ -32,11 +39,12 @@ export const TravelBuildingCard = ({
     <Popover open onOpenChange={(open) => !open && onClose()}>
       <PopoverAnchor virtualRef={anchorRef} />
       <PopoverContent
-        aria-label={`${structure.name} actions`}
+        aria-labelledby={titleId}
         side="top"
         sideOffset={8}
         collisionBoundary={boundary}
-        collisionPadding={8}
+        // Leave the map's menu controls and Day/Night indicator accessible above the card.
+        collisionPadding={{ top: 80, right: 8, bottom: 8, left: 8 }}
         hideWhenDetached
         // Radix follows the virtual artwork bounds without rerendering the sector.
         updatePositionStrategy="always"
@@ -47,26 +55,54 @@ export const TravelBuildingCard = ({
           if (event.target instanceof Node && boundary?.contains(event.target))
             event.preventDefault();
         }}
-        className="w-auto max-w-[min(24rem,var(--radix-popover-content-available-width))] p-3"
+        className="w-64 max-w-[var(--radix-popover-content-available-width)] rounded-xl p-0 shadow-xl"
       >
-        <p className="text-sm font-semibold">
-          {services.length
-            ? services.map((service) => service.name).join(" · ")
-            : structure.name}
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+          <h3
+            id={titleId}
+            className="min-w-0 flex-1 text-base leading-snug font-semibold break-words"
+          >
+            {services.length === 1 ? services[0]?.name : structure.name}
+          </h3>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground size-10 shrink-0 rounded-full"
+            aria-label="Close building actions"
+            onClick={onClose}
+          >
+            <X aria-hidden className="size-4" />
+          </Button>
+        </div>
+        <div className="flex flex-col gap-2 px-3 pb-3">
           {services.length ? (
             services.map((service) => (
-              <Button key={service.id} asChild size="sm" className="min-h-10">
-                <Link href={service.route}>Enter {service.name}</Link>
+              <Button
+                key={service.id}
+                asChild
+                className="h-auto min-h-12 w-full justify-between gap-3 py-2 text-base whitespace-normal"
+              >
+                <Link href={service.route} aria-label={`Enter ${service.name}`}>
+                  <span className="min-w-0 break-words">
+                    {services.length === 1 ? "Enter" : service.name}
+                  </span>
+                  <DoorOpen aria-hidden className="size-4 shrink-0" />
+                </Link>
               </Button>
             ))
           ) : (
-            <Button size="sm" className="min-h-10" onClick={onGoTo}>
-              Go to {structure.name}
+            <Button
+              className="h-auto min-h-12 w-full justify-between gap-3 py-2 text-base"
+              aria-label={`Go to ${structure.name}`}
+              onClick={onGoTo}
+            >
+              Go here
+              <Footprints aria-hidden className="size-4 shrink-0" />
             </Button>
           )}
         </div>
+        <PopoverArrow className="fill-popover" width={12} height={6} />
       </PopoverContent>
     </Popover>
   );

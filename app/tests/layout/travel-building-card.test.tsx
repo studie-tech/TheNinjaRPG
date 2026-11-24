@@ -30,7 +30,9 @@ it("offers movement before arrival and all colocated services after arrival", ()
     onClose: vi.fn(),
   };
   const view = render(<TravelBuildingCard {...props} services={[]} />);
-  fireEvent.click(view.getByRole("button", { name: "Go to Item shop" }));
+  const goHere = view.getByRole("button", { name: "Go to Item shop" });
+  expect(goHere.textContent).toBe("Go here");
+  fireEvent.click(goHere);
   expect(onGoTo).toHaveBeenCalledTimes(1);
   view.rerender(
     <TravelBuildingCard
@@ -45,6 +47,38 @@ it("offers movement before arrival and all colocated services after arrival", ()
   expect(view.getByRole("link", { name: "Enter Bank" }).getAttribute("href")).toBe(
     "/bank",
   );
+});
+
+it("names the destination once and labels a single arrival action Enter", () => {
+  const view = render(
+    <TravelBuildingCard
+      structure={shop}
+      services={[shop]}
+      getBounds={() => new DOMRect(100, 100, 100, 100)}
+      boundary={document.body}
+      onGoTo={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  );
+  expect(view.getByRole("dialog", { name: "Item shop" })).toBeTruthy();
+  expect(view.getByRole("heading", { name: "Item shop" })).toBeTruthy();
+  expect(view.getByRole("link", { name: "Enter Item shop" }).textContent).toBe("Enter");
+});
+
+it("offers a named close button for touch users", () => {
+  const onClose = vi.fn();
+  const view = render(
+    <TravelBuildingCard
+      structure={shop}
+      services={[]}
+      getBounds={() => new DOMRect(100, 100, 100, 100)}
+      boundary={document.body}
+      onGoTo={vi.fn()}
+      onClose={onClose}
+    />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Close building actions" }));
+  expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 it("keeps focus on the map when hovered and allows Escape to dismiss the actions", () => {
