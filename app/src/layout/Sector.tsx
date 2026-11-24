@@ -2730,7 +2730,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                 y: actionStructure.latitude,
               })
             }
-            onClose={() => setDismissedStructureId(actionStructure.id)}
+            onClose={() => {
+              hoveredStructureIdRef.current = null;
+              setDismissedStructureId(actionStructure.id);
+            }}
           />
         )}
       {/* Stack location, dungeon and raid cards without overlap. */}
