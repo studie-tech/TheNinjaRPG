@@ -252,13 +252,12 @@ it("keeps the standard Sector and Global tabs visible during the tutorial", () =
   const view = render(<TravelScreen />);
   expect(view.getByRole("button", { name: "Sector" })).toBeTruthy();
   expect(view.getByRole("button", { name: "Global" })).toBeTruthy();
-  expect(ContentBox.default).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      headerStartContent: expect.anything(),
-      collapsedActionsLabel: "Map controls",
-    }),
-    undefined,
-  );
+  expect(
+    view
+      .getByRole("button", { name: "Sector" })
+      .closest('[data-header-item="tabs"]')
+      ?.getAttribute("data-priority"),
+  ).toBe("0");
 });
 
 it("switches the retained tutorial map from the bottom bar and pauses its controls with a building", async () => {
@@ -681,7 +680,7 @@ it("renders travel tools in the bottom bar", () => {
 });
 
 it.each([false, true])(
-  "keeps loadouts inside Map controls without a below-map toolbar (immersive=%s)",
+  "keeps sector loadouts in their layout controls (immersive=%s)",
   async (immersive) => {
     vi.spyOn(ContentBox, "default").mockImplementation(RealContentBox);
     vi.spyOn(JutsuLoadoutSelector, "default").mockReturnValue(
@@ -705,31 +704,28 @@ it.each([false, true])(
         <LoadedTravel />
       </TravelNavigationHarness>,
     );
-    expect(view.queryByRole("button", { name: "Jutsu loadout" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Item loadout" })).toBeNull();
-    fireEvent.click(view.getByRole("button", { name: "Map controls" }));
-    const controls = view.getByRole("region", { name: "Map controls" });
-    expect(controls.contains(view.getByRole("button", { name: "Jutsu loadout" }))).toBe(
-      true,
-    );
-    expect(controls.contains(view.getByRole("button", { name: "Item loadout" }))).toBe(
-      true,
-    );
-    const loadouts = view.getByRole("group", { name: "Loadouts" });
-    expect(loadouts.parentElement?.lastElementChild).toBe(loadouts);
-    expect(loadouts.contains(view.getByRole("button", { name: "Jutsu loadout" }))).toBe(
-      true,
-    );
-    expect(loadouts.contains(view.getByRole("button", { name: "Item loadout" }))).toBe(
-      true,
-    );
-    if (!immersive) {
-      expect(
-        controls.contains(view.getByRole("button", { name: "Expand world" })),
-      ).toBe(true);
-    }
     const box = view.container.querySelector("[data-content-box]");
-    expect(box?.nextElementSibling).toBeNull();
+    let loadouts: Element | null | undefined;
+    if (immersive) {
+      expect(view.queryByRole("button", { name: "Jutsu loadout" })).toBeNull();
+      expect(view.queryByRole("button", { name: "Item loadout" })).toBeNull();
+      fireEvent.click(view.getByRole("button", { name: "Map controls" }));
+      const controls = view.getByRole("region", { name: "Map controls" });
+      loadouts = view.getByRole("group", { name: "Loadouts" });
+      expect(controls.contains(loadouts)).toBe(true);
+      expect(loadouts.parentElement?.lastElementChild === loadouts).toBe(true);
+      expect(box?.nextElementSibling === null).toBe(true);
+    } else {
+      expect(view.queryByRole("button", { name: "Map controls" })).toBeNull();
+      expect(view.getByRole("button", { name: "Expand world" })).toBeTruthy();
+      loadouts = box?.nextElementSibling;
+    }
+    expect(
+      loadouts?.contains(view.getByRole("button", { name: "Jutsu loadout" })),
+    ).toBe(true);
+    expect(loadouts?.contains(view.getByRole("button", { name: "Item loadout" }))).toBe(
+      true,
+    );
     await act(async () => session.setActiveTab(session.globalLink));
     expect(view.queryByRole("button", { name: "Jutsu loadout" })).toBeNull();
     expect(view.queryByRole("button", { name: "Item loadout" })).toBeNull();

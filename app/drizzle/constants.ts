@@ -800,10 +800,6 @@ export const PetArtProviders = ["GPT", "NANO_BANANA"] as const;
 export type PetArtProvider = (typeof PetArtProviders)[number];
 export const PET_ART_PROVIDER_SETTING = "petArtProvider";
 export const PET_SANCTUARY_NAME = "Bondkeeper Sanctuary";
-export const PET_SANCTUARY_IMAGE =
-  "https://ui0arpl8sm.ufs.sh/f/ar-xbD9hKwKkVBXFZacnC.webp";
-export const PET_SANCTUARY_LONGITUDE = 3;
-export const PET_SANCTUARY_LATITUDE = 6;
 export const PET_SANCTUARY_LORE =
   "Beneath Wake Island's wind-bent cedars, the Bondkeepers shelter creatures touched by Seichi's wandering chakra. Their sanctuary was founded after the island's keepers learned that a willing pact could steady both shinobi and beast. No creature is bought or bound here: choose the signs of the companion you hope to meet, and the keepers will guide your first bond. A released companion returns to the sanctuary's wild groves.";
 export const PET_OPTION_COUNTS: Record<FederalStatus, number> = {
