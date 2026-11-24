@@ -8,7 +8,6 @@ import {
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
-import { PageStoryScene } from "@/layout/PageStoryScene";
 import { PetAcquisition } from "@/layout/PetAcquisition";
 import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import { useRequireInVillage } from "@/utils/UserContext";
@@ -36,7 +35,6 @@ export function PetSanctuaryScreen() {
           className="w-full"
           priority
         />
-        <PageStoryScene />
         <details className="p-3 text-sm">
           <summary className="cursor-pointer font-semibold">
             About the sanctuary

@@ -1,6 +1,7 @@
 import { MapPin } from "lucide-react";
 import { isValidElement, type ReactNode } from "react";
 import {
+  IMG_BONDKEEPER_ELDER,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
   TUTORIAL_ITEM_ID,
   TUTORIAL_JUTSU_ID,
@@ -45,14 +46,16 @@ export interface TutorialStepConfig {
    * pressed on the way to the step's target, such as the tab that holds it.
    */
   elementActions?: Partial<Record<string, string>>;
+  /** The words while one of the elements is the highlighted one, for a control that needs its own. */
+  elementDescriptions?: Partial<Record<string, string>>;
+  /** Who says the words in the lesson's box, when it is not Lemu. */
+  speaker?: { name: string; image: string };
   /** Further elements the words refer to, each marked with its name. */
   marks?: GuidedLessonMark[];
   /** What Lemu says while the scene that opens the step still plays on the map. */
   sceneLead?: { description: string; action: string };
   /** Figures the sector map shows while the player is on the step. */
   mapScene?: TutorialMapScene;
-  /** Who speaks on `scenePage`, with the answer the step waits for. */
-  pageScene?: { speaker: string; says: TutorialMapScene["says"] };
   /**
    * The page whose scene takes the step's answer or reward, when its own controls do. The
    * lesson's button waits for a stuck player there, and shows at once on any other page.
@@ -177,13 +180,13 @@ const mapSceneTarget = {
   elementIds: ["tutorial-map-target"],
   revealId: "tutorial-travel-sector",
 };
-// A speaker's answers on the page: in the dialog they open, or under their words.
+// A speaker's answers on the map: in the dialog they open, or under their words.
 const sceneAnswers = {
   elementIds: ["tutorial-npc-answers", "tutorial-story-answers"],
   isInScene: true,
-  // What is said on a page stays readable in the dimmed page; a map stays lit as a whole.
-  marks: [{ selector: "[data-page-speech]", label: "" }],
 };
+// Who speaks for the Bondkeeper Sanctuary, in the box of its lessons.
+const bondkeeperElder = { name: "Bondkeeper elder", image: IMG_BONDKEEPER_ELDER };
 // The trip's confirmation and arrival timer, ahead of the controls that lead to them.
 const globalTravelElements = [
   "tutorial-auto-travel-proceed",
@@ -760,15 +763,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     id: "bond-return-pup",
     chapter: "bond",
     title: "Home at last",
+    speaker: bondkeeperElder,
     description:
-      "The Bondkeepers rush out to meet you, the pup wriggling in your arms at the sight of them, and their elder bows low to thank you for bringing it home.",
+      "You brought one of ours home! Look at it wriggle; it knows this garden. Thank you, young one. Let us repay the kindness.",
     action: "Hand over the pup.",
-    ...sceneAnswers,
-    scenePage: "/pets",
-    pageScene: {
-      speaker: "Bondkeeper elder",
-      says: "You brought one of ours home! Let us repay the kindness.",
-    },
     page: "/pets",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.sanctuary,
@@ -777,11 +775,47 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   {
     id: "bond-adopt",
     chapter: "bond",
-    title: "It won't leave your side",
+    title: "Your first companion",
+    speaker: bondkeeperElder,
     description:
-      "The pup refuses to let you out of sight, so the Bondkeepers offer it to you as your companion, and your <b>first bond is free</b>. Take the pup, or design a companion of your own instead. We'll teach you how to care for it later.",
-    action: "Tap Adopt the pup, or design your own.",
-    elementIds: ["tutorial-sanctuary-pup", "tutorial-pet-acquisition"],
+      "It refuses to let you out of its sight! Then it belongs with you, and your <b>first bond is free</b>. Give the pup a name, or design a companion of your own below it instead.",
+    action: "Name the pup, then tap Adopt the pup.",
+    // The page gives its ids to the one control the player needs next.
+    elementIds: [
+      "tutorial-pet-meet",
+      "tutorial-pet-identity",
+      "tutorial-pet-continue",
+      "tutorial-pet-speciesId",
+      "tutorial-pet-paletteIndex",
+      "tutorial-pet-characteristicIndex",
+      "tutorial-pet-auraIndex",
+      "tutorial-sanctuary-pup",
+    ],
+    elementDescriptions: {
+      "tutorial-pet-speciesId":
+        "A companion of your own, then! First, its <b>species</b>. It decides how far your companion can grow: some have a fixed potential, others reveal theirs once you are bonded.",
+      "tutorial-pet-paletteIndex":
+        "Now its <b>colours</b>. From here on you only decide how it looks, so pick what you like.",
+      "tutorial-pet-characteristicIndex":
+        "Every companion has something you know it by. What is yours known for?",
+      "tutorial-pet-auraIndex":
+        "Last of its looks, its <b>aura</b>: the light that follows it.",
+      "tutorial-pet-continue": "A fine choice.",
+      "tutorial-pet-identity":
+        "I can picture it already. What will you call it, and is it male or female? Its portrait will show it.",
+      "tutorial-pet-meet":
+        "Then it is ready to meet you. The bond is free, and its portrait is painted while you go on.",
+    },
+    elementActions: {
+      "tutorial-pet-speciesId": "Choose a species.",
+      "tutorial-pet-paletteIndex": "Choose a colour palette.",
+      "tutorial-pet-characteristicIndex": "Choose its defining characteristic.",
+      "tutorial-pet-auraIndex": "Choose an aura.",
+      "tutorial-pet-continue": "Tap Continue.",
+      "tutorial-pet-identity": "Name your companion and choose its gender.",
+      "tutorial-pet-meet": "Tap Meet my first companion.",
+    },
+    marks: [{ selector: "[data-pup-name]", label: "" }],
     page: "/pets",
     advanceOn: "petAdopt",
   },
@@ -793,9 +827,6 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "You did well out there, better than most graduates. That metal the courier left behind... show it to no one; I'll take it to the academy archives myself. Now, you have earned your graduation.",
     action: "Answer me to complete the Academy Trials.",
-    ...sceneAnswers,
-    scenePage: "/pets",
-    pageScene: { speaker: "Lemu", says: { from: "lesson" } },
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.debrief,

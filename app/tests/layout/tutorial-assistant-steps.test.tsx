@@ -349,7 +349,10 @@ describe("each tutorial step", () => {
       expect(region.getAttribute("data-tutorial-step")).toBe(step.id);
 
       // The test window is wider than the sidebar breakpoint: the menu is a sidebar.
-      const shown = step.sidebarDescription ?? step.description;
+      const shown =
+        (target && step.elementDescriptions?.[target]) ??
+        step.sidebarDescription ??
+        step.description;
       const description = textOf(typeof shown === "string" ? parseHtml(shown) : shown);
       expect(region.textContent).toContain(description);
       const progress = getTutorialChapterProgress(TUTORIAL_STEPS, index)!;
@@ -526,17 +529,28 @@ describe("step overrides", () => {
     expect(state.push).not.toHaveBeenCalled();
   });
 
-  it("celebrates a formed bond and points at the new companion", async () => {
+  it("celebrates a formed bond and moves on with Next alone", async () => {
     const index = TUTORIAL_STEPS.findIndex((step) => step.advanceOn === "petAdopt");
-    const view = show(
-      index,
-      { petAcquisitions: 1 },
-      "/pets",
-      <Target id="tutorial-pet-acquisition" />,
+    const target = <Target id="tutorial-sanctuary-pup" />;
+    const before = show(index, { petAcquisitions: 1 }, "/pets", target);
+    expect(lesson(before, "A bond is formed").textContent).toContain(
+      "You and your companion already share a bond",
+    );
+    cleanup();
+    const view = show(index, { petAcquisitions: 0 }, "/pets", target);
+    lesson(view, TUTORIAL_STEPS[index]!.title);
+    expect(overlay()).toBeTruthy();
+    state.profile = makeProfile(index, { petAcquisitions: 1 });
+    view.rerender(
+      <>
+        {target}
+        {assistant()}
+      </>,
     );
     const region = lesson(view, "A bond is formed");
-    expect(region.textContent).toContain("The Bondkeepers bless your new bond.");
-    expect(overlay()).toBeTruthy();
+    expect(region.textContent).toContain("The bond is sealed");
+    // Nothing on the page is pressed to go on.
+    await waitFor(() => expect(overlay() === null).toBe(true));
     expect(state.saveStep).not.toHaveBeenCalled();
     // Nothing reports an adoption, so the reveal moves on with Next or Enter.
     expect(view.getByRole("button", { name: "Next" })).toBeTruthy();
@@ -1594,12 +1608,24 @@ describe("quest steps", () => {
     expect(getQuestsTabLesson({ tutorialOn: true, tutorialStep: 0 })).toBeNull();
   });
 
-  it("takes every later answer and claim in a scene on its page", () => {
-    const steps = TUTORIAL_STEPS.filter((step) => step.mapScene || step.pageScene);
+  it("answers the Bondkeeper elder in the lesson itself", () => {
+    const index = TUTORIAL_STEPS.findIndex((step) => step.id === "bond-return-pup");
+    const step = TUTORIAL_STEPS[index]!;
+    const view = show(
+      index,
+      dialogQuest(String(step.relatedValue), String(step.objectiveId)),
+      "/pets",
+    );
+    const region = lesson(view, step.title);
+    expect(region.textContent).toContain(step.speaker?.name ?? "speaker");
+    expect(region.textContent).toContain(String(step.description));
+    expect(view.getByRole("button", { name: "Yes" })).toBeTruthy();
+  });
+
+  it("takes every answer and claim of the map's scenes on the map", () => {
+    const steps = TUTORIAL_STEPS.filter((step) => step.mapScene);
     expect(steps.map((step) => step.id)).toEqual([
       "mission-claim-pup",
-      "bond-return-pup",
-      "genin-debrief",
       "exam-proctor-retry",
       "exam-tour",
       "exam-choose",
@@ -1607,7 +1633,7 @@ describe("quest steps", () => {
       "exam-claim",
     ]);
     for (const step of steps) {
-      expect(step.scenePage).toBe(step.mapScene ? "/travel" : "/pets");
+      expect(step.scenePage).toBe("/travel");
       expect([step.scenePage, "*"]).toContain(step.page);
     }
   });

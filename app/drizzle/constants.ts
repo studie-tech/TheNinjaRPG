@@ -1713,6 +1713,9 @@ export type SentimentType = (typeof Sentiment)[number];
 /** Tutorial assistant portrait (Lemu). */
 export const IMG_URL_ASSISTANT =
   "https://uploadthing.b-cdn.net/f/content-NBVEXpYD8aRhwFof6jq45.webp" as const;
+/** The Bondkeeper elder who speaks for the sanctuary in its lessons. */
+export const IMG_BONDKEEPER_ELDER =
+  "https://ui0arpl8sm.ufs.sh/f/bondkeeper-cdd81aa4abf844a5.webp" as const;
 export const IMG_URL_HANDPOINTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIvN7gkJxfOewksxBoS1HQCihpL7c42Ky9uUF.webp" as const;
 export const TUTORIAL_JUTSU_ID = "clh4d6pxd0006tb0h4y1yudi5";

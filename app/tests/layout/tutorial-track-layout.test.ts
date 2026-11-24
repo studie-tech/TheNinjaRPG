@@ -35,7 +35,16 @@ describe("tutorial highlight layout tracking", () => {
     expect(update).toHaveBeenCalledTimes(2);
   });
 
-  it("ignores attribute changes", async () => {
+  it("follows an id handed to another control", async () => {
+    const target = document.body.appendChild(document.createElement("div"));
+    const update = vi.fn(() => target);
+    stop = trackLayout(update);
+    target.id = "tutorial-next";
+    await flushMutations();
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores other attribute changes", async () => {
     const target = document.body.appendChild(document.createElement("div"));
     const update = vi.fn(() => target);
     stop = trackLayout(update);

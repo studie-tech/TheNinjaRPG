@@ -424,7 +424,7 @@ export const spotlightHoleStyle = (box: SpotlightBox): CSSProperties => ({
 
 /**
  * Run `update` now and whenever layout may have moved, returning the cleanup. `update`
- * returns the element it measured. Changes to the DOM tree, scrolling, resizing and the
+ * returns the element it measured. Changes to the DOM tree or its ids, scrolling, resizing and the
  * element's own size, and a `TUTORIAL_LAYOUT_EVENT` from a target that moves on its own
  * (a marker on a turning globe), schedule one measurement per frame; with `animations`, so does the
  * end of any CSS animation or transition, for targets inside animated scenes that move
@@ -484,7 +484,13 @@ export const trackLayout = (
     document.addEventListener("transitionend", schedule, true);
   }
   const observer = new MutationObserver(schedule);
-  observer.observe(document.body, { childList: true, subtree: true });
+  // A step's target can also be handed from one control to the next by its id alone.
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["id"],
+  });
   return () => {
     if (poll !== null) clearInterval(poll);
     if (frame !== null) cancelAnimationFrame(frame);

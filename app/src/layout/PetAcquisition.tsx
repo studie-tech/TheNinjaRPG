@@ -42,6 +42,7 @@ import { showMutationToast } from "@/libs/toast";
 import {
   getStarterQuestProgress,
   isStarterObjectiveSatisfied,
+  isTutorialActive,
   STARTER_QUEST_OBJECTIVES,
 } from "@/libs/tutorial";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -317,6 +318,22 @@ export function PetAcquisition() {
     !!starterProgress &&
     !isPupHandedOver &&
     isStarterObjectiveSatisfied(STARTER_QUEST_OBJECTIVES.pup, starterProgress);
+  const canOfferPup =
+    !isReplacement && data.pets.length === 0 && data.canAdoptSanctuaryPup;
+  const isPupOffered = canOfferPup && isPupHandedOver;
+  // The one control the tutorial points at: the pup's until the player designs their own.
+  const isDesigning = !isPupOffered || stage > 0 || selectedTraits.some(Boolean);
+  const nextControl = !isDesigning
+    ? "pup"
+    : activeTrait
+      ? selectedTraits[stage]
+        ? "continue"
+        : activeTrait.field
+      : hasSelection
+        ? "meet"
+        : "identity";
+  const guideId = (control: typeof nextControl) =>
+    control === nextControl ? `tutorial-pet-${control}` : undefined;
   const appearanceReady = pet ? isPetAppearanceReady(pet) : false;
   const retryAt = data.generationRetryAt;
   const canRetry =
@@ -373,13 +390,12 @@ export function PetAcquisition() {
         </div>
       )}
       {!acquiredPetId &&
-        !isReplacement &&
-        data.pets.length === 0 &&
-        data.canAdoptSanctuaryPup &&
+        canOfferPup &&
         (isPupHandedOver ? (
           <SanctuaryPupOffer
             name={name}
             onNameChange={setName}
+            isGuided={!isDesigning}
             isBusy={isBusy}
             onAdopt={() => void adoptPup()}
           />
@@ -390,7 +406,14 @@ export function PetAcquisition() {
               role="status"
             >
               The pup you rescued is still at your side. Hand it over to the Bondkeepers
-              in your <b>Quests</b> first.
+              first
+              {isTutorialActive(userData) ? (
+                "."
+              ) : (
+                <>
+                  , in your <b>Quests</b>.
+                </>
+              )}
             </p>
           )
         ))}
@@ -549,6 +572,7 @@ export function PetAcquisition() {
           {(!isCollectionFull || isPreviewing) && data.options.species.length > 0 && (
             <div>
               <form
+                data-spotlight-panel=""
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (isBusy) return;
@@ -570,6 +594,7 @@ export function PetAcquisition() {
                 </div>
                 {activeTrait ? (
                   <PetTraitChoices
+                    id={guideId(activeTrait.field)}
                     title={activeTrait.title}
                     field={activeTrait.field}
                     options={data.options[activeTrait.options]}
@@ -584,7 +609,7 @@ export function PetAcquisition() {
                     }
                   />
                 ) : (
-                  <div className="space-y-2">
+                  <div id={guideId("identity")} className="space-y-2">
                     <Label htmlFor="new-pet-name">Companion name</Label>
                     <Input
                       id="new-pet-name"
@@ -690,6 +715,7 @@ export function PetAcquisition() {
                   )}
                   {activeTrait ? (
                     <Button
+                      id={guideId("continue")}
                       type="button"
                       disabled={isBusy || !selectedTraits[stage]}
                       onClick={() => changeStage(stage + 1)}
@@ -724,7 +750,7 @@ export function PetAcquisition() {
                       </p>
                     </Confirm>
                   ) : (
-                    <Button type="submit" disabled={!canMeetPet}>
+                    <Button id={guideId("meet")} type="submit" disabled={!canMeetPet}>
                       <Sparkles className="mr-2 h-4 w-4" />
                       Meet my first companion
                     </Button>
@@ -771,6 +797,7 @@ export function PetAcquisition() {
 
 /** Accessible single-choice controls whose values remain the catalogue's persisted trait IDs. */
 function PetTraitChoices({
+  id,
   title,
   field,
   options,
@@ -778,6 +805,7 @@ function PetTraitChoices({
   disabled,
   onSelect,
 }: {
+  id?: string;
   title: string;
   field: keyof PetSelection;
   options: (PetAppearanceOption | PetSpeciesOption)[];
@@ -786,7 +814,7 @@ function PetTraitChoices({
   onSelect: (value: string | number) => void;
 }) {
   return (
-    <fieldset disabled={disabled}>
+    <fieldset id={id} disabled={disabled}>
       <legend className="sr-only">{title}</legend>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {options.map((option) => {
@@ -871,12 +899,14 @@ const traitStages = [
 const SanctuaryPupOffer: React.FC<{
   name: string;
   onNameChange: (name: string) => void;
+  /** The tutorial points at the offer. */
+  isGuided: boolean;
   isBusy: boolean;
   onAdopt: () => void;
-}> = ({ name, onNameChange, isBusy, onAdopt }) => (
+}> = ({ name, onNameChange, isGuided, isBusy, onAdopt }) => (
   <section
-    id="tutorial-sanctuary-pup"
     aria-labelledby="sanctuary-pup-title"
+    data-spotlight-panel=""
     className="@container mb-4 flex flex-col gap-3 rounded-lg border-2 border-violet-500/50 bg-violet-500/10 p-4"
   >
     <div>
@@ -888,19 +918,20 @@ const SanctuaryPupOffer: React.FC<{
         violet scorch. Give it a name, or keep the one the Bondkeepers chose.
       </p>
     </div>
-    <div className="flex flex-col gap-2 @lg:flex-row @lg:items-center">
-      <label htmlFor="sanctuary-pup-name" className="sr-only">
-        Name your pup
-      </label>
-      <Input
-        id="sanctuary-pup-name"
-        value={name}
-        placeholder={SANCTUARY_PUP.name}
-        maxLength={PET_NAME_MAX_LENGTH}
-        onChange={(event) => onNameChange(event.target.value)}
-        className="@lg:max-w-60"
-      />
+    <div className="flex flex-col gap-2 @lg:flex-row @lg:items-end">
+      <div className="space-y-1 @lg:w-60">
+        <Label htmlFor="sanctuary-pup-name">Its name</Label>
+        <Input
+          id="sanctuary-pup-name"
+          value={name}
+          placeholder={SANCTUARY_PUP.name}
+          maxLength={PET_NAME_MAX_LENGTH}
+          onChange={(event) => onNameChange(event.target.value)}
+          data-pup-name={isGuided || undefined}
+        />
+      </div>
       <Button
+        id={isGuided ? "tutorial-sanctuary-pup" : undefined}
         decoration="gold"
         disabled={isBusy}
         onClick={onAdopt}

@@ -43,7 +43,7 @@ import { parseHtml } from "@/utils/parse";
 export const storyScenePlayingAtom = atom(false);
 
 /**
- * Tutorial step a character on the map or page is speaking for, and whose words it says, so the
+ * Tutorial step a character on the map is speaking for, and whose words it says, so the
  * lesson leaves those out: the lesson's, the quest objective's or the speaker's own.
  */
 export const spokenStepAtom = atom<{
@@ -52,11 +52,11 @@ export const spokenStepAtom = atom<{
 } | null>(null);
 
 /** Whose words a scene's speaker says. */
-export const spokenWordsOf = (says: TutorialMapScene["says"] | undefined) =>
+const spokenWordsOf = (says: TutorialMapScene["says"] | undefined) =>
   typeof says === "string" ? "own" : (says?.from ?? "lesson");
 
 /** What a scene's speaker says. */
-export const spokenTextOf = (
+const spokenTextOf = (
   says: TutorialMapScene["says"],
   step: TutorialStepConfig,
   offer: StoryOffer | undefined,

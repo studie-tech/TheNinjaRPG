@@ -548,9 +548,25 @@ const PlayerTutorialAssistant: React.FC<
     return () => clearTimeout(timer);
   }, [strandedBattleStepId, stepNumber]);
 
+  const isBondLesson = currentStep?.advanceOn === "petAdopt";
+  const hasBonded = isBondLesson && (userData?.petAcquisitions ?? 0) > 0;
+  // Nothing on the page is pressed for a bond already formed.
+  const bondedStep =
+    hasBonded && currentStep
+      ? {
+          ...currentStep,
+          elementIds: undefined,
+          elementActions: undefined,
+          elementDescriptions: undefined,
+          marks: undefined,
+          revealId: "tutorial-pet-acquisition",
+        }
+      : undefined;
   // The hospital step overrides every other step's target.
   const placedStep =
-    userData?.status === "HOSPITALIZED" ? TUTORIAL_HOSPITALIZED_STEP : currentStep;
+    userData?.status === "HOSPITALIZED"
+      ? TUTORIAL_HOSPITALIZED_STEP
+      : (bondedStep ?? currentStep);
   const { highlight, panelDodgesHighlight, panelCrowdsHighlight } =
     useHighlightPlacement({
       step: placedStep,
@@ -578,7 +594,7 @@ const PlayerTutorialAssistant: React.FC<
     marks:
       highlight && isLessonMarked
         ? [
-            ...(currentStep?.marks ?? []),
+            ...(placedStep?.marks ?? []),
             // The words of a confirmation stay readable around the button marked in it.
             { selector: `[data-modal]:has([id="${highlight.elementId}"])`, label: "" },
           ]
@@ -620,8 +636,11 @@ const PlayerTutorialAssistant: React.FC<
 
   // A formed bond and a full stomach replace their lesson with one that offers Next:
   // nothing reports an adoption, and greyed-out bowls cannot be bought.
-  const hasBonded =
-    currentStep?.advanceOn === "petAdopt" && (userData?.petAcquisitions ?? 0) > 0;
+  // A bond formed before the lesson opened has nothing to celebrate on the page.
+  const bondKey =
+    isBondLesson && userData ? (hasBonded ? "before" : "open") : undefined;
+  const [bondStart, setBondStart] = useState(bondKey);
+  if (bondKey ? !bondStart : bondStart) setBondStart(bondKey);
   // Ramen only restores stamina and chakra; with both full there is nothing to buy.
   const isWellFed =
     currentStep?.advanceOn === "buyRamen" &&
@@ -792,14 +811,15 @@ const PlayerTutorialAssistant: React.FC<
     dynamicQuestStep ||
     (isHospitalized
       ? TUTORIAL_HOSPITALIZED_STEP
-      : hasBonded && currentStep
+      : bondedStep
         ? {
-            ...currentStep,
+            ...bondedStep,
             title: "A bond is formed",
             description:
-              "The Bondkeepers bless your new bond. Your companion's portrait takes a few minutes to paint. If it doesn't finish, retry it on your companion's page: a failed attempt costs nothing.",
-            action: undefined,
-            elementIds: ["tutorial-pet-acquisition"],
+              bondStart === "before"
+                ? "You and your companion already share a bond, so there is nothing left to choose here. If its portrait isn't finished, retry it on your companion's page: a failed attempt costs nothing."
+                : "The bond is sealed; take good care of each other. Your companion's portrait takes a few minutes to paint. If it doesn't finish, retry it on your companion's page: a failed attempt costs nothing.",
+            action: "Tap Next.",
             showNextButton: true,
           }
         : isWellFed && currentStep
@@ -1083,6 +1103,10 @@ const PlayerTutorialAssistant: React.FC<
     highlight && highlight.stepId === currentTutorialStep?.id
       ? currentTutorialStep.elementActions?.[highlight.elementId]
       : undefined;
+  const elementDescription =
+    highlight && highlight.stepId === currentTutorialStep?.id
+      ? currentTutorialStep.elementDescriptions?.[highlight.elementId]
+      : undefined;
   const stepAction = elementAction ?? currentTutorialStep?.action;
   // What a step only shows is pressed to go on, as its Next button is.
   const isHighlightNext = !!currentTutorialStep?.showNextButton && !elementAction;
@@ -1237,6 +1261,12 @@ const PlayerTutorialAssistant: React.FC<
   // A scene's answer or reward is given in the lesson itself away from the scene.
   const isSceneElsewhere =
     !!currentTutorialStep.scenePage && highlight?.stepId !== currentTutorialStep.id;
+  // So is the answer to whoever speaks in the lesson itself.
+  const isAnsweredHere =
+    isSceneElsewhere ||
+    (currentTutorialStep.advanceOn === "questDialog" &&
+      !currentTutorialStep.scenePage &&
+      !currentTutorialStep.teachOnPage);
   const hasShortcut =
     !currentTutorialStep.questsTab &&
     (hasRetry ||
@@ -1303,7 +1333,7 @@ const PlayerTutorialAssistant: React.FC<
               />
             )}
           </h3>
-          <DockHighlight active={!isPreview && isSceneElsewhere}>
+          <DockHighlight active={!isPreview && isAnsweredHere}>
             <div className="flex flex-wrap gap-2">
               {!isCheckingRewards &&
                 dialogOptions.options.map((entry) => (
@@ -1451,7 +1481,7 @@ const PlayerTutorialAssistant: React.FC<
           errorMessage={disableTutorialError}
           onOpenDisableModal={openDisableModal}
           disableLabel={disableLabel}
-          characterImage={characterImage}
+          characterImage={currentTutorialStep.speaker?.image ?? characterImage}
           dodgeHighlight={panelDodgesHighlight}
           startFolded={panelCrowdsHighlight}
           onOpenOrderingDialog={() => setShowOrderingDialog(true)}
@@ -1500,10 +1530,17 @@ const PlayerTutorialAssistant: React.FC<
           }
           lead={
             spokenWords === "lesson" ? undefined : (
-              <StepDescription
-                description={currentTutorialStep.description}
-                className={leadClassName}
-              />
+              <>
+                {currentTutorialStep.speaker && (
+                  <p className="text-primary text-sm font-semibold">
+                    {currentTutorialStep.speaker.name}
+                  </p>
+                )}
+                <StepDescription
+                  description={elementDescription ?? currentTutorialStep.description}
+                  className={leadClassName}
+                />
+              </>
             )
           }
         >

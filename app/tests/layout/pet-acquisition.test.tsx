@@ -1099,9 +1099,35 @@ it("offers the rescued pup only after it has been handed to the Bondkeepers", as
     await handedOver.view.findByRole("button", { name: "Adopt the pup" });
     expect(handedOver.view.queryByText(/still at your side/)).toBeNull();
     // The lesson and quest call the rescued companion a pup; the offer must agree.
-    const offer = handedOver.view.container.querySelector("#tutorial-sanctuary-pup");
-    expect(offer?.textContent).toContain("The pup you rescued");
-    expect(offer?.textContent).not.toMatch(/hound/i);
+    const offer = handedOver.view.getByRole("region", { name: "The Sanctuary pup" });
+    expect(offer.textContent).toContain("The pup you rescued");
+    expect(offer.textContent).not.toMatch(/hound/i);
+
+    // The lesson points at one control at a time: the pup's, then the designer's.
+    const { container } = handedOver.view;
+    const target = () =>
+      [...container.querySelectorAll('[id^="tutorial-"]')]
+        .map((element) => element.id)
+        .filter((id) => id !== "tutorial-pet-acquisition");
+    expect(target()).toEqual(["tutorial-sanctuary-pup"]);
+    for (const field of [
+      "speciesId",
+      "paletteIndex",
+      "characteristicIndex",
+      "auraIndex",
+    ]) {
+      if (field !== "speciesId") expect(target()).toEqual([`tutorial-pet-${field}`]);
+      fireEvent.click(handedOver.view.getAllByRole("radio")[0]!);
+      expect(target()).toEqual(["tutorial-pet-continue"]);
+      fireEvent.click(handedOver.view.getByRole("button", { name: "Continue" }));
+    }
+    expect(target()).toEqual(["tutorial-pet-identity"]);
+    fireEvent.change(handedOver.view.getByLabelText("Companion name"), {
+      target: { value: "Miso" },
+    });
+    expect(target()).toEqual(["tutorial-pet-identity"]);
+    fireEvent.click(handedOver.view.getByRole("radio", { name: "Female" }));
+    expect(target()).toEqual(["tutorial-pet-meet"]);
   } finally {
     handedOver.queryClient.clear();
   }
