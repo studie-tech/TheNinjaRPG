@@ -1,4 +1,5 @@
 import {
+  IMG_FRONTPAGE_SCREENSHOT_SECTOR,
   IMG_LAYOUT_CLASSIC_PREVIEW,
   IMG_LAYOUT_THEME_ART,
   IMG_PIXEL_HERO_POSTER,
@@ -106,6 +107,26 @@ export const GAME_LAYOUTS = [
     welcomeIntro:
       "Some journeys are remembered for their battles. Others, for the people along the way. Make friends, join a village, and write a character story of your own.",
   },
+  {
+    id: "sector",
+    name: "Sector Layout",
+    art: IMG_FRONTPAGE_SCREENSHOT_SECTOR,
+    audience: "Players using the sector as their main game interface",
+    rationale:
+      "Put your shinobi's world at the center of the game, with a full-screen sector map, character controls and game menus.",
+    composition:
+      "A full-height map with sliding sidebars, centered bottom shortcuts and game screens in dialogs.",
+    tone: "light",
+    frame: "sector",
+    publicFrame: "page",
+    welcome: "illustrated",
+    sidebarBreakpoint: null,
+    supportsColorMode: true,
+    visualLanguage: "Sector exploration",
+    welcomeTitle: "Your next adventure is out there.",
+    welcomeIntro:
+      "Explore Seichi, train your shinobi and find your place in the village.",
+  },
 ] as const;
 
 export type GameLayout = (typeof GAME_LAYOUTS)[number];
@@ -114,8 +135,11 @@ export const DEFAULT_GAME_LAYOUT: GameLayoutId = "default";
 export const GAME_LAYOUT_ATTRIBUTE = "data-game-layout";
 export const GAME_LAYOUT_FRAME_ATTRIBUTE = "data-game-frame";
 
+/** Normalize saved preferences to the canonical layout identity. */
 export const toGameLayoutId = (value: unknown): GameLayoutId | undefined =>
-  GAME_LAYOUTS.find((layout) => layout.id === value)?.id;
+  GAME_LAYOUTS.find(
+    (layout) => layout.id === (value === "experimental" ? "sector" : value),
+  )?.id;
 
 export const getGameLayout = (id: GameLayoutId): GameLayout =>
   GAME_LAYOUTS.find((layout) => layout.id === id) ?? GAME_LAYOUTS[0];
@@ -135,3 +159,7 @@ export const getGameLayoutScript = (id: GameLayoutId) => {
   const layout = getGameLayout(id);
   return `(function(){var dark=${layout.tone === "dark"};${layout.supportsColorMode ? 'try{dark=localStorage.getItem("theme")==="dark"}catch(e){}' : ""}document.documentElement.setAttribute("${GAME_LAYOUT_ATTRIBUTE}","${layout.id}");document.documentElement.setAttribute("${GAME_LAYOUT_FRAME_ATTRIBUTE}","${layout.frame}");document.documentElement.classList.toggle("dark",dark)})()`;
 };
+
+/** Prerender a character-only preference with Classic until its account is confirmed. */
+export const getInitialGameLayout = (id: GameLayoutId): GameLayoutId =>
+  id === "sector" ? DEFAULT_GAME_LAYOUT : id;

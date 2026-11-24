@@ -68,7 +68,9 @@ export const createGlobeScene = async (options: {
   const game = await createGameRenderer({
     ...options,
     surface: "globe",
-    height: (width) => width,
+    height: (width) =>
+      options.mount.closest<HTMLElement>("[data-travel-viewport]")?.clientHeight ||
+      width,
   });
   try {
     let state = options.state;
@@ -630,6 +632,7 @@ export const createGlobeScene = async (options: {
     });
     return {
       dispose: game.dispose,
+      setPaused: game.setPaused,
       updateState,
       zoom: (factor: number) => {
         controls.zoom(factor);

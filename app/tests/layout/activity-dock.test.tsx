@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
+import { MobileGameNav } from "@/components/layout/shared/MobileGameNav";
 import { ActivityDock } from "@/layout/ActivityDock";
+import { ActivityDockButton } from "@/layout/ActivityDockButton";
 import * as logbook from "@/layout/Logbook";
 import { chatPanelAtom } from "@/libs/chatPanel";
+import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
 import * as context from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
@@ -16,7 +19,7 @@ let user: {
 };
 beforeEach(() => {
   localStorage.clear();
-  installBrowserGlobals({ events: ["CustomEvent"] });
+  installBrowserGlobals({ events: ["CustomEvent"], resizeObserver: true });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   user = {
     userId: "dock-reader",
@@ -32,12 +35,75 @@ beforeEach(() => {
     <p>Progress for {userQuest.quest.name}</p>
   ));
 });
+
+it("opens the same lesson from mobile navigation, closes chat, and retains a guided tab choice", () => {
+  user.tutorialOn = false;
+  const view = render(
+    <>
+      <MobileGameNav
+        mobileNavConfig={DEFAULT_MOBILE_NAV_CONFIG}
+        yellowButtonClassName="size-6"
+        mobileNavbarButtonClassName="size-6"
+      />
+      <ActivityDock guidedLesson={{ id: "mobile-lesson", awaitsAnswer: false }}>
+        Mobile lesson
+      </ActivityDock>
+    </>,
+  );
+  const toggle = view.getByRole("button", { name: "Activity" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  const panelId = toggle.getAttribute("aria-controls");
+  expect(
+    panelId &&
+      document
+        .getElementById(panelId)
+        ?.contains(view.getByRole("tab", { name: "Tutorial" })),
+  ).toBe(true);
+  fireEvent.click(toggle);
+  expect(view.queryByText("Mobile lesson")).toBeNull();
+  act(() => getDefaultStore().set(chatPanelAtom, { owner: "chat", tab: "inbox" }));
+  fireEvent.click(toggle);
+  expect(getDefaultStore().get(chatPanelAtom).owner).toBeNull();
+  expect(view.getByText("Mobile lesson")).toBeTruthy();
+  expect(document.activeElement?.textContent).toBe("Tutorial");
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(toggle);
+  fireEvent.click(toggle);
+  expect(view.getByRole("tab", { name: "Quests" }).getAttribute("aria-selected")).toBe(
+    "true",
+  );
+  expect(view.getByText("No active quests or missions.")).toBeTruthy();
+  expect(document.activeElement?.textContent).toBe("Quests");
+});
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   localStorage.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   restoreBrowserGlobals();
+  document.documentElement.removeAttribute("data-mobile-activity-nav");
+});
+
+it("returns focus to the bottom Activity control when collapsed", () => {
+  document.documentElement.setAttribute("data-mobile-activity-nav", "true");
+  localStorage.setItem(`activityDockOpen:${user.userId}`, "false");
+  const view = render(
+    <>
+      <ActivityDockButton />
+      <ActivityDock>Desktop lesson</ActivityDock>
+    </>,
+  );
+  const trigger = view.getByRole("button", { name: "Activity" });
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(trigger);
+  expect(view.getByText("Desktop lesson")).toBeTruthy();
+  expect(document.activeElement?.textContent).toBe("Tutorial");
+  fireEvent.click(view.getByRole("button", { name: "Collapse Activity" }));
+  expect(document.activeElement).toBe(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
 });
 
 it("persists the chosen side and collapsed state without disabling the tutorial", () => {

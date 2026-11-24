@@ -97,7 +97,7 @@ export const config = {
      * rest of it is file-like and the skip above would otherwise let it resolve under
      * the variant URL. Kept in step with SHELL_PARAMS by a test.
      */
-    "/(web|ios|android)-(default|pixel|20-eclipse-observatory|17-obsidian-council|3-sakura-courtyard)-(in|out)/:path*",
+    "/(web|ios|android)-(default|pixel|20-eclipse-observatory|17-obsidian-council|3-sakura-courtyard|sector)-(in|out)/:path*",
     "/web-default-out-(control|spring|summer|winter|halloween|akikaze|hyorin|tsukimori|akasumi|shirohana|horizon)/:path*",
     /*
      * Optional catch-all routes are the exception to the file-like skip above:

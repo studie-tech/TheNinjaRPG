@@ -5,9 +5,12 @@ import {
   Eye,
   EyeOff,
   GitMerge,
+  Globe,
   HousePlus,
   Locate,
+  Map as MapIcon,
   MapPinned,
+  MapPinSearch,
   Maximize2,
   Search,
   Swords,
@@ -16,7 +19,9 @@ import {
   ZapOff,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { Fragment, useMemo } from "react";
+import type { ReactNode } from "react";
+import { Fragment, useContext, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -45,7 +50,10 @@ import { CaravanControlsTrigger } from "@/layout/CaravanControls";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
-import type { HeaderActionItem } from "@/layout/ContentBoxHeaderActions";
+import {
+  ContentBoxHeaderActions,
+  type HeaderActionItem,
+} from "@/layout/ContentBoxHeaderActions";
 import { FindSectorPopover, SectorIdField } from "@/layout/FindSectorPopover";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
@@ -58,17 +66,24 @@ import NavTabs from "@/layout/NavTabs";
 import { TravelArrivalStatus } from "@/layout/TravelArrivalStatus";
 import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { StealthControls } from "@/layout/travel/StealthControls";
-import { mapIconToolClassName as mapToolClassName } from "@/layout/travel/styles";
+import { mapIconToolClassName, mapToolClassName } from "@/layout/travel/styles";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
 import { hasRequiredRank } from "@/libs/rank";
 import { calcGlobalTravelTime } from "@/libs/travel";
+import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import { getReadableVillageHexColor } from "@/utils/color";
 
 /** Render travel maps, controls and dialogs from a single session. */
-export function TravelView({ session, hasLocationRequest = false }: TravelViewProps) {
+export function TravelView({
+  session,
+  hasLocationRequest = false,
+  immersive = false,
+  isInteractive = true,
+}: TravelViewProps) {
+  const navigation = useContext(TravelNavigationContext);
   const {
     showActive,
     setShowActive,
@@ -183,6 +198,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           userLocation={true}
           showOwnership={showOwnership && !userData?.tutorialOn}
           autoRotate={false}
+          isActive={!!showGlobal && isInteractive}
           focusSector={globeFocusSector}
           actionExplanation={
             isTraveling ? "You are traveling to your destination" : undefined
@@ -206,6 +222,8 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
     targetSector,
     userData?.tutorialOn,
     initiateTravelToSector,
+    showGlobal,
+    isInteractive,
   ]);
 
   // Retain the sector scene while the view switches map tabs.
@@ -224,13 +242,18 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           target={targetPosition}
           showSorrounding={showSorrounding}
           showActive={showOtherUsers}
-          isActive={!!showSector}
+          showCompass={!immersive}
+          isActive={!!showSector && isInteractive}
           autoAttackMode={autoAttackMode}
           isWorldExpanded={isWorldExpanded && !!showSector}
           cameraFocusRevision={cameraFocusRevision}
           setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
           setPosition={setScenePosition}
+          onBuildingEntry={() => {
+            setPendingAttackTarget(null);
+            setAutoDestination(null);
+          }}
         />
       )
     );
@@ -242,17 +265,21 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
     sectorWindow,
     hasCurrentSector,
     setScenePosition,
+    setPendingAttackTarget,
+    setAutoDestination,
     targetPosition,
     showSorrounding,
     showOtherUsers,
     autoAttackMode,
     isWorldExpanded,
     showSector,
+    isInteractive,
     cameraFocusRevision,
     villages,
     hasUser,
     setWorldExpanded,
     setShowSorrounding,
+    immersive,
   ]);
 
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -280,142 +307,18 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
 
   // Render
 
-  // Map tools in their display order. On narrow screens they leave the header row by
-  // priority (lower stays longer) into a "More" menu: stealth and sensory first, then
-  // the tabs and quick travel, the way out of a sector.
+  // Controls stay mounted when their disclosure closes so dialogs retain their state.
   const isSectorTools = !isGlobal && activeTab !== "";
+  const toolClassName = immersive ? mapToolClassName : mapIconToolClassName;
   const travelTools: HeaderActionItem[] = [
-    { key: "war", node: <WarFieldActions />, priority: 10 },
-    {
-      key: "caravans",
-      // Kept out of the tutorial's guided map lessons.
-      node: isSectorTools && !tutorialRunning && (
-        <CaravanControlsTrigger className={mapToolClassName} />
-      ),
-      priority: 8,
-    },
-    {
-      key: "auto-attack",
-      node:
-        isSectorTools &&
-        userData?.anbuId &&
-        (autoAttackMode ? (
-          <button
-            type="button"
-            aria-label="Stop auto-attack"
-            aria-pressed={true}
-            className={mapToolClassName}
-            onClick={() => setAutoAttackMode(false)}
-          >
-            <Zap className="h-7 w-7 text-red-500" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            aria-label="Start auto-attack"
-            aria-pressed={false}
-            className={mapToolClassName}
-            onClick={() => setShowAutoAttackModal(true)}
-          >
-            <ZapOff className="h-7 w-7 hover:text-red-500" />
-          </button>
-        )),
-      priority: 2,
-      attention: autoAttackMode,
-    },
-    {
-      key: "stealth",
-      node: isSectorTools && (
-        <StealthControls
-          asMenu={false}
-          onRevealed={(players) => {
-            setRevealedPlayers(players);
-            setShowRevealedPlayersModal(true);
-          }}
-        />
-      ),
-      priority: 1,
-    },
-    {
-      key: "players",
-      node: isSectorTools && (
-        <TooltipProvider delayDuration={50}>
-          <Tooltip>
-            <TooltipTrigger
-              aria-label="Show other players on the map"
-              aria-pressed={showOtherUsers}
-              className={mapToolClassName}
-              onClick={() =>
-                tutorialRunning
-                  ? setRevealOthersInTutorial((prev) => !prev)
-                  : setShowActive(!showActive)
-              }
-            >
-              {showOtherUsers ? (
-                <Eye className="h-7 w-7 text-orange-500" />
-              ) : (
-                <EyeOff className="h-7 w-7" />
-              )}
-            </TooltipTrigger>
-            <TooltipContent>
-              {showOtherUsers
-                ? "Hide other players on the map"
-                : "Show other players on the map"}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      ),
-      priority: 6,
-      // Hidden players are easy to forget about once the switch sits in the menu. The
-      // tutorial starts with them hidden on purpose.
-      attention: isSectorTools && !tutorialRunning && !showOtherUsers,
-    },
-    {
-      key: "scout",
-      node: isSectorTools && userData.status === "AWAKE" && (
-        <button
-          type="button"
-          aria-label="Scout surrounding sectors"
-          aria-pressed={showSorrounding}
-          className={mapToolClassName}
-          onClick={() => setShowSorrounding((prev) => !prev)}
-        >
-          <UserRoundSearch
-            className={`h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
-          />
-        </button>
-      ),
-      priority: 7,
-    },
-    {
-      key: "find",
-      node: isGlobal && !isTraveling && (
-        <FindSectorPopover
-          focusSector={globeFocusSector}
-          onFocusSector={setFocusSector}
-          triggerAsChild
-          trigger={
-            <button
-              type="button"
-              aria-label="Find a sector"
-              className={mapToolClassName}
-            >
-              <Locate
-                className={`h-7 w-7 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
-              />
-            </button>
-          }
-        />
-      ),
-      priority: 8,
-      attention: isGlobal && focusSector !== null,
-    },
     {
       key: "quick-travel",
+      priority: 0,
       node: (
         <Popover open={isQuickTravelOpen} onOpenChange={setQuickTravelOpen}>
-          <PopoverTrigger aria-label="Quick Travel" className={mapToolClassName}>
+          <PopoverTrigger aria-label="Quick Travel" className={toolClassName}>
             <Search className="h-7 w-7 hover:text-orange-500" />
+            {immersive && <span>Quick travel</span>}
           </PopoverTrigger>
           <PopoverContent className="w-72">
             <p className="py-2 font-semibold">Quick Travel</p>
@@ -561,54 +464,181 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           </PopoverContent>
         </Popover>
       ),
-      priority: 4,
     },
     {
-      key: "expand",
-      node: !isGlobal && activeTab !== "" && (
+      key: "scout",
+      priority: 7,
+      node: isSectorTools && userData.status === "AWAKE" && (
         <button
           type="button"
-          aria-label="Expand world"
-          aria-expanded={isWorldExpanded}
-          disabled={!showSector || !SectorComponent}
-          className={`${mapToolClassName} hover:text-orange-500`}
-          onClick={() => setWorldExpanded(true)}
+          aria-label="Scout surrounding sectors"
+          aria-pressed={showSorrounding}
+          className={toolClassName}
+          onClick={() => setShowSorrounding((prev) => !prev)}
         >
-          <Maximize2 className="h-7 w-7" />
+          <UserRoundSearch
+            className={`h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
+          />
+          {immersive && <span className="flex-1">Scout surrounding sectors</span>}
         </button>
       ),
-      priority: 9,
+    },
+    {
+      key: "players",
+      priority: 6,
+      attention: isSectorTools && !tutorialRunning && !showOtherUsers,
+      node: isSectorTools && (
+        <TooltipProvider delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger
+              aria-label="Show other players on the map"
+              aria-pressed={showOtherUsers}
+              className={toolClassName}
+              onClick={() =>
+                tutorialRunning
+                  ? setRevealOthersInTutorial((prev) => !prev)
+                  : setShowActive(!showActive)
+              }
+            >
+              {showOtherUsers ? (
+                <Eye className="h-7 w-7 text-orange-500" />
+              ) : (
+                <EyeOff className="h-7 w-7" />
+              )}
+              {immersive && <span className="flex-1">Show other players</span>}
+              {immersive && (
+                <span className="text-muted-foreground text-xs">
+                  {showOtherUsers ? "On" : "Off"}
+                </span>
+              )}
+            </TooltipTrigger>
+            <TooltipContent>
+              {showOtherUsers
+                ? "Hide other players on the map"
+                : "Show other players on the map"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ),
+    },
+    {
+      key: "stealth",
+      priority: 1,
+      node: isSectorTools && (
+        <StealthControls
+          asMenu={immersive}
+          onRevealed={(players) => {
+            setRevealedPlayers(players);
+            setShowRevealedPlayersModal(true);
+          }}
+        />
+      ),
+    },
+    {
+      key: "operations",
+      priority: 10,
+      // Caravans stay out of the tutorial's guided map lessons.
+      node: (
+        <WarFieldActions
+          asMenu={immersive}
+          includeCaravans={immersive && isSectorTools && !tutorialRunning}
+        />
+      ),
+    },
+    {
+      key: "auto-attack",
+      priority: 2,
+      attention: autoAttackMode,
+      node:
+        isSectorTools &&
+        userData?.anbuId &&
+        (autoAttackMode ? (
+          <button
+            type="button"
+            aria-label="Stop auto-attack"
+            aria-pressed={true}
+            className={toolClassName}
+            onClick={() => setAutoAttackMode(false)}
+          >
+            <Zap className="h-7 w-7 text-red-500" />
+            {immersive && <span>Stop auto-attack</span>}
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Start auto-attack"
+            aria-pressed={false}
+            className={toolClassName}
+            onClick={() => setShowAutoAttackModal(true)}
+          >
+            <ZapOff className="h-7 w-7 hover:text-red-500" />
+            {immersive && <span>Start auto-attack</span>}
+          </button>
+        )),
+    },
+    {
+      key: "find",
+      priority: 8,
+      attention: isGlobal && focusSector !== null,
+      node: isGlobal && !isTraveling && (
+        <FindSectorPopover
+          focusSector={globeFocusSector}
+          onFocusSector={setFocusSector}
+          triggerAsChild
+          trigger={
+            <button type="button" aria-label="Find a sector" className={toolClassName}>
+              <Locate
+                className={`h-7 w-7 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
+              />
+              {immersive && <span>Find a sector</span>}
+            </button>
+          }
+        />
+      ),
     },
     {
       key: "ownership",
+      priority: 4,
       node: isGlobal && (
         <TooltipProvider delayDuration={50}>
           <Tooltip>
             <TooltipTrigger
               aria-label="Show sector ownerships and factions"
               aria-pressed={showOwnership}
-              className={mapToolClassName}
+              className={toolClassName}
               onClick={() => setShowOwnership(!showOwnership)}
             >
               <MapPinned
                 className={`h-7 w-7 ${showOwnership ? "text-orange-500" : ""}`}
               />
+              {immersive && (
+                <span className="flex-1">Sector ownership and factions</span>
+              )}
+              {immersive && (
+                <span className="text-muted-foreground text-xs">
+                  {showOwnership ? "On" : "Off"}
+                </span>
+              )}
             </TooltipTrigger>
             <TooltipContent>Show sector ownerships and factions</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       ),
-      priority: 9,
-      attention: isGlobal && showOwnership,
     },
     {
       key: "join",
+      priority: 11,
       node: joinVillageBtn && (
         <Confirm
           title={`Join Village [${sectorVillage.name}]`}
           proceed_label="Join village"
-          button={<GitMerge className="h-7 w-7 hover:text-orange-500" />}
-          triggerClassName={mapToolClassName}
+          button={
+            <>
+              <GitMerge className="h-7 w-7 hover:text-orange-500" />
+              {immersive && <span>Join {sectorVillage.name}</span>}
+            </>
+          }
+          triggerClassName={toolClassName}
           triggerLabel={`Join ${sectorVillage.name}`}
           disabled={isJoining}
           isLoading={isJoining}
@@ -623,16 +653,21 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           from day 0.
         </Confirm>
       ),
-      priority: 11,
     },
     {
       key: "hideout",
+      priority: 12,
       node: canCreateHideout && (
         <Confirm
           title="Purchase Hideout"
           proceed_label={canAffordHideout ? "Purchase hideout" : "Not enough ryo"}
-          button={<HousePlus className="h-7 w-7 hover:text-orange-500" />}
-          triggerClassName={mapToolClassName}
+          button={
+            <>
+              <HousePlus className="h-7 w-7 hover:text-orange-500" />
+              {immersive && <span>Purchase hideout</span>}
+            </>
+          }
+          triggerClassName={toolClassName}
           triggerLabel="Purchase hideout"
           disabled={isCreatingHideout}
           isLoading={isCreatingHideout}
@@ -652,35 +687,100 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           faction hideout in this sector?
         </Confirm>
       ),
-      priority: 12,
     },
     {
-      key: "tabs",
-      node: (
-        <NavTabs
-          current={isGlobal ? globalLink : activeTab}
-          options={sectorLink ? [sectorLink, globalLink] : [globalLink]}
-          labels={{ [sectorLink]: "Sector" }}
-          itemClassName={(option) => (option === globalLink ? "mr-0" : "")}
-          disabledOptions={isTraveling ? [sectorLink] : undefined}
-          setValue={setActiveTab}
-          onChange={(value) => {
-            if (value !== globalLink)
-              setCameraFocusRevision((previous) => previous + 1);
-          }}
-        />
+      key: "caravans",
+      priority: 8,
+      node: !immersive && isSectorTools && !tutorialRunning && (
+        <CaravanControlsTrigger className={toolClassName} />
       ),
-      // Tutorial steps point at the Global tab, so the tabs stay in the row while it runs.
-      priority: tutorialRunning ? 0 : 3,
+    },
+    {
+      key: "expand",
+      priority: 4,
+      node: !immersive && isSectorTools && (
+        <button
+          type="button"
+          aria-label="Expand world"
+          aria-expanded={isWorldExpanded}
+          disabled={!showSector || !SectorComponent}
+          className={toolClassName}
+          onClick={() => setWorldExpanded(true)}
+        >
+          <Maximize2 className="h-7 w-7" aria-hidden />
+        </button>
+      ),
     },
   ];
 
+  const mapTabs = (
+    <NavTabs
+      current={isGlobal ? globalLink : activeTab}
+      options={sectorLink ? [sectorLink, globalLink] : [globalLink]}
+      labels={{ [sectorLink]: "Sector" }}
+      itemClassName={(option) => (option === globalLink ? "mr-0" : "")}
+      disabledOptions={isTraveling ? [sectorLink] : undefined}
+      setValue={setActiveTab}
+      onChange={(value) => {
+        if (value !== globalLink) setCameraFocusRevision((previous) => previous + 1);
+      }}
+    />
+  );
+  const mapControls = (
+    <div className="flex flex-col gap-1 text-sm [&_svg]:shrink-0">
+      {travelTools.map(({ key, node }) => (
+        <Fragment key={key}>{node}</Fragment>
+      ))}
+      {showSector && (
+        <fieldset
+          aria-label="Loadouts"
+          className="mt-2 min-w-0 space-y-3 border-t pt-3"
+        >
+          <JutsuLoadoutSelector variant="menu" label="Jutsu" />
+          <ItemLoadoutSelector variant="menu" label="Items" />
+        </fieldset>
+      )}
+    </div>
+  );
+
   return (
     <>
+      {immersive &&
+        navigation?.controls &&
+        createPortal(
+          <div className="w-full" inert={!isInteractive}>
+            <TravelMapControls>{mapControls}</TravelMapControls>
+          </div>,
+          navigation.controls,
+        )}
+      {immersive &&
+        navigation?.view &&
+        createPortal(
+          <button
+            type="button"
+            className="sector-nav-control"
+            aria-label={isGlobal ? "Show sector map" : "Show global map"}
+            title={isGlobal ? "Show sector map" : "Show global map"}
+            disabled={!isInteractive || (isGlobal && (isTraveling || !sectorLink))}
+            onClick={() => {
+              setActiveTab(isGlobal ? sectorLink : globalLink);
+              if (isGlobal) setCameraFocusRevision((previous) => previous + 1);
+            }}
+          >
+            {isGlobal ? <MapIcon aria-hidden /> : <Globe aria-hidden />}
+          </button>,
+          navigation.view,
+        )}
       <HuntingArrival
-        blocked={!!admissionRecovery || !!locationRequest || hasLocationRequest}
+        blocked={
+          !isInteractive ||
+          !!admissionRecovery ||
+          !!locationRequest ||
+          hasLocationRequest
+        }
       />
-      {locationRequest && (
+      {/* Portaled map dialogs pause with the session while a building owns input. */}
+      {isInteractive && locationRequest && (
         <Modal
           id="tutorial-auto-travel"
           title="Auto Travel"
@@ -717,6 +817,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
       )}
       <ContentBox
         title="Travel"
+        hideTitle={immersive}
         subtitle={
           isSectorTools && hasCurrentSector ? (
             <>
@@ -727,10 +828,20 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           )
         }
         padding={false}
-        topRightItems={travelTools}
+        topRightItems={
+          immersive
+            ? undefined
+            : [
+                ...travelTools,
+                { key: "tabs", node: mapTabs, priority: tutorialRunning ? 0 : 3 },
+              ]
+        }
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
-        <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
+        <div
+          data-travel-viewport={immersive ? "" : undefined}
+          className={userData.travelFinishAt ? "relative min-h-80" : "relative"}
+        >
           {(showGlobal || (hasOpenedGlobal && villages && globe)) && (
             <div
               aria-hidden={!showGlobal}
@@ -765,7 +876,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
             !mapError &&
             userData.status !== "TRAVEL" &&
             (!showSector || !SectorComponent) && <SectorLoadingPlaceholder />}
-          {showModal && globe && userData && targetSector !== null && (
+          {isInteractive && showModal && globe && userData && targetSector !== null && (
             <Modal
               id="tutorial-global-travel"
               title="World Travel"
@@ -813,18 +924,18 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           )}
         </div>
       </ContentBox>
-      <div className="flex flex-wrap items-start justify-between gap-2 p-1">
-        <div className="flex min-w-0 flex-wrap items-start gap-2">
-          {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" compact />}
-          {showSector && <ItemLoadoutSelector size="small" label="Items" compact />}
+      {!immersive && showSector && (
+        <div className="flex flex-wrap items-center gap-2 p-1">
+          <JutsuLoadoutSelector size="small" label="Jutsu" compact />
+          <ItemLoadoutSelector size="small" label="Items" compact />
         </div>
-        {showSector && userData?.anbuId && autoAttackMode && (
-          <div className="flex items-center font-semibold text-red-500 text-sm">
-            <Zap className="mr-1 h-4 w-4" />
-            Auto-Attack: Scanning for enemies to hunt...
-          </div>
-        )}
-      </div>
+      )}
+      {showSector && userData?.anbuId && autoAttackMode && (
+        <div className="flex w-full items-center p-1 text-sm font-semibold text-red-500">
+          <Zap className="mr-1 h-4 w-4" />
+          Auto-Attack: Scanning for enemies to hunt...
+        </div>
+      )}
       {shownConsumables && shownConsumables.length > 0 && (
         <div className="flex flex-col" inert={isFetchingItems}>
           <p className="font-bold">Consumables</p>
@@ -846,7 +957,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
               }
             }}
           />
-          {isOpen && useritem && (
+          {isInteractive && isOpen && useritem && (
             <Modal
               title="Item Details"
               isOpen={isOpen}
@@ -884,7 +995,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
       )}
 
       {/* Auto Attack Configuration Modal */}
-      {showAutoAttackModal && (
+      {isInteractive && showAutoAttackModal && (
         <AutoAttackModal
           isOpen={showAutoAttackModal}
           setIsOpen={setShowAutoAttackModal}
@@ -893,7 +1004,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
       )}
 
       {/* Revealed Players Modal (from Sensory Scan) */}
-      {showRevealedPlayersModal && revealedPlayers.length > 0 && (
+      {isInteractive && showRevealedPlayersModal && revealedPlayers.length > 0 && (
         <Modal
           title="Players Revealed by Sensory!"
           isOpen={showRevealedPlayersModal}
@@ -923,6 +1034,27 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
         </Modal>
       )}
     </>
+  );
+}
+
+/** Anchor the retained travel controls above the bottom navigation. */
+function TravelMapControls({ children }: { children: ReactNode }) {
+  const headerRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={headerRef} className="w-full">
+      <ContentBoxHeaderActions
+        headerRef={headerRef}
+        titleRef={titleRef}
+        label="Travel"
+        collapsedLabel="Map controls"
+        iconOnly
+        align="start"
+        collapsedIcon={<MapPinSearch className="size-6" aria-hidden />}
+      >
+        {children}
+      </ContentBoxHeaderActions>
+    </div>
   );
 }
 
@@ -1068,6 +1200,10 @@ const SectorLoadingPlaceholder = () => (
 
 interface TravelViewProps {
   session: TravelSession;
+  /** Fill the host’s available map viewport while retaining the page controls. */
+  immersive?: boolean;
+  /** A building dialog pauses map input and automatic arrival prompts. */
+  isInteractive?: boolean;
   /** A route destination is being read before its confirmation reaches the session. */
   hasLocationRequest?: boolean;
 }

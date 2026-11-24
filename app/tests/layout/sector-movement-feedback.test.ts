@@ -42,6 +42,7 @@ const setup = () => {
     getMutationKey: () => ["travel", "moveInSector"],
     api: { travel: { moveInSector: {} } },
     mountedRef: { current: true },
+    buildingEntryRef: { current: null },
     windowNavRef: { current: null },
     pendingCrossRef: { current: null },
     pendingWorldTargetRef: { current: null },

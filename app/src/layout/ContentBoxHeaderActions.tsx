@@ -25,6 +25,8 @@ export function ContentBoxHeaderActions({
   noRightAlign,
   collapsedLabel,
   iconOnly = false,
+  collapsedIcon,
+  align = "end",
 }: ContentBoxHeaderActionsProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -35,7 +37,7 @@ export function ContentBoxHeaderActions({
     above: false,
     maxHeight: 0,
     maxWidth: 0,
-    right: 0,
+    offset: 0,
   });
   const panelId = useId();
   const isDisclosure = !!collapsedLabel || isOverflowing;
@@ -94,34 +96,44 @@ export function ContentBoxHeaderActions({
 
     const place = () => {
       const rect = root.getBoundingClientRect();
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const viewportTop = window.visualViewport?.offsetTop ?? 0;
+      const viewportBottom =
+        viewportTop + (window.visualViewport?.height ?? window.innerHeight);
       const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
-      const above = rect.top - 16;
-      // Keep controls clear of the fixed mobile navigation and Activity dock.
-      const below = viewportHeight - rect.bottom - 80;
-      const wanted = Math.min(
-        (contentRef.current?.scrollHeight ?? 0) + 24,
-        viewportHeight * 0.6,
+      const bottomNavInset =
+        Number.parseFloat(
+          document.documentElement.style.getPropertyValue("--game-bottom-nav-h"),
+        ) || 0;
+      // Leave a viewport margin and the menu's 4px gap, clearing any raised mobile nav.
+      const above = rect.top - viewportTop - 20;
+      const usableBottom = Math.min(
+        viewportBottom,
+        window.innerHeight - bottomNavInset,
       );
+      const below = usableBottom - rect.bottom - 20;
+      const wanted = (contentRef.current?.scrollHeight ?? 0) + 26;
       const opensAbove = below < wanted && above > below;
-      const maxHeight = Math.max(
-        44,
-        Math.min(viewportHeight * 0.6, opensAbove ? above : below),
-      );
+      const maxHeight = Math.max(44, opensAbove ? above : below);
       // Persistent controls can follow a named menu; use the header edge so they
       // do not squeeze its options into the space left of its trigger.
       const menuRight = collapsedLabel
         ? (headerRef.current?.getBoundingClientRect().right ?? rect.right)
         : rect.right;
-      const right = rect.right - menuRight;
-      const maxWidth = Math.max(44, Math.min(viewportWidth - 32, menuRight - 16));
+      const menuLeft = Math.max(
+        16,
+        headerRef.current?.getBoundingClientRect().left ?? rect.left,
+      );
+      const offset = align === "start" ? menuLeft - rect.left : rect.right - menuRight;
+      const availableWidth =
+        align === "start" ? viewportWidth - menuLeft - 16 : menuRight - 16;
+      const maxWidth = Math.max(44, Math.min(viewportWidth - 32, availableWidth));
       setPlacement((previous) =>
         previous.above === opensAbove &&
         previous.maxHeight === maxHeight &&
         previous.maxWidth === maxWidth &&
-        previous.right === right
+        previous.offset === offset
           ? previous
-          : { above: opensAbove, maxHeight, maxWidth, right },
+          : { above: opensAbove, maxHeight, maxWidth, offset },
       );
     };
     place();
@@ -139,13 +151,21 @@ export function ContentBoxHeaderActions({
     document.addEventListener("focusin", dismissOutside);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
+    window.visualViewport?.addEventListener("resize", place);
+    window.visualViewport?.addEventListener("scroll", place);
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    if (contentRef.current) observer?.observe(contentRef.current);
     return () => {
       document.removeEventListener("pointerdown", dismissOutside);
       document.removeEventListener("focusin", dismissOutside);
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
+      window.visualViewport?.removeEventListener("resize", place);
+      window.visualViewport?.removeEventListener("scroll", place);
+      observer?.disconnect();
     };
-  }, [isDisclosure, isOpen, collapsedLabel, headerRef]);
+  }, [isDisclosure, isOpen, collapsedLabel, headerRef, align]);
 
   return (
     <div
@@ -188,7 +208,7 @@ export function ContentBoxHeaderActions({
         onClick={() => setIsOpen((open) => !open)}
       >
         {iconOnly ? (
-          <Menu className="size-6" aria-hidden />
+          (collapsedIcon ?? <Menu className="size-6" aria-hidden />)
         ) : (
           <List className="h-5 w-5" aria-hidden />
         )}
@@ -209,13 +229,15 @@ export function ContentBoxHeaderActions({
             ? {
                 maxHeight: placement.maxHeight,
                 maxWidth: placement.maxWidth,
-                right: placement.right,
+                left: align === "start" ? placement.offset : undefined,
+                right: align === "end" ? placement.offset : undefined,
               }
             : undefined
         }
         className={cn(
           isDisclosure &&
-            "bg-popover text-popover-foreground absolute top-full right-0 z-[45] mt-1 max-h-[60dvh] max-w-[calc(100vw-2rem)] overflow-auto rounded-md border p-3 shadow-md",
+            "bg-popover text-popover-foreground absolute top-full z-[45] mt-1 max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-auto rounded-md border p-3 shadow-md",
+          isDisclosure && (align === "start" ? "left-0" : "right-0"),
           collapsedLabel && "w-96",
           isDisclosure && placement.above && "top-auto bottom-full mb-1",
           isDisclosure &&
@@ -290,9 +312,11 @@ export function ContentBoxPriorityActions({
       // The controls get the header beside the title's text: a longer subtitle truncates
       // rather than moving controls behind More.
       const titleWidth = titleTextWidth(title);
-      const gap = titleWidth
-        ? Number.parseFloat(getComputedStyle(header).columnGap) || 0
-        : 0;
+      const headerStyle = getComputedStyle(header);
+      const padding =
+        (Number.parseFloat(headerStyle.paddingLeft) || 0) +
+        (Number.parseFloat(headerStyle.paddingRight) || 0);
+      const gap = titleWidth ? Number.parseFloat(headerStyle.columnGap) || 0 : 0;
       const widths = new Map<string, number>();
       for (const element of root.querySelectorAll<HTMLElement>("[data-header-item]")) {
         // A control that renders nothing measures 0 and takes no room.
@@ -305,7 +329,7 @@ export function ContentBoxPriorityActions({
       const hidden = splitHeaderActions(
         items,
         widthOf,
-        header.clientWidth - titleWidth - gap,
+        header.clientWidth - padding - titleWidth - gap,
         HEADER_TOOL_WIDTH,
       );
       const next = layoutHeaderMenu(
@@ -459,8 +483,7 @@ export function ContentBoxPriorityActions({
           style={{ width: menu.width, height: menu.height }}
         ></section>
       )}
-      {/* One list, so a control that moves between the row and More keeps its element. The
-          row comes before More and the menu after it, so Tab follows what is shown. */}
+      {/* A single keyed list preserves controls as they move into More. */}
       {[
         ...items.filter((item) => !menu.places[item.key]).map(renderItem),
         <Button
@@ -493,6 +516,7 @@ const MORE_TRIGGER_KEY = "content-box-more-trigger";
 
 /** The width of a content box title's text and back icon, independent of its subtitle. */
 const titleTextWidth = (title: HTMLElement | null) => {
+  if (title?.classList.contains("sr-only")) return 0;
   const heading = title?.querySelector("h1,h2");
   const text = heading?.querySelector<HTMLElement>("[data-content-box-title-text]");
   if (!text) return 0;
@@ -545,7 +569,7 @@ export const layoutHeaderMenu = (
 
 /**
  * The controls that leave the header row: none when all fit; otherwise, with room kept for
- * the "More" trigger, controls are kept by priority (lower first) while they fit.
+ * the "More" trigger, controls are kept by priority while they fit.
  */
 export const splitHeaderActions = (
   items: Pick<HeaderActionItem, "key" | "priority">[],
@@ -598,6 +622,8 @@ type ContentBoxHeaderActionsProps = {
   noRightAlign?: boolean;
   collapsedLabel?: string;
   iconOnly?: boolean;
+  collapsedIcon?: ReactNode;
+  align?: "start" | "end";
 };
 
 /** One header control for `ContentBoxPriorityActions`. */

@@ -7,7 +7,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GAME_LAYOUTS, type GameLayoutId, toGameLayoutId } from "@/libs/gameLayouts";
+import { useAvailableGameLayouts } from "@/hooks/useGameLayout";
+import { type GameLayoutId, toGameLayoutId } from "@/libs/gameLayouts";
 
 export function GameLayoutPicker({
   layout,
@@ -18,6 +19,7 @@ export function GameLayoutPicker({
   onLayoutChange: (layout: GameLayoutId) => void;
   className?: string;
 }) {
+  const layouts = useAvailableGameLayouts();
   return (
     <Select
       value={layout}
@@ -30,7 +32,7 @@ export function GameLayoutPicker({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {GAME_LAYOUTS.map((option) => (
+        {layouts.map((option) => (
           <SelectItem key={option.id} value={option.id}>
             {option.name}
           </SelectItem>

@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import {
-  PET_SANCTUARY_IMAGE,
-  PET_SANCTUARY_LATITUDE,
-  PET_SANCTUARY_LONGITUDE,
-  PET_SANCTUARY_NAME,
-  VILLAGE_DUTY_SLOTS_PER_LEVEL,
-} from "@/drizzle/constants";
+import { PET_SANCTUARY_NAME, VILLAGE_DUTY_SLOTS_PER_LEVEL } from "@/drizzle/constants";
 import {
   bloodline,
   conversation,
@@ -221,10 +215,11 @@ describeWithDatabase("content seeds", () => {
       expect.objectContaining({
         id: "wake-bondkeeper-sanctuary",
         name: PET_SANCTUARY_NAME,
-        image: PET_SANCTUARY_IMAGE,
+        image:
+          "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-pets-51f2d944ac82291ab2643a24.webp",
         villageId: wakeIsland?.id,
-        longitude: PET_SANCTUARY_LONGITUDE,
-        latitude: PET_SANCTUARY_LATITUDE,
+        longitude: 6,
+        latitude: 8,
         hasPage: 1,
         allyAccess: 1,
         maxLevel: 1,

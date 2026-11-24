@@ -68,7 +68,8 @@ import { userBattleAtom, useUserDataSelector } from "@/utils/UserContext";
  * Profile sidebar. Each section selects only the profile fields it displays, so a profile
  * write re-renders the sections showing a changed value.
  */
-const MenuBoxProfile: React.FC = () => {
+const MenuBoxProfile: React.FC<MenuBoxProfileProps> = ({ presentation = "full" }) => {
+  const isSupplemental = presentation === "supplemental";
   const { data: identity } = useUserDataSelector(selectIdentity);
   const { location } = useGameMenu();
   const hasLocation = !!location;
@@ -76,48 +77,58 @@ const MenuBoxProfile: React.FC = () => {
   return (
     <>
       <div className="flex-col items-center justify-center">
-        <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
-          <Link href="/profile">
-            <AvatarImage
-              href={identity?.avatar}
-              alt={identity?.username}
-              className="theme-player-avatar"
-              size={100}
-              hover_effect={true}
-              priority
-            />
-          </Link>
+        {!isSupplemental && (
+          <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
+            <Link href="/profile">
+              <AvatarImage
+                href={identity?.avatar}
+                alt={identity?.username}
+                className="theme-player-avatar"
+                size={100}
+                hover_effect={true}
+                priority
+              />
+            </Link>
 
-          <div className="pt-5">
-            <ProfilePools />
-            <ProfileLevel />
+            <div className="pt-5">
+              <ProfilePools />
+              <ProfileLevel />
+            </div>
           </div>
-        </div>
+        )}
+        {isSupplemental && <ProfileLevel showProgress={false} />}
 
-        <div className="mt-4">
-          <hr />
-          <ProfileStanding hasLocation={hasLocation} />
-          <p suppressHydrationWarning>
-            <b>Time: </b> <GameClock />
-          </p>
-        </div>
+        {!isSupplemental && (
+          <div className="mt-4">
+            <hr />
+            <ProfileStanding hasLocation={hasLocation} />
+            <p suppressHydrationWarning>
+              <b>Time: </b> <GameClock />
+            </p>
+          </div>
+        )}
         <ProfileBattleEffects />
-        <hr className="my-2" />
-        <div className="flex flex-col gap-1">
-          <ProfileMoney hasLocation={hasLocation} />
-          <ProfileTimers />
-          <ProfileDailyActivities />
-          <ProfileReputation />
-        </div>
+        {!isSupplemental && (
+          <>
+            <hr className="my-2" />
+            <div className="flex flex-col gap-1">
+              <ProfileMoney hasLocation={hasLocation} />
+              <ProfileTimers />
+              <ProfileDailyActivities />
+              <ProfileReputation />
+            </div>
+          </>
+        )}
       </div>
       <hr className="my-2" />
-      <div className="flex justify-center px-2 pt-2 align-center">
+      <div className="flex justify-center px-2 pt-2 align-center" data-profile-social>
         {SOCIAL_LINKS.map((social) => {
           return (
             <a
               target="_blank"
               href={social.url}
               key={social.url}
+              title={social.alt}
               className="hover:opacity-80"
               rel="noopener"
             >
@@ -133,7 +144,10 @@ const MenuBoxProfile: React.FC = () => {
 export default MenuBoxProfile;
 
 /** Health, chakra, stamina and energy, with combat values while the player fights. */
-const ProfilePools: React.FC = () => {
+export const ProfilePools: React.FC<{ compact?: boolean; onInspect?: () => void }> = ({
+  compact = false,
+  onInspect,
+}) => {
   const { data: userData, timeDiff } = useUserDataSelector(selectPools);
   const battle = useAtomValue(userBattleAtom);
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
@@ -157,6 +171,8 @@ const ProfilePools: React.FC = () => {
     <>
       <PoolStatusBars
         pools={pools}
+        compact={compact}
+        onInspect={onInspect}
         remountOnChange
         lastRegenAt={userData?.regenAt}
         regen={hasBattlePools ? 0 : passiveRegeneration}
@@ -166,6 +182,9 @@ const ProfilePools: React.FC = () => {
       />
       <StatusBar
         title="EP"
+        resourceName="Energy"
+        compact={compact}
+        onInspect={onInspect}
         tooltip="Energy continues recovering during combat and is credited when you leave."
         combatRegenerationPeriods={
           userData?.status === "BATTLE" && battle?.id === userData.battleId
@@ -196,29 +215,44 @@ const ProfilePools: React.FC = () => {
 };
 
 /** Experience toward the next level, the level-up action or Elite Jonin milestones. */
-const ProfileLevel: React.FC = () => {
+export const ProfileLevel: React.FC<{
+  compact?: boolean;
+  onInspect?: () => void;
+  showProgress?: boolean;
+}> = ({ compact = false, onInspect, showProgress = true }) => {
   const { data: userData } = useUserDataSelector(selectLevel);
-  if (userData?.rank === "ELITE JONIN")
+  if (!compact && userData?.rank === "ELITE JONIN")
     return (
       <Link href="/academy" className="block text-center text-sm underline">
         Milestones: {Math.max(0, userData.level - MAX_EXPERIENCE_LEVEL)}/
         {MAX_PLAYER_LEVEL - MAX_EXPERIENCE_LEVEL}
       </Link>
     );
-  if (userData?.canLevelUp) return <LevelUpBtn />;
+  if (!compact && userData?.canLevelUp) return <LevelUpBtn />;
   return (
     <>
-      <StatusBar
-        title="XP"
-        tooltip="Experience required for next level"
-        color="bg-yellow-500"
-        showText={true}
-        regen={0}
-        status={userData?.status}
-        current={userData?.earnedExperience ?? 0}
-        total={userData?.requiredExperience}
-      />
-      {userData && userData.unassignedExperience > 0 && (
+      {(showProgress || compact) && (
+        <StatusBar
+          title="XP"
+          resourceName="Experience"
+          compact={compact}
+          onInspect={onInspect}
+          tooltip={
+            userData?.canLevelUp
+              ? "Ready to level up in your player menu"
+              : userData?.rank === "ELITE JONIN"
+                ? "Elite Jonin milestones are available at the Academy"
+                : "Experience required for next level"
+          }
+          color="bg-yellow-500"
+          showText={true}
+          regen={0}
+          status={userData?.status}
+          current={userData?.earnedExperience ?? 0}
+          total={userData?.requiredExperience}
+        />
+      )}
+      {!compact && userData && userData.unassignedExperience > 0 && (
         <Link
           href="/profile/experience"
           className="block text-center text-xs underline"
@@ -253,42 +287,65 @@ const ProfileStanding: React.FC<{ hasLocation: boolean }> = ({ hasLocation }) =>
           </Link>
         </p>
       )}
-      {userData && (
-        <TooltipProvider delayDuration={50}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <p className="cursor-default">
-                <b>Bracket: </b>
-                {userData.bracket}/{MAX_PVP_BRACKET}
-              </p>
-            </TooltipTrigger>
-            <TooltipContent>
-              {userData.isEliteJonin ? (
-                <>
-                  Elite Jonin use bracket {ELITE_JONIN_BRACKET}. Your fights are limited
-                  to brackets {ELITE_JONIN_BRACKET - 1} and {ELITE_JONIN_BRACKET},
-                  including during wars or when immunity is lifted.
-                </>
-              ) : (
-                <>
-                  PvP bracket based on experience (Academy & Genin are bracket 0). You
-                  can freely attack players in your bracket, one bracket below, or
-                  higher. Attacking Elite Jonin requires bracket{" "}
-                  {ELITE_JONIN_BRACKET - 1} or {ELITE_JONIN_BRACKET}. Other players more
-                  than one bracket below are protected unless their immunity is lifted
-                  or both sides are active war participants.
-                </>
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
+      <ProfileBracket />
     </>
   );
 };
 
+/** Experience-based PvP bracket and its existing attack-range guidance. */
+export const ProfileBracket: React.FC<{ compact?: boolean }> = ({
+  compact = false,
+}) => {
+  const { data: userData } = useUserDataSelector((user) => ({
+    bracket: getExpBracket(user.experience, user.rank),
+    isEliteJonin: user.rank === "ELITE JONIN",
+  }));
+  if (!userData) return null;
+  return (
+    <TooltipProvider delayDuration={50}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {compact ? (
+            <button
+              type="button"
+              aria-label={`PvP bracket: ${userData.bracket}/${MAX_PVP_BRACKET}`}
+            >
+              <Swords aria-hidden />
+              <span data-player-summary-label>Bracket</span>
+              {userData.bracket}/{MAX_PVP_BRACKET}
+            </button>
+          ) : (
+            <p className="cursor-default">
+              <b>Bracket: </b>
+              {userData.bracket}/{MAX_PVP_BRACKET}
+            </p>
+          )}
+        </TooltipTrigger>
+        <TooltipContent>
+          {userData.isEliteJonin ? (
+            <>
+              Elite Jonin use bracket {ELITE_JONIN_BRACKET}. Your fights are limited to
+              brackets {ELITE_JONIN_BRACKET - 1} and {ELITE_JONIN_BRACKET}, including
+              during wars or when immunity is lifted.
+            </>
+          ) : (
+            <>
+              PvP bracket based on experience (Academy & Genin are bracket 0). You can
+              freely attack players in your bracket, one bracket below, or higher.
+              Attacking Elite Jonin requires bracket {ELITE_JONIN_BRACKET - 1} or{" "}
+              {ELITE_JONIN_BRACKET}. Other players more than one bracket below are
+              protected unless their immunity is lifted or both sides are active war
+              participants.
+            </>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
 /** Status label linked to the page where the player can act on it. */
-const StatusLink: React.FC<{
+export const StatusLink: React.FC<{
   status: (typeof UserStatuses)[number] | "UNKNOWN";
   hasLocation: boolean;
 }> = ({ status, hasLocation }) => {
@@ -347,19 +404,35 @@ const ProfileBattleEffects: React.FC = () => {
 };
 
 /** Money on hand, linked to the bank inside a location. */
-const ProfileMoney: React.FC<{ hasLocation: boolean }> = ({ hasLocation }) => {
+export const ProfileMoney: React.FC<{ hasLocation: boolean; compact?: boolean }> = ({
+  hasLocation,
+  compact = false,
+}) => {
   const { data: money } = useUserDataSelector(selectMoney);
   return (
     <TooltipProvider delayDuration={50}>
       <Tooltip>
-        <TooltipTrigger className="w-full">
+        <TooltipTrigger asChild>
           <Link
+            aria-label={`Money on hand: ${money?.toLocaleString() ?? "Loading"}`}
             href={hasLocation ? "/bank" : "/profile"}
-            className="hover:text-orange-500"
+            className="w-full hover:text-orange-500"
           >
             <div className="flex flex-row items-center">
               <p className="mr-3 text-xl">両</p>
-              {money?.toLocaleString() ?? "??"}
+              {compact ? (
+                <>
+                  <span data-player-summary-label>Money</span>
+                  <span data-player-summary-short-value>
+                    {money === undefined ? "??" : compactNumberFormat.format(money)}
+                  </span>
+                  <span data-player-summary-full-value>
+                    {money?.toLocaleString() ?? "??"}
+                  </span>
+                </>
+              ) : (
+                (money?.toLocaleString() ?? "??")
+              )}
             </div>
           </Link>
         </TooltipTrigger>
@@ -370,7 +443,7 @@ const ProfileMoney: React.FC<{ hasLocation: boolean }> = ({ hasLocation }) => {
 };
 
 /** Meals, immunities and every running training or crafting countdown. */
-const ProfileTimers: React.FC = () => {
+export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   const { data: userData, timeDiff } = useUserDataSelector(selectTimers);
   const [now, setNow] = useState(Date.now);
   const refreshTime = () => setNow(Date.now());
@@ -425,8 +498,10 @@ const ProfileTimers: React.FC = () => {
               <div className="flex flex-row items-center">
                 <Utensils className="mr-2 h-6 w-6" />
                 <span>
-                  Meal:{" "}
+                  {!compact && <>Meal: </>}
+                  {compact && <span data-player-summary-label>Meal</span>}
                   <Countdown
+                    format={compact ? formatBracketedClock : undefined}
                     targetDate={buff.expiresAt}
                     timeDiff={timeDiff}
                     onEndShow="Expired"
@@ -449,6 +524,7 @@ const ProfileTimers: React.FC = () => {
             <TooltipTrigger className="w-full">
               <div className="flex flex-row items-center">
                 <ShieldCheck className="mr-2 h-6 w-6" />
+                {compact && <span data-player-summary-label>PvP immunity</span>}
                 <Countdown
                   targetDate={userData.immunityUntil}
                   timeDiff={timeDiff}
@@ -467,6 +543,9 @@ const ProfileTimers: React.FC = () => {
             <TooltipTrigger className="w-full">
               <div className="flex flex-row items-center text-orange-500">
                 <ShieldAlert className="mr-2 h-6 w-6" />
+                {compact && (
+                  <span data-player-summary-label>Bracket immunity lifted</span>
+                )}
                 <Countdown
                   targetDate={userData.bracketImmunityLiftedUntil}
                   timeDiff={timeDiff}
@@ -485,6 +564,7 @@ const ProfileTimers: React.FC = () => {
             <TooltipTrigger className="w-full">
               <div className="flex flex-row items-center text-red-500">
                 <Swords className="mr-2 h-6 w-6" />
+                {compact && <span data-player-summary-label>War participant</span>}
                 <Countdown
                   targetDate={userData.warParticipantUntil}
                   timeDiff={timeDiff}
@@ -503,17 +583,23 @@ const ProfileTimers: React.FC = () => {
           const Icon = kind === "ELEMENT" ? Flame : Medal;
           return endsAt ? (
             <SidebarTimerRow
+              showSummaryLabel={compact}
               key={kind}
               icon={<Icon className="mr-2 h-6 w-6" />}
               href="/traininggrounds"
               tooltip={<>{MASTERY_QUEUE_KIND_LABELS[kind]} training</>}
             >
-              <Countdown targetDate={endsAt} timeDiff={timeDiff} />
+              <Countdown
+                targetDate={endsAt}
+                timeDiff={timeDiff}
+                format={compact ? formatBracketedClock : undefined}
+              />
             </SidebarTimerRow>
           ) : null;
         })}
       {trainingJutsu && (
         <SidebarTimerRow
+          showSummaryLabel={compact}
           icon={<Atom className="mr-2 h-6 w-6" />}
           href="/traininggrounds"
           tooltip={
@@ -523,6 +609,7 @@ const ProfileTimers: React.FC = () => {
           }
         >
           <Countdown
+            format={compact ? formatBracketedClock : undefined}
             targetDate={trainingJutsu.finishTraining}
             timeDiff={timeDiff}
             onFinish={async () => {
@@ -536,6 +623,7 @@ const ProfileTimers: React.FC = () => {
       )}
       {userData?.covertTrainingType && covertTrainingFinishAt && (
         <SidebarTimerRow
+          showSummaryLabel={compact}
           icon={
             userData.covertTrainingType === "stealth" ? (
               <EyeOff className="mr-2 h-6 w-6" />
@@ -551,6 +639,7 @@ const ProfileTimers: React.FC = () => {
           }
         >
           <Countdown
+            format={compact ? formatBracketedClock : undefined}
             targetDate={covertTrainingFinishAt}
             timeDiff={timeDiff}
             onFinish={async () => {
@@ -561,11 +650,13 @@ const ProfileTimers: React.FC = () => {
       )}
       {activeItemCraftingTimer && (
         <SidebarTimerRow
+          showSummaryLabel={compact}
           icon={<Hammer className="mr-2 h-6 w-6" />}
           href="/occupation"
           tooltip={<>Crafting {activeItemCraftingTimer.itemName}</>}
         >
           <Countdown
+            format={compact ? formatBracketedClock : undefined}
             targetDate={activeItemCraftingTimer.craftingFinishedAt}
             timeDiff={timeDiff}
             onFinish={refreshItemTimers}
@@ -574,6 +665,7 @@ const ProfileTimers: React.FC = () => {
       )}
       {activeImbuementTimer && (
         <SidebarTimerRow
+          showSummaryLabel={compact}
           icon={<Gem className="mr-2 h-6 w-6" />}
           href="/occupation"
           tooltip={
@@ -584,6 +676,7 @@ const ProfileTimers: React.FC = () => {
           }
         >
           <Countdown
+            format={compact ? formatBracketedClock : undefined}
             targetDate={activeImbuementTimer.craftingFinishedAt}
             timeDiff={timeDiff}
             onFinish={refreshItemTimers}
@@ -595,7 +688,9 @@ const ProfileTimers: React.FC = () => {
 };
 
 /** Daily missions, errands, medical and PvP missions still open today. */
-const ProfileDailyActivities: React.FC = () => {
+export const ProfileDailyActivities: React.FC<{ compact?: boolean }> = ({
+  compact = false,
+}) => {
   const { data: userData } = useUserDataSelector(selectDailyActivities);
   return (
     <>
@@ -603,32 +698,43 @@ const ProfileDailyActivities: React.FC = () => {
         [
           {
             icon: LayoutList,
+            name: "Missions",
             done: userData.dailyMissions,
             limit: MISSIONS_PER_DAY,
             tooltip: "Daily missions to complete",
           },
           {
             icon: ClipboardList,
+            name: "Errands",
             done: userData.dailyErrands ?? 0,
             limit: ERRANDS_PER_DAY,
             tooltip: "Daily errands to complete",
           },
           {
             icon: Stethoscope,
+            name: "Medical",
             done: userData.dailyMedicalMissions ?? 0,
             limit: MEDICAL_MISSIONS_PER_DAY,
             tooltip: "Daily medical missions to complete",
           },
           {
             icon: Swords,
+            name: "PvP",
             done: userData.dailyPvpMissions ?? 0,
             limit: PVP_MISSIONS_PER_DAY,
             tooltip: "Daily PvP missions to complete",
           },
-        ].map(({ icon: Icon, done, limit, tooltip }) =>
+        ].map(({ icon: Icon, done, limit, tooltip, name }) =>
           done < limit ? (
-            <SidebarLinkRow key={tooltip} href="/missionhall" tooltip={tooltip}>
-              <Icon className="mr-2 h-6 w-6" /> {done} / {limit}
+            <SidebarLinkRow
+              key={tooltip}
+              href="/missionhall"
+              tooltip={tooltip}
+              label={`${tooltip}: ${done} / ${limit}`}
+            >
+              <Icon className="mr-2 h-6 w-6" />{" "}
+              {compact && <span data-player-summary-label>{name}</span>}
+              {compact ? `${done}/${limit}` : `${done} / ${limit}`}
             </SidebarLinkRow>
           ) : null,
         )}
@@ -637,11 +743,32 @@ const ProfileDailyActivities: React.FC = () => {
 };
 
 /** Reputation points, linked to the black market. */
-const ProfileReputation: React.FC = () => {
+export const ProfileReputation: React.FC<{ compact?: boolean }> = ({
+  compact = false,
+}) => {
   const { data: reputationPoints } = useUserDataSelector(selectReputationPoints);
   return (
-    <SidebarLinkRow href="/points" tooltip="Reputation points for use in black market">
-      <Star className="mr-2 h-6 w-6" /> {reputationPoints ?? "??"}
+    <SidebarLinkRow
+      href="/points"
+      tooltip="Reputation points for use in black market"
+      label={`Reputation points: ${reputationPoints ?? "Loading"}`}
+    >
+      <Star className="mr-2 h-6 w-6" />{" "}
+      {compact ? (
+        <>
+          <span data-player-summary-label>Reputation</span>
+          <span data-player-summary-short-value>
+            {reputationPoints === undefined
+              ? "??"
+              : compactNumberFormat.format(reputationPoints)}
+          </span>
+          <span data-player-summary-full-value>
+            {reputationPoints?.toLocaleString() ?? "??"}
+          </span>
+        </>
+      ) : (
+        (reputationPoints ?? "??")
+      )}
     </SidebarLinkRow>
   );
 };
@@ -651,13 +778,15 @@ const SidebarTimerRow: React.FC<{
   icon: React.ReactNode;
   href: string;
   tooltip: React.ReactNode;
+  showSummaryLabel?: boolean;
   children: React.ReactNode;
-}> = ({ icon, href, tooltip, children }) => (
+}> = ({ icon, href, tooltip, children, showSummaryLabel = false }) => (
   <TooltipProvider delayDuration={50}>
     <Tooltip>
       <TooltipTrigger className="w-full">
         <div className="flex flex-row items-center hover:text-orange-500">
           {icon}
+          {showSummaryLabel && <span data-player-summary-label>{tooltip}</span>}
           <Link href={href}>{children}</Link>
         </div>
       </TooltipTrigger>
@@ -670,12 +799,13 @@ const SidebarTimerRow: React.FC<{
 const SidebarLinkRow: React.FC<{
   href: string;
   tooltip: string;
+  label?: string;
   children: React.ReactNode;
-}> = ({ href, tooltip, children }) => (
+}> = ({ href, tooltip, label = tooltip, children }) => (
   <TooltipProvider delayDuration={50}>
     <Tooltip>
-      <TooltipTrigger className="w-full">
-        <Link href={href} className="hover:text-orange-500">
+      <TooltipTrigger asChild>
+        <Link href={href} aria-label={label} className="w-full hover:text-orange-500">
           <div className="flex flex-row items-center">{children}</div>
         </Link>
       </TooltipTrigger>
@@ -685,7 +815,7 @@ const SidebarLinkRow: React.FC<{
 );
 
 /** A live text node keeps UTC clock ticks outside the surrounding React tree. */
-const GameClock: React.FC = () => {
+export const GameClock: React.FC = () => {
   const clock = React.useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const update = () => {
@@ -771,8 +901,6 @@ const selectLevel = (user: ProfileUser) => {
 const selectStanding = (user: ProfileUser) => ({
   status: user.status,
   villageName: user.village?.name,
-  bracket: getExpBracket(user.experience, user.rank),
-  isEliteJonin: user.rank === "ELITE JONIN",
 });
 
 const selectMoney = (user: ProfileUser) => user.money;
@@ -803,4 +931,15 @@ const selectDailyActivities = (user: ProfileUser) => ({
 
 const selectReputationPoints = (user: ProfileUser) => user.reputationPoints;
 
+/** Short HUD balances retain their exact amounts in the accessible link label. */
+const compactNumberFormat = new Intl.NumberFormat("en", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
 type ProfileUser = NonNullable<UserWithRelations>;
+
+export interface MenuBoxProfileProps {
+  /** Supplemental sidebars show only details that the persistent character HUD omits. */
+  presentation?: "full" | "supplemental";
+}

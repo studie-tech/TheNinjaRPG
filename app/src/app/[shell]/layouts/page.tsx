@@ -3,10 +3,10 @@
 import { Check, Palette } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useSelectGameLayout } from "@/hooks/useGameLayout";
+import { useAvailableGameLayouts, useSelectGameLayout } from "@/hooks/useGameLayout";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
-import { GAME_LAYOUTS, type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
+import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import { cn } from "@/libs/shadui";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
@@ -15,7 +15,10 @@ export default function GameLayoutsPage() {
   const selectLayout = useSelectGameLayout();
   const [tone, setTone] = useState<"all" | "light" | "dark">("all");
   const [announcement, setAnnouncement] = useState("");
-  const themes = GAME_LAYOUTS.filter((theme) => tone === "all" || theme.tone === tone);
+  const availableLayouts = useAvailableGameLayouts();
+  const themes = availableLayouts.filter(
+    (theme) => tone === "all" || theme.tone === tone,
+  );
 
   const chooseTheme = (id: GameLayoutId) => {
     selectLayout(id);
@@ -27,7 +30,7 @@ export default function GameLayoutsPage() {
   return (
     <ContentBox
       title="Choose your surroundings"
-      subtitle="Five ways to make Seichi your own."
+      subtitle="Choose how you explore Seichi."
       defaultBackHref="/profile"
       padding={false}
     >
@@ -35,8 +38,7 @@ export default function GameLayoutsPage() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <p className="max-w-prose text-muted-foreground text-sm">
             Find a space that suits how you play. Every layout includes your character,
-            the full world menu, notifications and your mobile shortcuts. Your choice is
-            saved on this device.
+            the full world menu and notifications. Your choice is saved on this device.
           </p>
           <fieldset
             className="flex gap-1 rounded-lg border border-border p-1"
@@ -118,7 +120,7 @@ export default function GameLayoutsPage() {
           })}
         </div>
         <p className="mt-8 text-muted-foreground text-sm">
-          Reading preferences, text size and mobile shortcuts work with every layout.
+          Reading preferences and text size carry across layouts.
         </p>
       </div>
     </ContentBox>

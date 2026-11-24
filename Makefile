@@ -102,6 +102,7 @@ start: # Run this worktree's server in the foreground (PORT optional)
 dev-prepare: ensure-env # Prepare a worktree without starting a server
 	@test -f app/.env || { echo 'dev: app/.env missing; copy app/.env.example and configure it.' >&2; exit 1; }
 	@$(MAKE) install ensure-services
+	@cd app && node ../scripts/dev-bun.mjs run scripts/dev-lpc.ts
 
 .PHONY: dev-up dev-status dev-down
 dev-up: # Start/reuse this worktree's server, wait for HTTP readiness, print JSON

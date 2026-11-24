@@ -8,6 +8,7 @@ import { MAX_PVP_BRACKET, XP_BRACKETS } from "@/drizzle/constants";
 import * as gameMenu from "@/hooks/useGameMenu";
 import * as Avatar from "@/layout/Avatar";
 import * as Image from "@/layout/Image";
+import * as levelUp from "@/layout/LevelUpBtn";
 import * as Link from "@/layout/Link";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import * as PoolStatusBars from "@/layout/PoolStatusBars";
@@ -130,6 +131,39 @@ const mount = () => {
 };
 
 describe("profile sidebar sections", () => {
+  it("keeps supplemental details without duplicating the character HUD", () => {
+    const view = render(<MenuBoxProfile presentation="supplemental" />);
+    expect(Avatar.default).not.toHaveBeenCalled();
+    expect(view.container.textContent).not.toContain("Bracket:");
+    expect(view.container.textContent).not.toContain("Time:");
+    expect(view.container.textContent).not.toContain("Status:");
+    expect(view.container.textContent).not.toContain("Village:");
+    expect(renders.pools).toBe(0);
+    expect(renders.bars).toEqual([]);
+    expect(renders.links).toEqual([]);
+  });
+
+  it("retains advancement actions in the supplemental sidebar", () => {
+    vi.spyOn(levelUp, "default").mockReturnValue(
+      <button type="button">Level up</button>,
+    );
+    user = { ...user, experience: calcLevelRequirements(10) };
+    const view = render(<MenuBoxProfile presentation="supplemental" />);
+    expect(view.getByRole("button", { name: "Level up" })).toBeTruthy();
+    expect(renders.pools).toBe(0);
+    expect(renders.bars).toEqual([]);
+  });
+
+  it("keeps unassigned XP and Elite Jonin milestones accessible without progress bars", () => {
+    user = { ...user, strength: 1, earnedExperience: 200 };
+    const view = render(<MenuBoxProfile presentation="supplemental" />);
+    expect(view.getByText(/200 unassigned XP/)).toBeTruthy();
+    write({ rank: "ELITE JONIN", level: 151 });
+    expect(view.getByText(/^Milestones:/)).toBeTruthy();
+    expect(renders.pools).toBe(0);
+    expect(renders.bars).toEqual([]);
+  });
+
   it("re-renders only the money row for a money write", () => {
     const view = mount();
     write({ money: 250 });

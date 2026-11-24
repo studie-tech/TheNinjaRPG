@@ -24,6 +24,7 @@ import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import { GameSettingsPopover, type GameSettingsUser } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import type { MenuBoxProfileProps } from "@/layout/MenuBoxProfile";
 import { SideBannerTitle } from "@/layout/SideBannerTitle";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import { getMainNavbarLinks, type NavBarDropdownLink } from "@/libs/menus";
@@ -107,9 +108,9 @@ const loadMenuBoxProfile = createModuleLoader(() => import("@/layout/MenuBoxProf
  */
 export const preloadSignedInSidebar = () => void loadMenuBoxProfile();
 
-const MenuBoxProfile = () => {
+const MenuBoxProfile = ({ presentation }: MenuBoxProfileProps) => {
   const { default: LoadedMenuBoxProfile } = use(loadMenuBoxProfile());
-  return <LoadedMenuBoxProfile />;
+  return <LoadedMenuBoxProfile presentation={presentation} />;
 };
 
 interface LayoutLeftSidebarProps {
@@ -138,14 +139,16 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
     <div>
       {userData && (
         <>
-          <SideBannerTitle>
-            <Link
-              href={`/userid/${userData.userId}`}
-              className="inline-block flex flex-row hover:text-orange-500"
-            >
-              {userData.username} <Link2 className="inline-block h-5 w-5" />
-            </Link>
-          </SideBannerTitle>
+          {variant !== "sector" && (
+            <SideBannerTitle>
+              <Link
+                href={`/userid/${userData.userId}`}
+                className="inline-block flex flex-row hover:text-orange-500"
+              >
+                {userData.username} <Link2 className="inline-block h-5 w-5" />
+              </Link>
+            </SideBannerTitle>
+          )}
           <ChunkErrorBoundary
             fallback={(retry) => (
               <div className="p-2 text-sm">
@@ -163,7 +166,9 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
                 />
               }
             >
-              <MenuBoxProfile />
+              <MenuBoxProfile
+                presentation={variant === "sector" ? "supplemental" : "full"}
+              />
             </Suspense>
           </ChunkErrorBoundary>
         </>
@@ -320,59 +325,84 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   onEventClick,
   onThemeToggle,
 }) => {
-  const iconClassName = cn(
-    "h-6 w-6 rounded-full p-1 xl:h-7 xl:w-7",
-    variant === "default"
-      ? "bg-blue-100 text-slate-700 group-hover/icon:bg-blue-300 group-hover/icon:text-black"
-      : "bg-slate-700/80 text-orange-50 group-hover/icon:bg-slate-600 group-hover/icon:text-white",
-  );
+  const isSector = variant === "sector";
+  const iconClassName = isSector
+    ? "sector-account-icon"
+    : cn(
+        "h-6 w-6 rounded-full p-1 xl:h-7 xl:w-7",
+        variant === "default"
+          ? "bg-blue-100 text-slate-700 group-hover/icon:bg-blue-300 group-hover/icon:text-black"
+          : "bg-slate-700/80 text-orange-50 group-hover/icon:bg-slate-600 group-hover/icon:text-white",
+      );
 
   return (
-    <div className="flex flex-row items-center gap-1 in-data-stacked-icons:flex-col in-data-stacked-icons:gap-1.5">
+    <div
+      className={
+        isSector
+          ? "sector-account-actions"
+          : "flex flex-row items-center gap-1 in-data-stacked-icons:flex-col in-data-stacked-icons:gap-1.5"
+      }
+    >
       {isSignedIn && (
         <span
           data-sidebar-keep-open="true"
           data-clerk-element="true"
-          className="inline-flex items-center [color-scheme:light]"
+          className={cn(
+            "inline-flex items-center [color-scheme:light]",
+            isSector && "sector-account-user",
+          )}
         >
           <UserButton
             appearance={{
               elements: {
-                rootBox: "[color-scheme:light]",
+                rootBox: isSector
+                  ? "sector-clerk-root [color-scheme:light]"
+                  : "[color-scheme:light]",
+                userButtonTrigger: isSector ? "sector-clerk-trigger" : undefined,
+                userButtonAvatarBox: isSector ? "sector-clerk-avatar" : undefined,
                 userButtonPopoverCard: "[color-scheme:light] [pointer-events:initial]",
                 userButtonPopoverMain: "[color-scheme:light]",
               },
             }}
           />
+          {isSector && (
+            <span className="sector-account-user-label" aria-hidden>
+              Account
+            </span>
+          )}
         </span>
       )}
       <Link
         href="/event"
         onClick={onEventClick}
         aria-label="Event Notifications"
-        className={SIGNED_IN_ICON_TARGET}
+        className={isSector ? "sector-account-action" : SIGNED_IN_ICON_TARGET}
       >
         <Bell className={iconClassName} />
+        {isSector && <span>Events</span>}
       </Link>
       <Link
         href="/help"
         id="tutorial-bugs"
         aria-label="Bugs"
-        className={SIGNED_IN_ICON_TARGET}
+        className={isSector ? "sector-account-action" : SIGNED_IN_ICON_TARGET}
       >
         <Bug className={iconClassName} />
+        {isSector && <span>Bugs?</span>}
       </Link>
       <GameSettingsPopover
         userData={userData}
         updateUser={updateUser}
         trigger="settings"
+        triggerClassName={isSector ? "sector-account-action" : undefined}
+        triggerLabel={isSector ? "Settings" : undefined}
       />
       {getGameLayout(variant).supportsColorMode && (
         <button
           type="button"
           aria-label="Toggle light and dark theme"
           title="Toggle light and dark theme"
-          className={SIGNED_IN_ICON_TARGET}
+          className={isSector ? "sector-account-action" : SIGNED_IN_ICON_TARGET}
           onClick={onThemeToggle}
         >
           <Eclipse
@@ -382,6 +412,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
               variant === "default" && "bg-yellow-100 dark:bg-blue-100",
             )}
           />
+          {isSector && <span>Theme</span>}
         </button>
       )}
     </div>
@@ -405,7 +436,9 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
 
   return (
     <>
-      <SideBannerTitle>Main Menu</SideBannerTitle>
+      <SideBannerTitle>
+        {variant === "sector" ? "Community" : "Main Menu"}
+      </SideBannerTitle>
       <div className="theme-menu-grid mt-1 grid grid-cols-2 gap-3">
         {navbarMenuItems.map((system) => {
           return (
@@ -422,11 +455,18 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
             </Button>
           );
         })}
-        {/* A full row: the phone-sized icon targets do not fit beside a menu button. */}
-        <div className="col-span-2 flex flex-row flex-wrap items-center justify-center">
-          {signedInIcons}
-        </div>
+        {variant !== "sector" && (
+          <div className="col-span-2 flex flex-row flex-wrap items-center justify-center">
+            {signedInIcons}
+          </div>
+        )}
       </div>
+      {variant === "sector" && (
+        <>
+          <SideBannerTitle>Account</SideBannerTitle>
+          {signedInIcons}
+        </>
+      )}
     </>
   );
 };
@@ -454,9 +494,11 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
   const renderDefaultSidebar = () => (
     <>
       <CollapsibleNotifications notifications={notifications} />
-      <SideBannerTitle break={notifications && notifications.length > 0}>
-        Main Menu
-      </SideBannerTitle>
+      {variant !== "sector" && (
+        <SideBannerTitle break={notifications && notifications.length > 0}>
+          Main Menu
+        </SideBannerTitle>
+      )}
       <div className="theme-menu-grid mt-1 grid grid-cols-2 gap-3">
         {systems.map((system) => {
           const disabled = system.requireAwake && userData.status !== "AWAKE";
@@ -493,11 +535,17 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
       </div>
       {location && (
         <>
-          <SideBannerTitle break>Location Menu</SideBannerTitle>
+          <SideBannerTitle break={variant !== "sector"}>
+            {variant === "sector" ? "Location" : "Location Menu"}
+          </SideBannerTitle>
           <div className={inBattle && location.requireAwake ? "opacity-30" : ""}>
             <Link
               href={inBattle && location.requireAwake ? "/combat" : location.href}
-              className="flex flex-row justify-center text-center"
+              className={
+                variant === "sector"
+                  ? "sector-location-link"
+                  : "flex flex-row justify-center text-center"
+              }
               id={location.id}
             >
               {location.icon}

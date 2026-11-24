@@ -5,6 +5,7 @@ import {
   chooseShell,
   parseShellParam,
   publicPathForShellPath,
+  SHELL_CLIENTS,
   SHELL_PARAMS,
   type ShellRequest,
   shellParam,
@@ -35,8 +36,12 @@ describe("shell variants", () => {
   );
 
   it("builds every variant once", () => {
-    expect(SHELL_PARAMS).toHaveLength(30 + WALLPAPER_VARIANTS.length);
-    expect(new Set(SHELL_PARAMS).size).toBe(30 + WALLPAPER_VARIANTS.length);
+    expect(SHELL_PARAMS).toHaveLength(
+      SHELL_CLIENTS.length * GAME_LAYOUTS.length * 2 + WALLPAPER_VARIANTS.length,
+    );
+    expect(new Set(SHELL_PARAMS).size).toBe(
+      SHELL_CLIENTS.length * GAME_LAYOUTS.length * 2 + WALLPAPER_VARIANTS.length,
+    );
     expect(SHELL_PARAMS).toContain("web-default-out");
     expect(SHELL_PARAMS).toContain("android-pixel-in");
     expect(SHELL_PARAMS).toContain("ios-20-eclipse-observatory-in");

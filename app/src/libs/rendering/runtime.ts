@@ -204,6 +204,7 @@ export const createGameRenderer = async (options: {
   };
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;
+  let paused = false;
   let contextLost = false;
   let disposed = false;
   /** A renderer whose frame failed while its context was live is not handed to another scene. */
@@ -233,7 +234,7 @@ export const createGameRenderer = async (options: {
     telemetry.contextLost();
   };
   const tick = (now: number) => {
-    if (disposed) return;
+    if (disposed || paused) return;
     // A frame can run after the context is gone but before its loss event arrives (iOS
     // Safari after a long background); GL calls then fail, so wait for restoration instead.
     if (renderer.context.isLost) {
@@ -305,7 +306,8 @@ export const createGameRenderer = async (options: {
     }
   };
   const updateSubscription = () => {
-    const drawable = visible && !document.hidden && !contextLost && !disposed;
+    const drawable =
+      visible && !paused && !document.hidden && !contextLost && !disposed;
     // Slow continuous scenes sleep between frames instead of checking every refresh.
     const sleeps = continuous && frameRate < TIMED_FRAME_RATE;
     const active = drawable && (dirty || (continuous && !sleeps));
@@ -349,7 +351,7 @@ export const createGameRenderer = async (options: {
     width = renderer.width,
     height = renderer.height,
   ) => {
-    if (disposed) return;
+    if (disposed || paused) return;
     const base = baseResolution(width, height);
     let level: QualityLevel = { resolution: base, disabled: [] };
     if (adapts()) {
@@ -534,6 +536,17 @@ export const createGameRenderer = async (options: {
       frameRate = nextRate;
       if (resumed) invalidate();
       else updateSubscription();
+    },
+    /** Retain the last frame while a host owns interaction; resume pending changes without rebuilding. */
+    setPaused: (value: boolean) => {
+      if (disposed || paused === value) return;
+      paused = value;
+      if (!paused) {
+        // Resizing clears the retained buffer, so re-measure only when its host resumes.
+        const width = Math.max(1, options.width ?? mount.clientWidth);
+        updateQuality(true, width, options.height(width));
+      }
+      invalidate();
     },
     dispose,
     /**

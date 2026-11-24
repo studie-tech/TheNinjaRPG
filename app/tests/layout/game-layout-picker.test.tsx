@@ -11,6 +11,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 type PickerRouter = {
   refresh: ReturnType<typeof vi.fn>;
@@ -35,6 +36,12 @@ beforeEach(() => {
   localStorage.removeItem(LAYOUT_PREFERENCE_COOKIE);
   document.cookie = `${LAYOUT_PREFERENCE_COOKIE}=; path=/; max-age=0`;
   installBrowserGlobals({ scrollIntoView: true });
+  mockUserContextValue({
+    data: { userId: "player" },
+    userId: "player",
+    isClerkLoaded: true,
+    isSignedIn: true,
+  });
 });
 
 afterEach(async () => {
@@ -42,6 +49,7 @@ afterEach(async () => {
     cleanup();
     await flushRadixFocus();
   });
+  vi.restoreAllMocks();
   restoreBrowserGlobals();
 });
 
@@ -115,7 +123,87 @@ describe("game layout picker", () => {
     expect(localStorage.getItem(LAYOUT_PREFERENCE_COOKIE)).toBe('"3-sakura-courtyard"');
   });
 
-  it("offers all five layouts as peers in one selector", async () => {
+  it.each([
+    {
+      label: "created character",
+      isClerkLoaded: true,
+      isSignedIn: true,
+      userId: "player",
+      data: { userId: "player" },
+      allowed: true,
+    },
+    {
+      label: "no character",
+      isClerkLoaded: true,
+      isSignedIn: true,
+      userId: "player",
+      data: undefined,
+      allowed: false,
+    },
+    {
+      label: "loading auth",
+      isClerkLoaded: false,
+      isSignedIn: true,
+      userId: "player",
+      data: { userId: "player" },
+      allowed: false,
+    },
+    {
+      label: "signed out",
+      isClerkLoaded: true,
+      isSignedIn: false,
+      userId: "player",
+      data: { userId: "player" },
+      allowed: false,
+    },
+    {
+      label: "stale account profile",
+      isClerkLoaded: true,
+      isSignedIn: true,
+      userId: "other",
+      data: { userId: "player" },
+      allowed: false,
+    },
+  ])(
+    "admits sector selection only for a signed-in character: $label",
+    async ({ allowed, ...session }) => {
+      const router = getRouter();
+      router.replace.mockClear();
+      mockUserContextValue(session);
+      function SelectExperiment() {
+        const selectLayout = useSelectGameLayout();
+        return (
+          <button type="button" onClick={() => selectLayout("sector")}>
+            Try sector
+          </button>
+        );
+      }
+      const view = render(<SelectExperiment />);
+      fireEvent.click(view.getByRole("button", { name: "Try sector" }));
+      if (allowed) {
+        expect(router.replace).toHaveBeenCalledWith("/travel");
+        expect(document.cookie).toContain(`${LAYOUT_PREFERENCE_COOKIE}=sector`);
+      } else {
+        expect(router.replace).not.toHaveBeenCalled();
+        expect(localStorage.getItem(LAYOUT_PREFERENCE_COOKIE)).toBeNull();
+        expect(document.cookie).not.toContain(`${LAYOUT_PREFERENCE_COOKIE}=sector`);
+      }
+    },
+  );
+
+  it("omits the sector choice before character creation", async () => {
+    mockUserContextValue({
+      isClerkLoaded: true,
+      isSignedIn: true,
+      userId: "new-player",
+      status: "success",
+    });
+    const view = await openPicker();
+    expect(view.queryByRole("option", { name: "Sector Layout" })).toBeNull();
+    expect(view.getByRole("option", { name: "Classic" })).toBeTruthy();
+  });
+
+  it("offers the layouts including the opt-in experiment in one selector", async () => {
     const view = await openPicker();
     expect(view.getAllByRole("listbox")).toHaveLength(1);
     expect(view.getAllByRole("option").map((option) => option.textContent)).toEqual([
@@ -124,6 +212,7 @@ describe("game layout picker", () => {
       "Eclipse Observatory",
       "Obsidian Council",
       "Sakura Courtyard",
+      "Sector Layout",
     ]);
   });
 

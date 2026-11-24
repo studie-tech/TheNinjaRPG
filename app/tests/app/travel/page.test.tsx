@@ -3,6 +3,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
+import { type ReactNode, useMemo, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import * as lpc from "@/hooks/lpc";
@@ -13,8 +14,12 @@ import * as itemCache from "@/hooks/useItemConsumptionCacheUpdate";
 import * as assetLibrary from "@/hooks/useMapAssetLibrary";
 import * as sectorCache from "@/hooks/useSectorCacheUpdate";
 import * as sectorVillage from "@/hooks/useSectorVillage";
+import { useTravelSession } from "@/hooks/useTravelSession";
 import * as ContentBox from "@/layout/ContentBox";
+import * as ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
+import * as JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import * as TravelPosition from "@/layout/TravelPositionLabel";
+import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -36,6 +41,8 @@ Object.assign(sensoryCapture, {
 });
 const dynamicSpy = vi.spyOn(dynamic, "default").mockReturnValue((() => null) as never);
 const { default: TravelPage } = await import("@/app/[shell]/travel/page");
+const { TravelScreen } = await import("@/screens/travel/TravelScreen");
+const { TravelView } = await import("@/screens/travel/TravelView");
 dynamicSpy.mockRestore();
 sensoryCapture.mockRestore();
 let actor: NonNullable<UserWithRelations>;
@@ -63,6 +70,7 @@ const villageData = [
 ];
 const userRef = { current: undefined as NonNullable<UserWithRelations> | undefined };
 const push = vi.fn();
+const RealContentBox = ContentBox.default;
 beforeEach(() => {
   mutation.mutate.mockClear();
   mutation.isPending = false;
@@ -238,18 +246,82 @@ it("updates the Travel destination when the saved automatic-wake preference chan
   ).toBe("/home");
 });
 
-it("keeps the Sector and Global tabs in the header while the tutorial runs", () => {
-  const tabs = () => document.querySelector("[data-header-start]")?.textContent;
-  const playing = render(<TravelPage />);
-  expect(tabs()).toContain("Sector");
-  expect(tabs()).toContain("Global");
-  playing.unmount();
+it("keeps the standard Sector and Global tabs visible during the tutorial", () => {
   actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
   userRef.current = actor;
-  render(<TravelPage />);
-  expect(tabs()).toContain("Sector");
-  expect(tabs()).toContain("Global");
+  const view = render(<TravelScreen />);
+  expect(view.getByRole("button", { name: "Sector" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "Global" })).toBeTruthy();
+  expect(
+    view
+      .getByRole("button", { name: "Sector" })
+      .closest('[data-header-item="tabs"]')
+      ?.getAttribute("data-priority"),
+  ).toBe("0");
 });
+
+it("switches the retained tutorial map from the bottom bar and pauses its controls with a building", async () => {
+  actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
+  userRef.current = actor;
+  const renderView = (isInteractive: boolean) => (
+    <TravelNavigationHarness>
+      <TravelScreen immersive isInteractive={isInteractive} />
+    </TravelNavigationHarness>
+  );
+  const view = render(renderView(true));
+  const menu = view.getByRole("button", { name: "Map controls" });
+  const toggle = view.getByRole("button", { name: "Show global map" });
+  fireEvent.click(toggle);
+  expect(view.getByRole("button", { name: "Show sector map" })).toBe(toggle);
+  fireEvent.click(toggle);
+  expect(view.getByRole("button", { name: "Show global map" })).toBe(toggle);
+  expect(view.getByRole("button", { name: "Map controls" })).toBe(menu);
+  view.rerender(renderView(false));
+  expect(toggle.hasAttribute("disabled")).toBe(true);
+  expect(menu.closest("[inert]")).toBeTruthy();
+  view.rerender(renderView(true));
+  expect(toggle.hasAttribute("disabled")).toBe(false);
+  expect(menu.closest("[inert]")).toBeNull();
+  expect(mutation.mutate).not.toHaveBeenCalled();
+});
+
+it("keeps the global view during an active journey", () => {
+  actor.status = "TRAVEL";
+  actor.travelFinishAt = new Date(Date.now() + 60_000);
+  const view = render(
+    <TravelNavigationHarness>
+      <TravelScreen immersive />
+    </TravelNavigationHarness>,
+  );
+  expect(
+    view.getByRole("button", { name: "Show sector map" }).hasAttribute("disabled"),
+  ).toBe(true);
+  expect(mutation.mutate).not.toHaveBeenCalled();
+});
+
+it.each(["controls=open", "view=global"])(
+  "consumes a bottom-navigation request from an ordinary page (%s)",
+  async (request) => {
+    vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+      new URLSearchParams(`${request}&keep=value`) as never,
+    );
+    const replace = vi.fn();
+    vi.spyOn(navigation, "useRouter").mockReturnValue({ push, replace } as never);
+    const view = render(
+      <TravelNavigationHarness>
+        <TravelScreen immersive />
+      </TravelNavigationHarness>,
+    );
+    if (request === "controls=open")
+      expect(
+        view
+          .getByRole("button", { name: "Map controls" })
+          .getAttribute("aria-expanded"),
+      ).toBe("true");
+    else expect(view.getByRole("button", { name: "Show sector map" })).toBeTruthy();
+    expect(replace).toHaveBeenCalledWith("/travel?keep=value", { scroll: false });
+  },
+);
 
 it("keeps Quick Travel disabled for the current sector", async () => {
   actor.status = "ASLEEP";
@@ -561,3 +633,126 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
       }
     },
   );
+
+it("lets a building finish its access guard before the map redirects an unavailable player", () => {
+  push.mockClear();
+  actor.status = "BATTLE";
+  const view = render(<TravelScreen immersive isInteractive={false} />);
+  expect(push).not.toHaveBeenCalled();
+  view.rerender(<TravelScreen immersive isInteractive />);
+  expect(push).toHaveBeenCalledWith("/combat");
+});
+
+it.each(["World Travel", "Auto Travel"])(
+  "retains the %s request without a portaled action while a building is open",
+  async (title) => {
+    let session: ReturnType<typeof useTravelSession>;
+    function RetainedTravel({ isInteractive }: { isInteractive: boolean }) {
+      session = useTravelSession(isInteractive);
+      return <TravelView session={session} immersive isInteractive={isInteractive} />;
+    }
+    const view = render(<RetainedTravel isInteractive />);
+    await act(async () => {
+      if (title === "World Travel") session.initiateTravelToSector(1539);
+      else session.setLocationRequest({ sector: 1539 });
+    });
+    expect(view.getByRole("dialog", { name: title })).toBeTruthy();
+    await act(async () => {
+      view.rerender(<RetainedTravel isInteractive={false} />);
+      await flushRadixFocus();
+    });
+    expect(view.queryByRole("dialog", { name: title })).toBeNull();
+    view.rerender(<RetainedTravel isInteractive />);
+    expect(view.getByRole("dialog", { name: title })).toBeTruthy();
+    expect(mutation.mutate).not.toHaveBeenCalled();
+  },
+);
+
+it("renders travel tools in the bottom bar", () => {
+  const view = render(
+    <TravelNavigationHarness>
+      <TravelScreen immersive />
+    </TravelNavigationHarness>,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Map controls" }));
+  expect(view.getByRole("button", { name: "Quick Travel" })).toBeTruthy();
+  expect(view.queryByRole("button", { name: "Expand world" })).toBeNull();
+});
+
+it.each([false, true])(
+  "keeps sector loadouts in their layout controls (immersive=%s)",
+  async (immersive) => {
+    vi.spyOn(ContentBox, "default").mockImplementation(RealContentBox);
+    vi.spyOn(JutsuLoadoutSelector, "default").mockReturnValue(
+      <button type="button">Jutsu loadout</button>,
+    );
+    vi.spyOn(ItemLoadoutSelector, "default").mockReturnValue(
+      <button type="button">Item loadout</button>,
+    );
+    let session: ReturnType<typeof useTravelSession>;
+    function LoadedTravel() {
+      session = useTravelSession();
+      return (
+        <TravelView
+          session={{ ...session, showSector: !session.isGlobal }}
+          immersive={immersive}
+        />
+      );
+    }
+    const view = render(
+      <TravelNavigationHarness>
+        <LoadedTravel />
+      </TravelNavigationHarness>,
+    );
+    const box = view.container.querySelector("[data-content-box]");
+    let loadouts: Element | null | undefined;
+    if (immersive) {
+      expect(view.queryByRole("button", { name: "Jutsu loadout" })).toBeNull();
+      expect(view.queryByRole("button", { name: "Item loadout" })).toBeNull();
+      fireEvent.click(view.getByRole("button", { name: "Map controls" }));
+      const controls = view.getByRole("region", { name: "Map controls" });
+      loadouts = view.getByRole("group", { name: "Loadouts" });
+      expect(controls.contains(loadouts)).toBe(true);
+      expect(loadouts.parentElement?.lastElementChild === loadouts).toBe(true);
+      expect(box?.nextElementSibling === null).toBe(true);
+    } else {
+      expect(view.queryByRole("button", { name: "Map controls" })).toBeNull();
+      expect(view.getByRole("button", { name: "Expand world" })).toBeTruthy();
+      loadouts = box?.nextElementSibling;
+    }
+    expect(
+      loadouts?.contains(view.getByRole("button", { name: "Jutsu loadout" })),
+    ).toBe(true);
+    expect(loadouts?.contains(view.getByRole("button", { name: "Item loadout" }))).toBe(
+      true,
+    );
+    await act(async () => session.setActiveTab(session.globalLink));
+    expect(view.queryByRole("button", { name: "Jutsu loadout" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Item loadout" })).toBeNull();
+  },
+);
+
+it.each([false, true])(
+  "hides the Travel heading only when immersive=%s",
+  (immersive) => {
+    render(<TravelScreen immersive={immersive} />);
+    expect(ContentBox.default).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: "Travel", hideTitle: immersive }),
+      undefined,
+    );
+  },
+);
+
+/** Render the same retained footer slots supplied by the sector frame. */
+function TravelNavigationHarness({ children }: { children: ReactNode }) {
+  const [controls, setControls] = useState<HTMLDivElement | null>(null);
+  const [view, setView] = useState<HTMLDivElement | null>(null);
+  const value = useMemo(() => ({ controls, view }), [controls, view]);
+  return (
+    <TravelNavigationContext value={value}>
+      <div>{children}</div>
+      <div ref={setControls} />
+      <div ref={setView} />
+    </TravelNavigationContext>
+  );
+}

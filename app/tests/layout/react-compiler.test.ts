@@ -22,6 +22,23 @@ const require = createRequire(import.meta.url);
 const { c } = require("react/compiler-runtime") as { c: (size: number) => unknown[] };
 
 const targets = [
+  ["components/layout/SectorPlayerStatus.tsx", ["SectorPlayerStatus"]],
+  ["layout/StatusBar.tsx", ["StatusBar"]],
+  [
+    "layout/ContentBoxHeaderActions.tsx",
+    ["ContentBoxHeaderActions", "ContentBoxPriorityActions"],
+  ],
+  ["components/layout/SectorGameLayout.tsx", ["SectorGameLayout"]],
+  [
+    "components/layout/shared/TravelCompass.tsx",
+    ["TravelCompass", "CharacterTravelCompass"],
+  ],
+  [
+    "components/layout/shared/MobileGameNav.tsx",
+    ["MobileGameNav", "MobileGameNavButton"],
+  ],
+  ["components/layout/SectorTravelHost.tsx", ["SectorTravelHost"]],
+  ["screens/travel/TravelScreen.tsx", ["TravelScreen", "TravelRoute"]],
   [
     "layout/MenuBoxProfile.tsx",
     [
@@ -52,6 +69,7 @@ const targets = [
     ["PlayerTutorialAssistant", "GuidedLessonAssistant", "GuestGuidedLesson"],
   ],
   ["layout/ActivityDock.tsx", ["ActivityDock", "ActivityQuests"]],
+  ["layout/ActivityDockButton.tsx", ["ActivityDockButton"]],
   ["layout/kessen/match/LessonSpotlight.tsx", ["LessonGuide"]],
   [
     "layout/kessen/hub/GuestHall.tsx",
@@ -72,7 +90,7 @@ const targets = [
   ["layout/items/SlotPicker.tsx", ["SlotPicker"]],
   ["layout/items/ItemsToolbar.tsx", ["ItemsToolbar"]],
   ["layout/travel/StealthControls.tsx", ["StealthControls"]],
-  ["screens/travel/TravelView.tsx", ["TravelView"]],
+  ["screens/travel/TravelView.tsx", ["TravelView", "TravelMapControls"]],
   ["screens/bank/BankScreen.tsx", ["BankScreen"]],
   ["screens/itemshop/ItemShopScreen.tsx", ["ItemShopScreen"]],
   ["app/[shell]/profile/experience/page.tsx", ["AssignExperience"]],

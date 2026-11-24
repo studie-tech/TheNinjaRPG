@@ -25,6 +25,8 @@ export interface GameLayoutRenderProps {
   isCombatPage: boolean;
   navbarMenuItems: NavBarDropdownLink[];
   shownNotifications: NavBarDropdownLink[];
+  /** Active alerts and unread game-menu items, counting each notice once. */
+  gameMenuNotificationCount: number;
   location?: NavBarDropdownLink;
   leftSideBarOpen: boolean;
   onLeftSideBarOpenChange: (open: boolean) => void;

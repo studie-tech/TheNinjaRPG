@@ -1,0 +1,810 @@
+html[data-game-layout="sector"] {
+  --sector-bottom-nav-space: calc(5rem + env(safe-area-inset-bottom));
+  --sector-sidebar-width: 20rem;
+  --sector-header-height: calc(
+    max(0.5rem, env(safe-area-inset-top)) + 44px + 0.5rem + 1px
+  );
+}
+.sector-game {
+  min-height: 100dvh;
+  color: var(--theme-text);
+  background: var(--theme-bg);
+  font-family: var(--theme-body-font);
+}
+.sector-game-map {
+  display: flex;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sector-header {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 44px;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--theme-line);
+  padding: max(0.5rem, env(safe-area-inset-top))
+    max(0.5rem, env(safe-area-inset-right)) 0.5rem
+    max(0.5rem, env(safe-area-inset-left));
+  background: var(--theme-surface);
+}
+.sector-tool {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+}
+.sector-tool:hover,
+.sector-tool[aria-current="page"] {
+  color: var(--theme-accent);
+  background: var(--theme-bg);
+}
+.sector-tool svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.sector-drawer {
+  width: min(var(--sector-sidebar-width), calc(100vw - 2rem));
+  padding: 1rem;
+  overflow-y: auto;
+}
+/* Fold controls share the title row to keep drawer navigation compact. */
+.sector-drawer-header {
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.sector-drawer-close {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 0.375rem;
+}
+.sector-drawer-close svg {
+  width: 18px;
+  height: 18px;
+}
+.sector-drawer-close:hover {
+  background: var(--theme-bg);
+}
+.sector-drawer-close:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+.sector-mobile-nav {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 50;
+  height: var(--sector-bottom-nav-space);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--theme-line);
+  background: var(--theme-surface);
+  color: var(--theme-text);
+}
+.sector-chat-launcher {
+  position: fixed;
+  bottom: calc(var(--game-bottom-nav-h, 0px) + 1rem);
+}
+.sector-page {
+  width: min(100%, 80rem);
+  margin-inline: auto;
+  padding: calc(44px + 2rem) max(1rem, env(safe-area-inset-right))
+    calc(var(--sector-bottom-nav-space) + var(--activity-dock-space, 0px) + 2rem) max(1rem, env(safe-area-inset-left));
+}
+.sector-map-main {
+  flex: 1;
+  min-height: 0;
+  /* Keep map controls clear of the home indicator and landscape notch. */
+  padding: 0 env(safe-area-inset-right) var(--sector-bottom-nav-space)
+    env(safe-area-inset-left);
+}
+.sector-travel {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+.sector-travel > [data-content-box] {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  flex-direction: column;
+}
+.sector-travel > [data-content-box] > [data-content-box-header] {
+  flex: none;
+  border: 0;
+  padding: 0;
+}
+.sector-travel > [data-content-box] > [data-content-box-inner] {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+}
+.sector-travel [data-travel-viewport] {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Keep both corner action stacks above the 44px Chat launcher on either side. */
+.sector-travel [data-sector-corner-actions] {
+  bottom: calc(44px + 2rem);
+}
+/* Every sector wrapper must inherit height so the observed scene mount follows it. */
+.sector-travel [data-travel-viewport] div:has(#tutorial-travel-sector),
+.sector-travel [data-travel-viewport] > div:has(#tutorial-global-map),
+.sector-travel #tutorial-travel-sector,
+.sector-travel #tutorial-travel-sector > div,
+.sector-travel #tutorial-travel-sector > div > div,
+.sector-travel #tutorial-global-map {
+  height: 100%;
+}
+/* Inventory actions can grow; bound their share so the map keeps a usable viewport. */
+.sector-travel > div:not([data-content-box]) {
+  flex: none;
+  max-height: 22dvh;
+  overflow-y: auto;
+}
+.sector-building-dialog {
+  grid-template-columns: minmax(0, 1fr);
+  width: calc(100% - 1rem);
+  max-width: 72rem;
+  padding: 2.5rem 1rem 1rem;
+}
+@media (max-width: 480px) {
+  .sector-header {
+    gap: 0;
+  }
+  .sector-building-dialog {
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .sector-drawer {
+    top: calc(var(--sector-header-height) + 1rem);
+    bottom: auto;
+    /* Content-sized drawers must exclude the shared sheet's size containment. */
+    contain: layout paint style;
+    max-height: calc(
+      100dvh - var(--sector-header-height) - var(--sector-bottom-nav-space) - 2rem
+    );
+    width: var(--sector-sidebar-width);
+    max-width: calc(100vw - 2rem);
+    height: fit-content;
+    border: 1px solid var(--theme-line);
+    border-radius: var(--radius);
+  }
+  .sector-drawer[data-sector-sidebar="player"] {
+    left: max(1rem, env(safe-area-inset-left));
+  }
+  .sector-drawer[data-sector-sidebar="game"] {
+    right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+.sector-building-dialog > [data-content-box] {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* A collapsed lesson or its Quests tab still needs to open above the building.
+   Nested confirmations keep the shared dialog layer above that dock. */
+.sector-building-dialog[data-guided-tutorial] {
+  z-index: 30;
+}
+
+/* A wider center slot separates the location action from two tighter shortcut groups. */
+.sector-mobile-nav[data-travel-controls="true"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(5rem, 1.6fr) repeat(
+      4,
+      minmax(0, 1fr)
+    );
+}
+.sector-nav-map-controls,
+.sector-nav-view {
+  position: relative;
+  top: -0.5rem;
+  min-width: 0;
+}
+.sector-nav-map-controls [data-content-box-actions] {
+  width: 100%;
+  margin-left: 0;
+}
+.sector-nav-map-controls [data-content-box-actions] > button,
+.sector-nav-control {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+}
+.sector-nav-control:hover {
+  background: var(--theme-bg);
+}
+.sector-nav-control:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: -2px;
+}
+.sector-nav-control:disabled {
+  opacity: 0.4;
+}
+.sector-mobile-nav[data-travel-controls="true"] > a > svg,
+.sector-mobile-nav[data-travel-controls="true"] > div > a > svg,
+.sector-mobile-nav[data-travel-controls="true"] > button > svg {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+.sector-mobile-nav a,
+.sector-mobile-nav > button {
+  align-items: center;
+}
+.sector-nav-map-controls [data-content-box-actions] > button > svg,
+.sector-nav-control > svg {
+  width: 24px;
+  height: 24px;
+}
+.sector-mobile-nav [data-nav-center] > a,
+.sector-mobile-nav [data-nav-center] > button {
+  top: -1rem;
+  width: 100%;
+}
+.sector-mobile-nav [data-nav-center] > a > div,
+.sector-mobile-nav [data-nav-center] > button > span {
+  position: relative;
+  isolation: isolate;
+  padding: 0.4rem;
+  background: none;
+}
+/* The halo extends beyond the compact action without taking space or intercepting taps. */
+.sector-mobile-nav [data-nav-center] > a > div::before,
+.sector-mobile-nav [data-nav-center] > button > span::before {
+  position: absolute;
+  z-index: -1;
+  inset: -0.65rem;
+  border-radius: 50%;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.5));
+  pointer-events: none;
+  content: "";
+}
+.sector-mobile-nav [data-nav-center] > a > div > svg {
+  width: 36px;
+  height: 36px;
+  padding: 0.5rem;
+}
+.sector-mobile-nav [data-nav-center] > button > span > span {
+  width: 36px;
+  height: 36px;
+}
+@media (min-width: 768px) {
+  .sector-mobile-nav[data-travel-controls="true"] {
+    grid-template-columns: repeat(4, 3.75rem) 6rem repeat(4, 3.75rem);
+  }
+}
+
+/* Give the character summary the full header width while retaining a 44px row. */
+.sector-player-status {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: 36px clamp(60px, 20vw, 100px) clamp(68px, 20vw, 96px) minmax(0, 1fr);
+  gap: 3px;
+  width: 100%;
+  height: 44px;
+  min-width: 0;
+  justify-self: stretch;
+  align-items: center;
+}
+.player-status-avatar {
+  position: relative;
+  width: 36px;
+}
+.player-status-avatar .player-status-portrait {
+  width: 100%;
+  margin: 0;
+  border: 1px solid var(--theme-line);
+  border-radius: 0.5rem;
+}
+.player-status-level {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  min-width: 14px;
+  border: 1px solid var(--theme-line);
+  border-radius: 0.25rem;
+  padding: 0 2px;
+  background: var(--theme-surface);
+  font-size: 8px;
+  line-height: 1.2;
+  font-weight: 700;
+  text-align: center;
+}
+.player-status-identity {
+  min-width: 0;
+}
+@media (max-width: 767px) {
+  .player-status-identity {
+    padding-inline-start: 2px;
+  }
+}
+.player-status-name {
+  display: block;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-status-standing {
+  display: flex;
+  flex-direction: column;
+  font-size: 9px;
+  line-height: 1.2;
+}
+.player-status-standing > a,
+.player-status-standing > span {
+  min-width: 0;
+  white-space: nowrap;
+}
+.player-status-standing svg {
+  width: 9px;
+  height: 9px;
+}
+.player-status-village {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.player-status-pools {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-auto-rows: 8px;
+  gap: 1px;
+  min-width: 0;
+}
+.player-status-meter {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 3px;
+  width: 100%;
+  height: 8px;
+  align-items: center;
+  text-align: left;
+}
+.player-status-meter-label {
+  display: contents;
+  font-size: 8px;
+  line-height: 1;
+}
+.player-status-meter-label > span:first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+.player-status-meter-value {
+  display: none;
+  grid-column: 3;
+  grid-row: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.player-status-meter-track {
+  grid-column: 2;
+  grid-row: 1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.15);
+}
+/* Fill each column before wrapping, balancing cards across the available rows. */
+.player-status-shortcuts {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, 20px);
+  grid-auto-columns: max-content;
+  align-content: safe center;
+  align-items: center;
+  justify-content: safe end;
+  gap: 2px 3px;
+  min-width: 0;
+  max-height: 44px;
+  overflow: auto;
+  scrollbar-width: none;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.player-status-shortcuts > a,
+.player-status-shortcuts > button,
+.player-status-shortcuts > span {
+  display: flex;
+  align-items: center;
+  width: auto;
+  height: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 20px;
+  border: 1px solid color-mix(in srgb, var(--theme-line) 20%, transparent);
+  border-radius: 3px;
+  padding: 0 2px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.player-status-shortcuts > a:hover,
+.player-status-shortcuts > button:hover {
+  background: var(--theme-bg);
+}
+.player-status-shortcuts svg {
+  display: block;
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  margin-right: 2px;
+}
+.player-status-shortcuts p {
+  margin: 0 2px 0 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+.player-status-shortcuts > a > div,
+.player-status-shortcuts > button > div {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+}
+.player-status-shortcuts [data-player-summary-label] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (min-width: 768px) {
+  .sector-player-status {
+    grid-template-columns: 40px clamp(90px, 12vw, 160px) minmax(180px, 1fr) minmax(0, max-content);
+    gap: 2px 1rem;
+  }
+  .player-status-avatar {
+    width: 40px;
+    grid-row: 1 / 3;
+  }
+  .player-status-identity {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+  .player-status-name {
+    font-size: 12px;
+  }
+  .player-status-standing {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0 0.5rem;
+    font-size: 9px;
+  }
+  .player-status-pools {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+  .player-status-meter {
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+  }
+  .player-status-meter-value {
+    display: inline;
+  }
+  .player-status-shortcuts {
+    grid-column: 4;
+    grid-row: 1 / 3;
+    gap: 2px 0.5rem;
+    font-size: 10px;
+  }
+  .player-status-shortcuts svg {
+    width: 12px;
+    height: 12px;
+    margin-right: 3px;
+  }
+  .player-status-shortcuts > a,
+  .player-status-shortcuts > button,
+  .player-status-shortcuts > span {
+    padding-inline: 0.4rem;
+  }
+}
+
+/* Overlay only the controls themselves, leaving map gestures available between them. */
+.sector-sidebar-controls {
+  position: fixed;
+  z-index: 25;
+  top: calc(var(--sector-header-height) + 1rem);
+  right: max(1rem, env(safe-area-inset-right));
+  left: max(1rem, env(safe-area-inset-left));
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.sector-sidebar-toggle {
+  pointer-events: auto;
+  border: 1px solid var(--theme-line);
+  border-radius: 0.6rem;
+  background: var(--theme-surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+}
+.sector-sidebar-toggle[hidden] {
+  display: none;
+}
+.sector-sidebar-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+.sector-travel [data-sector-weather] {
+  top: 1rem;
+  right: auto;
+  left: 50%;
+  max-width: calc(100% - 136px);
+  transform: translateX(-50%);
+}
+
+/* Extra room adds meaning instead of stretching the meters and shortcut gaps. */
+.sector-player-status [data-player-summary-label],
+.sector-player-status [data-player-summary-full-value],
+.player-status-meter-name,
+.player-status-rank {
+  display: none;
+}
+.player-status-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+@container (min-width: 1000px) {
+  .player-status-identity [data-player-summary-label] {
+    display: inline;
+    margin-right: 0.35rem;
+  }
+  .player-status-meter-name {
+    display: inline;
+  }
+  .player-status-meter-short {
+    display: none;
+  }
+  .player-status-meter {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+  }
+  .player-status-name {
+    line-height: 1.1;
+  }
+  .player-status-standing {
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.1;
+  }
+  .player-status-standing [data-player-summary-label] {
+    opacity: 0.7;
+  }
+  .player-status-rank {
+    display: block;
+    font-size: 8px;
+    line-height: 1;
+    opacity: 0.7;
+  }
+}
+
+/* Reveal card descriptions when the header can fit them beside the resource meters. */
+@container (min-width: 1400px) {
+  .player-status-shortcuts [data-player-summary-label] {
+    display: inline;
+    max-width: 24ch;
+    margin-right: 0.35rem;
+  }
+  .player-status-shortcuts [data-player-summary-full-value] {
+    display: inline;
+  }
+  .player-status-shortcuts [data-player-summary-short-value] {
+    display: none;
+  }
+}
+@container (min-width: 1200px) {
+  .sector-player-status [data-player-summary-full-value] {
+    display: inline;
+  }
+  .sector-player-status [data-player-summary-short-value] {
+    display: none;
+  }
+}
+
+/* Sector drawers prioritize navigation and information absent from the HUD. */
+.sector-drawer .theme-menu-grid {
+  gap: 0.375rem;
+}
+.sector-drawer .theme-menu-grid > a,
+.sector-drawer .theme-menu-grid > div > a {
+  height: auto;
+  min-height: 32px;
+  padding: 0.4rem 0.65rem;
+  gap: 0.5rem;
+  font-size: 11px;
+}
+.sector-drawer .theme-menu-grid > a > span:last-child,
+.sector-drawer .theme-menu-grid > div > a > span:last-child {
+  order: -1;
+}
+.sector-drawer .theme-menu-grid a svg {
+  width: 16px;
+  height: 16px;
+}
+.sector-drawer [data-sidebar-title] {
+  padding-top: 0.6rem;
+  font-size: 12px;
+}
+.sector-drawer [data-profile-social] {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+  padding: 0;
+}
+.sector-drawer [data-profile-social] a,
+.sector-drawer [data-footer-link],
+.sector-drawer [data-footer-contact] {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+}
+.sector-drawer [data-profile-social] a:hover,
+.sector-drawer [data-footer-link]:hover,
+.sector-drawer [data-footer-contact]:hover {
+  color: var(--theme-accent);
+  background: var(--theme-bg);
+}
+.sector-drawer [data-profile-social] a:focus-visible,
+.sector-drawer [data-footer-link]:focus-visible,
+.sector-drawer [data-footer-contact]:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: -2px;
+}
+.sector-drawer [data-profile-social] img {
+  width: 24px;
+  height: 24px;
+}
+.sector-drawer [data-site-footer] {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--theme-line);
+  padding-top: 0.25rem;
+  text-align: left;
+}
+.sector-drawer [data-footer-links] {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  font-size: 11px;
+}
+.sector-drawer [data-footer-link],
+.sector-drawer [data-footer-contact] {
+  padding-inline: 0.25rem;
+  white-space: nowrap;
+}
+.sector-drawer [data-footer-separator] {
+  display: none;
+}
+.sector-drawer [data-footer-details] {
+  border-top: 1px solid var(--theme-line);
+}
+.sector-drawer [data-footer-details] summary {
+  min-height: 28px;
+  align-content: center;
+  cursor: pointer;
+  padding-inline: 0.5rem;
+  font-size: 11px;
+}
+.sector-drawer [data-footer-details] summary:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: -2px;
+}
+.sector-drawer [data-footer-meta],
+.sector-drawer [data-footer-address] {
+  margin: 0.5rem 0 0;
+  padding-inline: 0.65rem;
+  font-size: 10px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+.sector-location-link {
+  display: block;
+  margin-top: 0.5rem;
+  border: 1px solid var(--theme-line);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+}
+.sector-location-link > div {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+}
+.sector-location-link img {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  object-fit: contain;
+}
+.sector-location-link span {
+  min-width: 0;
+  font-size: 11px;
+}
+.sector-account-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.375rem;
+  width: 100%;
+  margin-block: 0.375rem;
+}
+.sector-account-action,
+.sector-clerk-trigger {
+  display: inline-flex;
+  width: 100%;
+  height: 32px;
+  align-items: center;
+  justify-content: start;
+  gap: 0.5rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--theme-line);
+  border-radius: 0.5rem;
+  color: var(--theme-text);
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+}
+.sector-account-action:hover,
+.sector-clerk-trigger:hover,
+.sector-location-link:hover {
+  background: var(--theme-bg);
+}
+.sector-account-action:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+.sector-account-icon,
+.sector-account-action svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.sector-account-user {
+  position: relative;
+  min-width: 0;
+}
+.sector-clerk-root {
+  width: 100%;
+}
+.sector-clerk-avatar {
+  width: 18px;
+  height: 18px;
+}
+.sector-account-user-label {
+  position: absolute;
+  left: calc(18px + 1.15rem);
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 11px;
+}
+.sector-character-timers {
+  margin-top: 1rem;
+}
+.sector-character-timers:has(> div:empty) {
+  display: none;
+}
+.sector-character-timers [data-player-summary-label] {
+  margin-right: 0.5rem;
+}

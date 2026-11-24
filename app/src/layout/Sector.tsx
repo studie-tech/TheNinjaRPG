@@ -45,6 +45,7 @@ import Modal from "@/layout/Modal";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import { SurroundingUsers } from "@/layout/SurroundingUsers";
+import { TravelBuildingCard } from "@/layout/TravelBuildingCard";
 import { TravelUserCard } from "@/layout/TravelUserCard";
 import WebGlError from "@/layout/WebGLError";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
@@ -234,10 +235,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   const currentStructureRef = useRef<VillageStructure | null>(null);
   // Structure under the pointer (sticky while interacting with the panel so
-  // the pointer can leave the canvas to click "Go to" without clearing).
+  // the pointer can leave the canvas to use its action without clearing).
   const [hoveredStructure, setHoveredStructure] = useState<VillageStructure | null>(
     null,
   );
+  const [dismissedStructureId, setDismissedStructureId] = useState<string | null>(null);
+  const [openingServiceId, setOpeningServiceId] = useState<string | null>(null);
+  const [isWalkingToBuilding, setWalkingToBuilding] = useState(false);
+  const buildingEntryRef = useRef<{
+    service: VillageStructure;
+    sector: number;
+  } | null>(null);
+  useEffect(() => setDismissedStructureId(null), [currentStructure?.id]);
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
   const [showRaidModal, setShowRaidModal] = useState<boolean>(false);
   const [npcDialog, setNpcDialog] = useState<NpcDialog | null>(null);
@@ -259,6 +268,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const showSorroundingRef = useRef<boolean>(props.showSorrounding);
   const ignoreMapClicksUntilRef = useRef<number>(0);
   const hoveredStructureIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    hoveredStructureIdRef.current = null;
+    setHoveredStructure(null);
+    buildingEntryRef.current = null;
+    setOpeningServiceId(null);
+  }, [sector]);
   const structuresRef = useRef<VillageStructure[]>([]);
   const userRef = useUserDataRef(() => positionChangedRef.current());
   const positionChangedRef = useRef(() => {});
@@ -321,6 +336,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   /** Qualify a selected tile before crossings advance the sector ahead of React's props. */
   const setTarget = (point: SectorPoint | null) => {
+    const entry = buildingEntryRef.current;
+    if (
+      entry &&
+      (!point ||
+        point.x !== entry.service.longitude ||
+        point.y !== entry.service.latitude)
+    ) {
+      buildingEntryRef.current = null;
+      setOpeningServiceId(null);
+    }
     if (point) travel.scene.current?.recenter();
     routeTargetRef.current = point ? { sector: sectorRef.current, ...point } : null;
     continueMovement();
@@ -517,12 +542,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     [villageData?.structures, sectorMap, props.tile.t, dungeonStructures],
   );
   structuresRef.current = structures;
-  const currentServices = structures.filter(
-    (structure) =>
-      (structure.hasPage || structure.id === currentStructure?.id) &&
-      structure.longitude === currentStructure?.longitude &&
-      structure.latitude === currentStructure?.latitude,
-  );
 
   // Query for raids in this sector (only when user is in this sector)
   const { data: sectorRaidsData } = api.raids.getAvailableRaids.useQuery(
@@ -1116,6 +1135,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
    * crossing (carrying the landing tile when the click was in the adjacent
    * sector) is requested while the steps animate, so its round trip is
    * hidden behind the walk and the border costs no extra pause.
+   * Building entry commits the profile first so its page can use the confirmed position
+   * while the remaining walking animation finishes.
    */
   const runJourneySegment = async (
     data: {
@@ -1127,6 +1148,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     walk: Promise<void>,
     mutation: UserUpdateOptions,
     requestTarget: TravelSnapshot["routeTarget"],
+    isPositionCommitted = false,
   ): Promise<void> => {
     if (!userData || !mountedRef.current) return;
     // The crossing round trip is fired while the steps animate. When the
@@ -1177,18 +1199,19 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     snapMovementPosition(data);
     // Update all state only once at the end to avoid excessive re-renders
     setPosition({ x: data.longitude, y: data.latitude });
-    await commitMovePosition(
-      {
-        sector: data.sector,
-        location: data.location,
-        longitude: data.longitude,
-        latitude: data.latitude,
-      },
-      mutation,
-    );
+    if (!isPositionCommitted)
+      await commitMovePosition(
+        {
+          sector: data.sector,
+          location: data.location,
+          longitude: data.longitude,
+          latitude: data.latitude,
+        },
+        mutation,
+      );
     // Update surrounding users state at the end
     publishSurroundings();
-    runQuestTriggers(data);
+    if (!isPositionCommitted) runQuestTriggers(data);
   };
 
   // Crossing steps that are pre-fired during walk animations resolve
@@ -1575,6 +1598,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       void walk.catch(() => undefined);
       return {
         walk,
+        entryCommitted: false,
         target: moveTargetRef.current,
         sector: prepareSectorUpdate(),
         userRevision: prepareUserUpdate(),
@@ -1610,7 +1634,36 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         }
         return;
       }
-      await runJourneySegment(data, walk, mutation, context?.target);
+      const entry = buildingEntryRef.current;
+      if (
+        entry &&
+        mountedRef.current &&
+        isActiveRef.current &&
+        entry.sector === data.sector &&
+        entry.service.longitude === data.longitude &&
+        entry.service.latitude === data.latitude
+      ) {
+        // Confirm the position before building actions can mutate the same character.
+        await commitMovePosition(data, mutation);
+        if (context) context.entryCommitted = true;
+        runQuestTriggers(data);
+        if (
+          buildingEntryRef.current === entry &&
+          mountedRef.current &&
+          isActiveRef.current
+        ) {
+          buildingEntryRef.current = null;
+          setWalkingToBuilding(true);
+          void router.push(entry.service.route);
+        }
+      }
+      await runJourneySegment(
+        data,
+        walk,
+        mutation,
+        context?.target,
+        context?.entryCommitted,
+      );
       // Crossings retain their destination read; ordinary movement keeps this exact key current.
       if (userRef.current?.sector === input.sector && context?.sector) {
         await updateSector(true, context.sector);
@@ -1627,15 +1680,28 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
     // React Query stays pending until animation, reconciliation and any
     // crossing finish, preserving the ANBU auto-attack and movement gates.
-    onSettled: async () => {
+    onSettled: async (_data, _error, _input, context) => {
       walkAnimatingRef.current = false;
       movePendingRef.current = false;
       if (mountedRef.current) {
+        const entry = buildingEntryRef.current;
+        const isEntryAtDestination =
+          !!entry &&
+          entry.sector === sectorRef.current &&
+          entry.service.longitude === originRef.current?.col &&
+          entry.service.latitude === originRef.current.row;
+        if (isEntryAtDestination) {
+          // The player may have clicked Enter after this move was already accepted.
+          buildingEntryRef.current = null;
+          enterBuilding(entry.service);
+        }
+        setWalkingToBuilding(false);
+        if (!buildingEntryRef.current) setOpeningServiceId(null);
         publishMovementStatus(false);
         document.body.style.cursor = "default";
         continueMovement();
-        autoAttackRef.current();
-      } else {
+        if (!isEntryAtDestination) autoAttackRef.current();
+      } else if (!context?.entryCommitted) {
         // Navigation can outlive a committed move. Refresh rather than apply an
         // older location over a later action in this account's profile cache.
         await utils.profile.getUser.invalidate();
@@ -1648,6 +1714,40 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     movePendingRef.current = true;
     moveTargetRef.current = routeTargetRef.current;
     void executeMove(input).catch(() => undefined);
+  };
+
+  /** One entry action queues the walk and opens its page once the server confirms arrival. */
+  const enterBuilding = (service: VillageStructure) => {
+    if (buildingEntryRef.current || !isActiveRef.current) return;
+    if (!canAttemptAwakeAction(userRef.current)) {
+      showMutationToast({
+        success: false,
+        message: "You cannot enter a building right now.",
+      });
+      return;
+    }
+    if (!gridRef.current?.getHex({ col: service.longitude, row: service.latitude })) {
+      showMutationToast({
+        success: false,
+        message: "This building is outside the current map.",
+      });
+      return;
+    }
+    props.onBuildingEntry();
+    pendingCrossRef.current = null;
+    pendingWorldTargetRef.current = null;
+    if (
+      !movePendingRef.current &&
+      originRef.current?.col === service.longitude &&
+      originRef.current.row === service.latitude
+    ) {
+      setTarget(null);
+      void router.push(service.route);
+      return;
+    }
+    buildingEntryRef.current = { service, sector: sectorRef.current };
+    setOpeningServiceId(service.id);
+    setTarget({ x: service.longitude, y: service.latitude });
   };
 
   /** Step one tile beyond the border: the server resolves this as a crossing */
@@ -2246,11 +2346,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const hitLocation = questLocationsRef.current.find(
       (location) => location.id === locationId,
     );
-    if (structureId && structureId !== hoveredStructureIdRef.current) {
+    if (structureId) {
       hoveredStructureIdRef.current = structureId;
+      setDismissedStructureId(null);
       setHoveredStructure(
         structuresRef.current.find((structure) => structure.id === structureId) ?? null,
       );
+    }
+    if (!structureId) {
+      hoveredStructureIdRef.current = null;
+      setHoveredStructure(null);
+      setDismissedStructureId(currentStructureRef.current?.id ?? null);
     }
     const candidates: {
       type: string;
@@ -2506,8 +2612,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         onTap: (hit, client) => travelCallbacks.current.onTap(hit, client),
         onReady: () => travelCallbacks.current.onReady(),
         onHover: (structureId, locationId) => {
-          if (structureId !== hoveredStructureIdRef.current) {
+          // Keep the selection while the pointer travels from the canvas to its card.
+          if (structureId && structureId !== hoveredStructureIdRef.current) {
             hoveredStructureIdRef.current = structureId;
+            setDismissedStructureId(null);
             setHoveredStructure(
               structuresRef.current.find((structure) => structure.id === structureId) ??
                 null,
@@ -2526,6 +2634,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     mountRef.current ??= document.createElement("div");
     slot.appendChild(mountRef.current);
   }, []);
+  useEffect(() => {
+    // An accepted entry walk finishes visibly behind its dialog; map input stays disabled.
+    travel.scene.current?.setPaused(!props.isActive && !isWalkingToBuilding);
+  }, [props.isActive, isWalkingToBuilding, travel.isReady]);
+
   // The expanded layout fills the viewport's height, which a same-width move does not report.
   useEffect(() => {
     if (travel.isReady) travel.scene.current?.fit();
@@ -2587,6 +2700,41 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       ?.filter((asset) => asset.type === "SCENE_CHARACTER")
       .map((asset) => asset.image) ?? [];
 
+  const weatherControls = (
+    <div
+      data-sector-weather
+      className="absolute top-3 right-3 z-10 flex items-start gap-2"
+    >
+      <DayNightIndicator
+        className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
+        previewDate={lightingPreviewDate}
+        onPreviewDateChange={setLightingPreviewDate}
+        previewWeather={weatherPreview}
+        onPreviewWeatherChange={setWeatherPreview}
+      />
+      {isWorldExpanded && (
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="bg-background/90"
+          ref={expandedExitRef}
+          aria-label="Exit expanded world"
+          onClick={() => setWorldExpanded(false)}
+        >
+          <Minimize2 className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
+  const actionStructure = hoveredStructure ?? currentStructure;
+  const actionServices = structures.filter(
+    (service) =>
+      (service.hasPage || service.id === currentStructure?.id) &&
+      service.route &&
+      service.longitude === actionStructure?.longitude &&
+      service.latitude === actionStructure?.latitude,
+  );
   const content = (
     <div
       data-world-expanded={isWorldExpanded ? "true" : undefined}
@@ -2610,57 +2758,38 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             </div>
           </div>
         )}
-        <aside
-          aria-label="Map compass and neighboring sectors"
-          className="bg-background/90 pointer-events-none absolute top-3 left-3 z-10 rounded-lg border p-2 text-center text-xs shadow-md backdrop-blur-sm"
-        >
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
-            <span className="col-span-3">
-              N ·{" "}
-              {sectorGridNeighbors(sector)[0] < 0
-                ? "Polar boundary"
-                : sectorGridNeighbors(sector)[0]}
-            </span>
-            <span className="text-right whitespace-nowrap">
-              {sectorGridNeighbors(sector)[3]} · W
-            </span>
-            <span className="border-foreground/20 bg-muted min-w-8 rounded border px-1.5 py-0.5 font-bold">
-              <span className="sr-only">Current sector </span>
-              {sector}
-            </span>
-            <span className="text-left whitespace-nowrap">
-              E · {sectorGridNeighbors(sector)[1]}
-            </span>
-            <span className="col-span-3">
-              S ·{" "}
-              {sectorGridNeighbors(sector)[2] < 0
-                ? "Polar boundary"
-                : sectorGridNeighbors(sector)[2]}
-            </span>
-          </div>
-        </aside>
-        <div className="absolute top-3 right-3 z-10 flex items-start gap-2">
-          <DayNightIndicator
-            className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
-            previewDate={lightingPreviewDate}
-            onPreviewDateChange={setLightingPreviewDate}
-            previewWeather={weatherPreview}
-            onPreviewWeatherChange={setWeatherPreview}
-          />
-          {isWorldExpanded && (
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              className="bg-background/90"
-              ref={expandedExitRef}
-              aria-label="Exit expanded world"
-              onClick={() => setWorldExpanded(false)}
-            >
-              <Minimize2 className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        {props.showCompass !== false && (
+          <aside
+            aria-label="Map compass and neighboring sectors"
+            className="bg-background/90 pointer-events-none absolute top-3 left-3 z-10 rounded-lg border p-2 text-center text-xs shadow-md backdrop-blur-sm"
+          >
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
+              <span className="col-span-3">
+                N ·{" "}
+                {sectorGridNeighbors(sector)[0] < 0
+                  ? "Polar boundary"
+                  : sectorGridNeighbors(sector)[0]}
+              </span>
+              <span className="text-right whitespace-nowrap">
+                {sectorGridNeighbors(sector)[3]} · W
+              </span>
+              <span className="border-foreground/20 bg-muted min-w-8 rounded border px-1.5 py-0.5 font-bold">
+                <span className="sr-only">Current sector </span>
+                {sector}
+              </span>
+              <span className="text-left whitespace-nowrap">
+                E · {sectorGridNeighbors(sector)[1]}
+              </span>
+              <span className="col-span-3">
+                S ·{" "}
+                {sectorGridNeighbors(sector)[2] < 0
+                  ? "Polar boundary"
+                  : sectorGridNeighbors(sector)[2]}
+              </span>
+            </div>
+          </aside>
+        )}
+        {weatherControls}
       </div>
       {travel.error && <WebGlError />}
       {inspectedLocations && (
@@ -2683,22 +2812,38 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           ))}
         </Modal>
       )}
-      {currentStructure && (
-        <div className="absolute bottom-3 left-3 z-20 max-w-[calc(50%-40px)] rounded-lg bg-black/80 p-3 text-white shadow-lg sm:bottom-4 sm:left-4 sm:max-w-xs">
-          <h3 className="text-sm font-semibold">
-            {currentServices.map((service) => service.name).join(" · ")}
-          </h3>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {currentServices.map((service) => (
-              <Button key={service.id} asChild size="sm" className="min-h-10">
-                <Link href={service.route}>Enter {service.name}</Link>
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Stack corner actions so dungeon, hover and raid cards share the map without overlap. */}
-      <div className="pointer-events-none absolute right-3 bottom-3 z-20 flex max-w-[calc(50%-40px)] flex-col items-end gap-2 sm:right-4 sm:bottom-4 sm:max-w-xs">
+      {props.isActive &&
+        actionStructure &&
+        actionStructure.id !== dismissedStructureId && (
+          <TravelBuildingCard
+            key={actionStructure.id}
+            structure={actionStructure}
+            services={actionServices}
+            onEnter={enterBuilding}
+            openingServiceId={openingServiceId}
+            getBounds={() =>
+              travel.scene.current?.structureBounds(actionStructure.id) ?? null
+            }
+            boundary={mountRef.current}
+            onGoTo={() =>
+              setTarget({
+                x: actionStructure.longitude,
+                y: actionStructure.latitude,
+              })
+            }
+            onClose={() => {
+              buildingEntryRef.current = null;
+              setOpeningServiceId(null);
+              hoveredStructureIdRef.current = null;
+              setDismissedStructureId(actionStructure.id);
+            }}
+          />
+        )}
+      {/* Stack location, dungeon and raid cards without overlap. */}
+      <div
+        data-sector-corner-actions
+        className="pointer-events-none absolute right-3 bottom-3 z-20 flex max-w-[calc(50%-40px)] flex-col items-end gap-2 sm:right-4 sm:bottom-4 sm:max-w-xs"
+      >
         <MapLocationActions
           arrived={arrivedLocations}
           hovered={hoveredLocation}
@@ -2711,32 +2856,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             setTarget({ x: location.longitude, y: location.latitude })
           }
         />
-        {hoveredStructure && hoveredStructure.id !== currentStructure?.id && (
-          <div className="pointer-events-auto w-full rounded-lg bg-black/80 p-3 text-white shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="min-w-0">
-                <h3
-                  className="truncate text-sm font-semibold"
-                  title={hoveredStructure.name}
-                >
-                  {hoveredStructure.name}
-                </h3>
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    setTarget({
-                      x: hoveredStructure.longitude,
-                      y: hoveredStructure.latitude,
-                    })
-                  }
-                  className="mt-2 min-h-10"
-                >
-                  Go to {hoveredStructure.name}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
         {activeRaid && (
           <div className="pointer-events-auto w-full rounded-lg bg-black/80 p-3 text-white shadow-lg">
             <div className="flex items-center gap-3">
@@ -3013,6 +3132,8 @@ export interface SectorWindowData {
 }
 
 interface SectorProps {
+  /** Hosts can omit the map HUD when their navigation already identifies the sector. */
+  showCompass?: boolean;
   loadLpcCatalog: () => Promise<LpcCatalog>;
   sector: number;
   tile: GlobalTile;
@@ -3029,4 +3150,6 @@ interface SectorProps {
   setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
   setPosition: (position: SectorPoint | null) => void;
+  /** A building entry replaces queued combat and automatic-travel destinations. */
+  onBuildingEntry: () => void;
 }

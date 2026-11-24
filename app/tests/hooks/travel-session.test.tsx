@@ -146,7 +146,12 @@ const setup = (
       {children}
     </TrpcTestProviders>
   );
-  return { ...renderHook(() => useTravelSession(), { wrapper }), read };
+  return {
+    ...renderHook((isInteractive: boolean = true) => useTravelSession(isInteractive), {
+      wrapper,
+    }),
+    read,
+  };
 };
 
 const ready = async (test: ReturnType<typeof setup>) => {
@@ -356,6 +361,40 @@ describe("travel session ownership", () => {
       ),
     );
     expect(test.result.current.pendingAttackTarget).toBeNull();
+  });
+
+  it("retains an attack after a paused arrival and executes it once when interaction resumes", async () => {
+    const test = setup(() => ({ success: false, message: "Not close enough" }));
+    await ready(test);
+    act(() =>
+      test.result.current.setPendingAttackTarget({
+        userId: "target",
+        username: "Target",
+        longitude: 2,
+        latitude: 2,
+      }),
+    );
+    test.rerender(false);
+    user = { ...user!, longitude: 2, latitude: 2 };
+    await act(async () => test.result.current.setScenePosition({ x: 2, y: 2 }));
+    expect(
+      test.read.mock.calls.filter(([path]) => path === "combat.attackUser"),
+    ).toHaveLength(0);
+    expect(test.result.current.pendingAttackTarget?.userId).toBe("target");
+
+    test.rerender(true);
+    await waitFor(() =>
+      expect(test.read).toHaveBeenCalledWith(
+        "combat.attackUser",
+        expect.objectContaining({ userId: "target", longitude: 2, latitude: 2 }),
+      ),
+    );
+    expect(test.result.current.pendingAttackTarget).toBeNull();
+    test.rerender(false);
+    test.rerender(true);
+    expect(
+      test.read.mock.calls.filter(([path]) => path === "combat.attackUser"),
+    ).toHaveLength(1);
   });
 
   it("validates a same-sector destination before issuing a walking target", async () => {

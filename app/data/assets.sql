@@ -1836,3 +1836,22 @@ VALUES
 	('zY0_cCPeF9eKkAATnLKEN', 'Volcanic Caldera Entrance', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtqZqScUYJDfpFXWm3nrcPluEtIZqyLkaSV1j', '1', '1', '0', '2025-09-03 18:11:52.959', '2025-09-03 18:11:52.959', 'TNR', 'user_2SAAQO9eC7kPBc8eGW5Zo07JUfS', '0', 'DrKenji', 'https://utfs.io/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp'),
 	('ZZKDriSCpmBk4gv19OkCj', 'lightning_aura_small_orange', 'ANIMATION', 'https://theninja-user-uploads.s3.us-west-2.amazonaws.com/fx3_lightning_aura_small_orange.webp', '22', '50', '0', '2024-11-17 15:06:32.616', '2024-11-17 15:06:32.616', 'TNR', '1', '0', '', 'https://theninja-user-uploads.s3.us-west-2.amazonaws.com/fx3_lightning_aura_small_orange.webp'),
 	('ZZSwi_rfG_6yM0eo2DW8G', 'lightning_spell_start_small_green', 'ANIMATION', 'https://theninja-user-uploads.s3.us-west-2.amazonaws.com/fanfx2_lightning_spell_start_small_green.webp', '2', '50', '0', '2024-11-17 15:05:47.369', '2024-11-17 15:05:47.369', 'TNR', '1', '0', '', 'https://theninja-user-uploads.s3.us-west-2.amazonaws.com/fanfx2_lightning_spell_start_small_green.webp');
+
+INSERT INTO `MapAsset` (`id`, `key`, `name`, `category`, `imageUrl`, `windAffected`, `small`, `randomRotation`, `renderScale`, `licenseDetails`)
+VALUES
+	('seed-structure-63dc647813f0793df42b', 'castle.wyrmspire.ruin', 'Wyrmspire Ruin Castle', 'structure', 'https://ui0arpl8sm.ufs.sh/f/oleJt0JgcUkdLzJHHZmhD.png', 0, 0, 0, 2.4, 'TNR'),
+	('seed-structure-96efc039a07cad27aeb2', 'cave.wyrmspire.entrance', 'Wyrmspire Cave Entrance', 'structure', 'https://ui0arpl8sm.ufs.sh/f/OZwsCdJLe55T7Yc58iNXG.png', 0, 0, 0, 2.4, 'TNR'),
+	('seed-structure-5df5402ab5dbaaf38fcb', 'hollow.bellworks.entrance', 'Hollow Bellworks Entrance', 'structure', 'https://ui0arpl8sm.ufs.sh/f/content-Lqse0syYsnLnV0wGxhDb7.webp', 0, 0, 0, 2.4, 'TNR'),
+	('seed-structure-e4bd3c242753d64cc9c0', 'mountain.kuzenbo.shrine', 'Kuzenbo Mountain Shrine Entrance', 'structure', 'https://ui0arpl8sm.ufs.sh/f/N7kF1TGWfhs3XzWODNibz.png', 0, 0, 0, 4, 'TNR'),
+	('seed-structure-aa663524826a3b65e610', 'mountain.wyrmspire.range', 'Wyrmspire Mountain Range', 'structure', 'https://ui0arpl8sm.ufs.sh/f/KTknSDPjxrjmGQj-icWnX.png', 0, 0, 0, 2.4, 'TNR'),
+	('seed-structure-14c139b18fe9bf495929', 'new.asset.gasrcvbgrpls31woyckh7', 'Skyglass Wreck', 'structure', 'https://ui0arpl8sm.ufs.sh/f/3zD8fV-vgJEtRt-lO_lcW.png', 0, 0, 0, 2.4, 'TNR'),
+	('seed-structure-69f3fd43d22d400f6d43', 'prison.island.gate', 'Prison Island Gate', 'structure', 'https://ui0arpl8sm.ufs.sh/f/content-3TRoxt7ym-14QzSebAfm-.webp', 0, 0, 0, 2.4, 'TNR')
+ON DUPLICATE KEY UPDATE
+	`name` = VALUES(`name`),
+	`category` = VALUES(`category`),
+	`imageUrl` = VALUES(`imageUrl`),
+	`windAffected` = VALUES(`windAffected`),
+	`small` = VALUES(`small`),
+	`randomRotation` = VALUES(`randomRotation`),
+	`renderScale` = VALUES(`renderScale`),
+	`licenseDetails` = VALUES(`licenseDetails`);

@@ -11,6 +11,7 @@ import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
 import * as position from "@/layout/TravelPositionLabel";
 import * as war from "@/layout/WarFieldActions";
 import type { UserWithRelations } from "@/routers/profile";
+import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import { TravelView } from "@/screens/travel/TravelView";
 import {
   flushRadixFocus,
@@ -91,9 +92,11 @@ afterEach(async () => {
 function TravelFixture({
   global = false,
   tutorial = false,
+  immersive = false,
 }: {
   global?: boolean;
   tutorial?: boolean;
+  immersive?: boolean;
 }) {
   const quickTravelForm = useForm({ defaultValues: { sector: 1 } });
   const session = {
@@ -125,7 +128,7 @@ function TravelFixture({
   return (
     <ApiProvider client={transport} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <TravelView session={session} />
+        <TravelView session={session} immersive={immersive} />
       </QueryClientProvider>
     </ApiProvider>
   );
@@ -160,4 +163,24 @@ it("exposes global tools directly and retains the guided Global tab", () => {
   expect(view.queryByRole("button", { name: "Caravans" })).toBeNull();
   fireEvent.click(view.getByRole("button", { name: "Global" }));
   expect(setActiveTab).toHaveBeenCalledWith("Global");
+});
+
+it("keeps labeled map actions behind the sector layout's own bottom-menu trigger", () => {
+  const controls = document.createElement("div");
+  document.body.append(controls);
+  try {
+    const view = render(
+      <TravelNavigationContext value={{ controls, view: null }}>
+        <TravelFixture immersive />
+      </TravelNavigationContext>,
+    );
+    expect(view.queryByRole("button", { name: "Scan sector" })).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Map controls" }));
+    expect(view.getByRole("button", { name: "Scan sector" })).toBeTruthy();
+    expect(view.getByText("Sensory scan")).toBeTruthy();
+    expect(view.getByRole("button", { name: "Activate stealth" })).toBeTruthy();
+    expect(view.getByText("Scout surrounding sectors")).toBeTruthy();
+  } finally {
+    controls.remove();
+  }
 });

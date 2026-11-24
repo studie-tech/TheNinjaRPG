@@ -5,6 +5,7 @@ import { ArrowRight, Gift, Loader2, MapPin, Settings2, Sparkles } from "lucide-r
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/app/_trpc/client";
+import { SIDEBAR_COLUMNS_SHOWN_QUERY } from "@/components/layout/shared/layoutUtils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -265,14 +266,17 @@ const PlayerTutorialAssistant: React.FC<
   } | null>(null);
 
   // Check if we're on mobile
-  const [isMobile, setIsMobile] = useState<boolean>(
-    typeof window !== "undefined" ? window.innerWidth < sidebarBreakpoint : false,
+  const [usesGameMenuDrawer, setUsesGameMenuDrawer] = useState<boolean>(
+    sidebarBreakpoint === null ||
+      (typeof window !== "undefined" && window.innerWidth < sidebarBreakpoint),
   );
 
-  // Handle window resize to update isMobile state
+  // Drawer-only frames keep their menu guidance at every viewport width.
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < sidebarBreakpoint);
+      setUsesGameMenuDrawer(
+        sidebarBreakpoint === null || window.innerWidth < sidebarBreakpoint,
+      );
     };
 
     window.addEventListener("resize", handleResize);
@@ -338,10 +342,10 @@ const PlayerTutorialAssistant: React.FC<
         return navigateWithRetry(() => router.replace("/combat"));
       }
 
-      // Show the menu prompt when on mobile, the drawer is closed, and the step
+      // Show the menu prompt when using a drawer, it is closed, and the step
       // points at something inside the game menu
       const shouldShowGameMenuTutorial =
-        isMobile &&
+        usesGameMenuDrawer &&
         !rightSideBarOpen &&
         isActiveStep &&
         currentStepConfig?.requiresGameMenu === true &&
@@ -359,12 +363,17 @@ const PlayerTutorialAssistant: React.FC<
       // Show tutorial if we have a valid step and we're on the right page
       const onCorrectPage = isTutorialPageMatch(currentStepConfig?.page, pathname);
       const hasRequiredGameMenu =
-        currentStepConfig?.requiresGameMenu && isMobile ? rightSideBarOpen : true;
+        currentStepConfig?.requiresGameMenu && usesGameMenuDrawer
+          ? rightSideBarOpen
+          : true;
       setIsAssistantVisible(isActiveStep && onCorrectPage && hasRequiredGameMenu);
 
       // If we're at a valid step but not on the correct page, redirect
       if (isActiveStep && !onCorrectPage && currentStepConfig) {
-        if (!currentStepConfig?.requiresGameMenu) {
+        const keepMenuOpen =
+          sidebarBreakpoint === null &&
+          window.matchMedia(SIDEBAR_COLUMNS_SHOWN_QUERY).matches;
+        if (!keepMenuOpen && !currentStepConfig?.requiresGameMenu) {
           setRightSideBarOpen(false);
         }
         const battleCheck =
@@ -375,7 +384,15 @@ const PlayerTutorialAssistant: React.FC<
         }
       }
     }
-  }, [userData, currentStep, pathname, router, rightSideBarOpen, isMobile]);
+  }, [
+    userData,
+    currentStep,
+    pathname,
+    router,
+    rightSideBarOpen,
+    usesGameMenuDrawer,
+    sidebarBreakpoint,
+  ]);
 
   // Skip steps that have nothing to do: spending experience the player does
   // not have, adopting a companion when they already formed a bond, or
@@ -801,7 +818,7 @@ const PlayerTutorialAssistant: React.FC<
             onOpenDisableModal={openDisableModal}
             lead={
               <p className="text-base leading-relaxed">
-                On phones, the location and main menus live in the game menu.
+                The location and main menus live in the game menu.
               </p>
             }
             footer={
@@ -2093,8 +2110,8 @@ const selectUserId = (user: { userId: string }) => ({ userId: user.userId });
  * @returns
  */
 interface TutorialAssistantProps {
-  /** Viewport width below which the shell moves its game menu into a drawer. */
-  sidebarBreakpoint: number;
+  /** Width below which the menu uses a drawer; null keeps it in a drawer at every width. */
+  sidebarBreakpoint: number | null;
   rightSideBarOpen: boolean;
   setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   rightSideBarRef: React.RefObject<HTMLDivElement | null>;

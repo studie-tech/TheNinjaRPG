@@ -207,7 +207,10 @@ afterEach(() => {
   restoreBrowserGlobals();
 });
 
-const assistant = (sidebarBreakpoint = 768, rightSideBarOpen = false) => (
+const assistant = (
+  sidebarBreakpoint: number | null = 768,
+  rightSideBarOpen = false,
+) => (
   <TutorialAssistant
     sidebarBreakpoint={sidebarBreakpoint}
     rightSideBarOpen={rightSideBarOpen}
@@ -237,7 +240,7 @@ const show = (
   values: Partial<Profile> = {},
   pathname?: string,
   extra?: ReactNode,
-  breakpoint?: number,
+  breakpoint?: number | null,
 ) => {
   state.profile = makeProfile(step, values);
   state.pathname =
@@ -435,6 +438,33 @@ describe("step overrides", () => {
 });
 
 describe("routing", () => {
+  it.each([false, true])(
+    "keeps drawer-only tutorial dismissal responsive (desktop=%s)",
+    (desktop) => {
+      const original = Object.getOwnPropertyDescriptor(window, "matchMedia");
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: () => ({
+          matches: desktop,
+          addEventListener() {},
+          removeEventListener() {},
+        }),
+      });
+      try {
+        state.pathname = "/not-the-lesson";
+        state.profile = makeProfile(0);
+        render(assistant(null, true));
+        expect(state.push).toHaveBeenCalled();
+        if (desktop) expect(state.setRightSideBarOpen).not.toHaveBeenCalledWith(false);
+        else expect(state.setRightSideBarOpen).toHaveBeenCalledWith(false);
+      } finally {
+        cleanup();
+        if (original) Object.defineProperty(window, "matchMedia", original);
+        else Reflect.deleteProperty(window, "matchMedia");
+      }
+    },
+  );
+
   it("sends the player to the step's page and tries once more", async () => {
     vi.useFakeTimers();
     const index = TUTORIAL_STEPS.findIndex((step) => step.page === "/village");
@@ -554,6 +584,19 @@ describe("highlight placement", () => {
 
 describe("mobile game menu", () => {
   const index = TUTORIAL_STEPS.findIndex((step) => step.requiresGameMenu);
+  it("guides drawer-only desktop layouts through the game-menu button", async () => {
+    const view = show(
+      index,
+      {},
+      undefined,
+      <Target id="tutorial-gameBtn" box={new DOMRect(1000, 10, 44, 44)} />,
+      null,
+    );
+    const region = await waitFor(() => lesson(view, TUTORIAL_STEPS[index]!.title));
+    expect(region.textContent).toContain("Tap the highlighted menu button.");
+    fireEvent.click(view.getByRole("button", { name: "Open menu" }));
+    expect(state.setRightSideBarOpen).toHaveBeenCalledWith(true);
+  });
 
   it("highlights the menu button until the drawer opens", async () => {
     const view = show(
@@ -569,7 +612,7 @@ describe("mobile game menu", () => {
     );
     expect(region.textContent).toContain("Tap the highlighted menu button.");
     expect(region.textContent).toContain(
-      "On phones, the location and main menus live in the game menu.",
+      "The location and main menus live in the game menu.",
     );
     fireEvent.click(view.getByRole("button", { name: "Open menu" }));
     expect(state.setRightSideBarOpen).toHaveBeenCalledWith(true);
@@ -876,16 +919,16 @@ describe("quest steps", () => {
     const placement = vi.spyOn(tutorialPlacement, "getTutorialPortraitSide");
     spies.push(placement);
     const modalBox = new DOMRect(350, 250, 500, 220);
-    const getBox = HTMLElement.prototype.getBoundingClientRect;
+    const getBox = Element.prototype.getBoundingClientRect;
     spies.push(
-      vi
-        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-        .mockImplementation(function (this: HTMLElement) {
-          if (this.id === "tutorial-auto-travel-content") return modalBox;
-          if (this.id === "tutorial-auto-travel-proceed")
-            return new DOMRect(650, 400, 120, 40);
-          return getBox.call(this);
-        }),
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        if (this.id === "tutorial-auto-travel-content") return modalBox;
+        if (this.id === "tutorial-auto-travel-proceed")
+          return new DOMRect(650, 400, 120, 40);
+        return getBox.call(this);
+      }),
     );
     const index = TUTORIAL_STEPS.findIndex(
       (step) => step.id === "mission-travel-to-pup",

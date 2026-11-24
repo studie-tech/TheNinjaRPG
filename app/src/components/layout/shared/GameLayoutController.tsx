@@ -9,10 +9,10 @@ import React, {
   useState,
 } from "react";
 import ReactDOM from "react-dom";
-import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
 import { useGameMenu } from "@/hooks/useGameMenu";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useRankedQueueCount } from "@/hooks/useRankedQueueCount";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
@@ -46,7 +46,7 @@ import {
   SignedInIcons,
 } from "./LayoutSidebars";
 import type { GameLayoutControllerProps, GameLayoutRenderProps } from "./layoutTypes";
-import { shouldCloseRightSidebar } from "./layoutUtils";
+import { SIDEBAR_COLUMNS_SHOWN_QUERY, shouldCloseRightSidebar } from "./layoutUtils";
 import { getImageSet, layoutVariantClasses } from "./layoutVariants";
 
 // Lessons and quest scenes load once a character exists; visitors only need the welcome page.
@@ -78,6 +78,8 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   }));
   const pathname = usePublicPathname();
   const isPageActive = usePageActive();
+  const isDesktop = useMediaQuery(SIDEBAR_COLUMNS_SHOWN_QUERY);
+  const keepSidebarsOpen = variant === "sector" && isDesktop;
   const { systems, location } = useGameMenu();
   const [leftSideBarOpen, setLeftSideBarOpen] = useState(false);
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);
@@ -125,10 +127,11 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const activeTerritoryWar = useTerritoryWarNotice(!!userData, timeDiff, isPageActive);
 
   useEffect(() => {
+    if (keepSidebarsOpen) return;
     // Deep links and notification taps navigate without clicking a sidebar item.
     setLeftSideBarOpen(false);
     setRightSideBarOpen(false);
-  }, [pathname]);
+  }, [pathname, keepSidebarsOpen]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -238,6 +241,22 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     userId,
     activeTerritoryWar,
   ]);
+  // Hidden notices feed link badges; count them once, excluding the player menu.
+  // Tavern unread activity is client-owned rather than part of profile notifications.
+  const gameMenuNotificationCount =
+    shownNotifications.reduce(
+      (count, notice) => count + Math.max(1, notice.notificationCount ?? 0),
+      0,
+    ) +
+    (notifications?.reduce(
+      (count, notice) =>
+        notice.color === "hidden" &&
+        !navbarMenuItems.some((link) => link.href === notice.href)
+          ? count + (notice.notificationCount ?? 0)
+          : count,
+      0,
+    ) ?? 0) +
+    (systems.find((link) => link.href === "/tavern")?.notificationCount ?? 0);
   const isSignedInLayout = isClerkLoaded ? isSignedIn : initialIsSignedIn;
   useEffect(() => {
     if (isSignedInLayout) preloadSignedInSidebar();
@@ -278,13 +297,17 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     bloodlineId: user.bloodlineId,
   }));
 
+  const closeLeftSidebarOnNavigate = () => {
+    if (!keepSidebarsOpen) setLeftSideBarOpen(false);
+  };
+
   const signedInIcons = (
     <SignedInIcons
       variant={variant}
       isSignedIn={isClerkLoaded && isSignedIn}
       userData={layoutUser}
       updateUser={updateUser}
-      onEventClick={() => setLeftSideBarOpen(false)}
+      onEventClick={closeLeftSidebarOnNavigate}
       onThemeToggle={toggleTheme}
     />
   );
@@ -316,12 +339,12 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       navbarMenuItems={navbarMenuItems}
       signedInIcons={signedInIcons}
-      onNavigate={() => setLeftSideBarOpen(false)}
+      onNavigate={closeLeftSidebarOnNavigate}
     />
   );
 
   const handleRightSidebarClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (shouldCloseRightSidebar(e.target as HTMLElement)) {
+    if (!keepSidebarsOpen && shouldCloseRightSidebar(e.target as HTMLElement)) {
       setRightSideBarOpen(false);
     }
   };
@@ -334,6 +357,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     isCombatPage,
     navbarMenuItems,
     shownNotifications,
+    gameMenuNotificationCount,
     location,
     leftSideBarOpen,
     onLeftSideBarOpenChange,

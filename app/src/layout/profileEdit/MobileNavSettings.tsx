@@ -85,14 +85,14 @@ export const MobileNavSettings: React.FC = () => {
   return (
     <div className="space-y-4 p-3">
       <p className="text-muted-foreground text-sm">
-        Customize the 5 shortcuts in your mobile navigation bar. The center button
-        automatically shows Village or Travel based on your location. Note: If you
-        configure Travel in a slot, it will be hidden when outside the village (since
-        the center button already shows Travel in that case).
+        Customize the 4 shortcuts around Activity and the center button. Activity always
+        opens your tutorial and quests. The center shows Village or Travel; Sector
+        Layout uses a destination compass outside villages. A Travel shortcut is hidden
+        when the center already links to Travel.
       </p>
 
       <div className="space-y-3">
-        <div className="font-semibold text-sm">Left Side (2 buttons)</div>
+        <div className="text-sm font-semibold">Left side · beside Activity</div>
         {normalizedConfig.left.map((id, index) => (
           <div key={`left-${index}`}>
             {renderSlotSelector(

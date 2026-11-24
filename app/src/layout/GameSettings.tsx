@@ -68,6 +68,7 @@ interface GameSettingsProps {
   updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
   trigger?: "audio" | "settings";
   triggerClassName?: string;
+  triggerLabel?: string;
 }
 
 /**
@@ -601,6 +602,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
   updateUser,
   trigger = "audio",
   triggerClassName,
+  triggerLabel,
   section,
 }) => {
   const { audioEnabled } = useGameSettings(userData);
@@ -655,6 +657,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
               </span>
             )}
           </span>
+          {triggerLabel && <span>{triggerLabel}</span>}
         </button>
       </PopoverTrigger>
       <PopoverContent

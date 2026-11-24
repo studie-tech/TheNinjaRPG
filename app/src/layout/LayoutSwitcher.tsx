@@ -8,10 +8,15 @@ import type { GameFrameProps } from "@/components/layout/GameLayout";
 import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
 import { Button } from "@/components/ui/button";
 import { useNavigationRouter } from "@/hooks/navigation";
-import { applyGameLayout } from "@/hooks/useGameLayout";
+import { applyGameLayout, useCanUseSectorLayout } from "@/hooks/useGameLayout";
 import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
-import { type GameLayout, type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
+import {
+  type GameLayout,
+  type GameLayoutId,
+  getGameLayout,
+  getInitialGameLayout,
+} from "@/libs/gameLayouts";
 import {
   applyFontScaleCookie,
   LAYOUT_PREFERENCE_COOKIE,
@@ -21,7 +26,7 @@ import {
 import type { WallpaperVariant } from "@/libs/wallpaperExperiment";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
 import { usePublicPathname } from "@/utils/routing";
-import { safeLocalStorageGetItem } from "@/utils/storage";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
 
 /**
@@ -38,7 +43,11 @@ const PixelGame = dynamic(() =>
 const PanelGame = dynamic(() =>
   import("@/components/layout/PanelGameLayout").then((module) => module.PanelGame),
 );
+const SectorGame = dynamic(() =>
+  import("@/components/layout/SectorGameLayout").then((module) => module.SectorGame),
+);
 const GAME_FRAMES = {
+  sector: SectorGame,
   classic: ClassicGame,
   pixel: PixelGame,
   panel: PanelGame,
@@ -86,6 +95,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   ReactDOM.prefetchDNS("https://o4507797256601600.ingest.de.sentry.io");
   const pathname = usePublicPathname();
   const { isClerkLoaded, isSignedIn } = useUserInfo();
+  const canUseSectorLayout = useCanUseSectorLayout();
   // Explicit choices replace only the presentation; remounting the root shell would
   // also restart Clerk and could activate another saved account after sign-out.
   const [displayedLayout, setDisplayedLayout] = useState(initialLayout);
@@ -105,6 +115,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
     // renews its expiry. A localStorage copy that failed to update must not replace it.
     if (cookieCarriesLayout(initialLayout)) {
       persistLayoutPreferenceCookie(initialLayout);
+      safeLocalStorageSetItem(LAYOUT_PREFERENCE_COOKIE, JSON.stringify(initialLayout));
       return;
     }
     const stored = storedValueToLayout(
@@ -113,6 +124,10 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
     // A public welcome rollout must not become the visitor's game preference.
     if (stored || initialIsSignedIn) {
       persistLayoutPreferenceCookie(stored ?? initialLayout);
+      safeLocalStorageSetItem(
+        LAYOUT_PREFERENCE_COOKIE,
+        JSON.stringify(stored ?? initialLayout),
+      );
     }
     if (
       stored &&
@@ -130,7 +145,16 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   const isKnownAnonymous = useDeferredValue(
     isClerkLoaded ? !isSignedIn : !initialIsSignedIn,
   );
-  const shownLayout = useDeferredValue(displayedLayout);
+  const eligibleLayout =
+    displayedLayout === "sector" && !canUseSectorLayout
+      ? getInitialGameLayout(displayedLayout)
+      : displayedLayout;
+  const deferredLayout = useDeferredValue(eligibleLayout);
+  // Authentication loss must withdraw the frame immediately, even during a deferred swap.
+  const shownLayout =
+    deferredLayout === "sector" && !canUseSectorLayout
+      ? getInitialGameLayout(deferredLayout)
+      : deferredLayout;
   useEffect(() => {
     applyGameLayout(shownLayout);
     // A change of shell variant mid-session remounts everything under <html>, and React

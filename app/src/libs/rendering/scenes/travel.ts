@@ -109,9 +109,10 @@ export const createTravelScene = async (options: {
     surface: "travel",
     backgroundAlpha: 0.5,
     height: (width) =>
-      options.mount.closest('[data-world-expanded="true"]')
+      options.mount.closest<HTMLElement>("[data-travel-viewport]")?.clientHeight ||
+      (options.mount.closest('[data-world-expanded="true"]')
         ? window.innerHeight
-        : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600)),
+        : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600))),
   });
   game.canvas.style.filter = "none";
   try {
@@ -1238,10 +1239,28 @@ export const createTravelScene = async (options: {
     };
     return {
       dispose: game.dispose,
+      setPaused: game.setPaused,
       sectors,
       fit: game.fit,
       updateWindow: requestWindowUpdate,
       setBackground,
+      /** Client-space artwork bounds for DOM actions that follow pan, zoom and resize. */
+      structureBounds: (id: string) => {
+        const entry = sectors
+          .get(options.getSnapshot().sector)
+          ?.art.entries.find((entry) => entry.description.structureId === id);
+        if (!entry) return null;
+        const bounds = entry.sprite.getBounds();
+        const canvas = game.canvas.getBoundingClientRect();
+        const sx = canvas.width / game.renderer.width;
+        const sy = canvas.height / game.renderer.height;
+        return new DOMRect(
+          canvas.left + bounds.x * sx,
+          canvas.top + bounds.y * sy,
+          bounds.width * sx,
+          bounds.height * sy,
+        );
+      },
       /** Resume smooth character tracking after inspecting the map with a drag. */
       recenter: () => {
         hasManualCamera = false;

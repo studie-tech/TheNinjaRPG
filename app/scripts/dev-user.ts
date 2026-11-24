@@ -1,12 +1,13 @@
 /** Local CLI for the existing preview broker. Bun loads app/.env using dotenv syntax. */
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { devPaths, devStatus } from "../../scripts/dev-server.mjs";
 import {
   aiTestUserCallEndpointRequestSchema,
   aiTestUserRequestSchema,
   aiTestUserResponseSchema,
 } from "@/validators/ai-test-user";
+import { devPaths, devStatus } from "../../scripts/dev-server.mjs";
+import { prepareDevLpc } from "./dev-lpc";
 
 const paths = devPaths();
 const artifactDir = join(paths.root, "app/scripts/.artifacts");
@@ -18,6 +19,10 @@ async function main() {
   const action = process.argv[2];
   if (action === "doctor") {
     const database = new URL(process.env.DATABASE_URL || "http://unconfigured");
+    const lpc = await prepareDevLpc({
+      databaseUrl: process.env.DATABASE_URL,
+      readOnly: true,
+    });
     console.log(
       JSON.stringify(
         {
@@ -26,11 +31,13 @@ async function main() {
           brokerConfigured: Boolean(process.env.AI_TEST_USER_BROKER_TOKEN),
           clerkConfigured: Boolean(process.env.CLERK_SECRET_KEY),
           credentials,
+          lpc,
         },
         null,
         2,
       ),
     );
+    if (lpc.status !== "ready" && lpc.status !== "skipped") process.exitCode = 1;
     return;
   }
   const status = await devStatus(paths);

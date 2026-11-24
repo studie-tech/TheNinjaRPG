@@ -16,15 +16,17 @@ export const seedLpcAssets = async (client: DrizzleClient) => {
     throw new Error(
       `GameAsset ID ${collision.id} belongs to another media type; LPC sync stopped.`,
     );
+  const existingIds = new Set(existing.map((asset) => asset.id));
+  const missing = assets.filter((asset) => !existingIds.has(asset.id));
   // Bounded batches keep the seed usable over the HTTP database driver.
-  for (const batch of chunkArray(assets, 10))
+  for (const batch of chunkArray(missing, 10))
     await Promise.all(
       batch.map((asset) => retryOnDeadlock(() => insertLpcSeedAsset(client, asset))),
     );
-  await invalidateLpcSceneCatalog();
+  if (missing.length > 0) await invalidateLpcSceneCatalog();
   return {
     designs: assets.length,
-    inserted: assets.length - existing.length,
+    inserted: missing.length,
     preserved: existing.length,
   };
 };

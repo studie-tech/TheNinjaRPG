@@ -1,6 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
+  gameAsset,
   item,
   itemVariant,
   userAttribute,
@@ -36,6 +37,7 @@ describeWithDatabase("sprite appearance database snapshots", () => {
       item,
       userAttribute,
       userData,
+      gameAsset,
     );
     await insertUsers([
       {

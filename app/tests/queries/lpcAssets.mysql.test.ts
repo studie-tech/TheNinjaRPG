@@ -16,6 +16,7 @@ import * as ssrf from "@/server/utils/ssrf";
 import { gameAssetValidator } from "@/validators/asset";
 import type { LpcConfig } from "@/validators/lpcAsset";
 import { seedLpcAssets } from "../../drizzle/seeds/lpc";
+import { prepareDevLpc } from "../../scripts/dev-lpc";
 import { deferred } from "../setup/deferred";
 import { insertItems, insertUsers } from "../setup/factories";
 import { lpcAssets } from "../setup/lpc";
@@ -131,11 +132,17 @@ describeWithDatabase("LPC GameAsset persistence", () => {
       .update(gameAsset)
       .set({ name: "Edited katana", lpcConfig: edited })
       .where(eq(gameAsset.id, "katana"));
-    expect(await seedLpcAssets(database)).toEqual({
+    const repeated = await recordQueries(() => seedLpcAssets(database));
+    expect(repeated.result).toEqual({
       designs: lpcAssets.length,
       inserted: 0,
       preserved: lpcAssets.length,
     });
+    expect(
+      repeated.statements.filter((statement) =>
+        /^(insert|update|delete) /i.test(statement),
+      ),
+    ).toHaveLength(0);
     expect(
       await database.query.gameAsset.findFirst({ where: eq(gameAsset.id, "katana") }),
     ).toMatchObject({ name: "Edited katana", lpcConfig: edited });
@@ -178,6 +185,7 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     const saved = await database.query.gameAsset.findFirst({
       where: eq(gameAsset.id, original.id),
     });
+    await database.delete(gameAsset).where(eq(gameAsset.id, "gem"));
     const deadlocked = beforeStatements(database, gameAsset, [
       async () => {
         throw new Error("Failed query: insert into GameAsset", {
@@ -194,20 +202,101 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     const sync = await recordQueries(() => seedLpcAssets(deadlocked));
     expect(sync.result).toEqual({
       designs: lpcAssets.length,
-      inserted: 0,
-      preserved: lpcAssets.length,
+      inserted: 1,
+      preserved: lpcAssets.length - 1,
     });
     expect(
       sync.statements.filter((statement) =>
         statement.startsWith("insert into `GameAsset`"),
       ),
-    ).toHaveLength(lpcAssets.length);
+    ).toHaveLength(1);
     expect(await listLpcAssets(database)).toHaveLength(lpcAssets.length);
     expect(
       await database.query.gameAsset.findFirst({
         where: eq(gameAsset.id, original.id),
       }),
     ).toEqual(saved);
+  });
+
+  it("allows concurrent local backfills without duplicate rows or overwriting saved designs", async () => {
+    const database = await getTestDatabase();
+    await Promise.all([seedLpcAssets(database), seedLpcAssets(database)]);
+    expect(await listLpcAssets(database)).toHaveLength(lpcAssets.length);
+    const steady = await recordQueries(() => seedLpcAssets(database));
+    expect(steady.result).toEqual({
+      designs: lpcAssets.length,
+      inserted: 0,
+      preserved: lpcAssets.length,
+    });
+    expect(steady.statements).toHaveLength(1);
+  });
+
+  it("prepares a fresh local catalog and performs no writes on repeated preparation", async () => {
+    const database = await getTestDatabase();
+    const first = await prepareDevLpc({
+      databaseUrl: "http://localhost:3002",
+      client: database,
+    });
+    expect(first).toMatchObject({
+      status: "ready",
+      designs: lpcAssets.length,
+      expectedDesigns: lpcAssets.length,
+      missing: [],
+      invalid: [],
+    });
+    const repeated = await recordQueries(() =>
+      prepareDevLpc({ databaseUrl: "http://localhost:3002", client: database }),
+    );
+    expect(repeated.result.status).toBe("ready");
+    expect(
+      repeated.statements.filter((statement) =>
+        /^(insert|update|delete) /i.test(statement),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("reports missing and invalid local designs without replacing saved artwork", async () => {
+    const database = await getTestDatabase();
+    const before = await recordQueries(() =>
+      prepareDevLpc({
+        databaseUrl: "http://localhost:3002",
+        readOnly: true,
+        client: database,
+      }),
+    );
+    expect(before.result).toMatchObject({ status: "incomplete", designs: 0 });
+    expect(before.statements).toHaveLength(1);
+    await seedLpcAssets(database);
+    await database
+      .update(gameAsset)
+      .set({ lpcConfig: null, name: "Unfinished staff body" })
+      .where(eq(gameAsset.id, "body"));
+    const result = await prepareDevLpc({
+      databaseUrl: "http://localhost:3002",
+      client: database,
+    });
+    expect(result).toMatchObject({ status: "incomplete", invalid: ["body"] });
+    expect(
+      await database.query.gameAsset.findFirst({ where: eq(gameAsset.id, "body") }),
+    ).toMatchObject({ name: "Unfinished staff body", lpcConfig: null });
+  });
+
+  it("stops local preparation before writes when a design ID belongs to other media", async () => {
+    const database = await getTestDatabase();
+    await database.insert(gameAsset).values({
+      id: "body",
+      name: "Existing image",
+      type: "STATIC",
+      image: "https://example.com/body.png",
+      url: "https://example.com/body.png",
+    });
+    const result = await prepareDevLpc({
+      databaseUrl: "http://localhost:3002",
+      client: database,
+    });
+    expect(result.status).toBe("unavailable");
+    expect(result.message).toContain("GameAsset ID body belongs to another media type");
+    expect(await listLpcAssets(database)).toHaveLength(0);
   });
 
   it("propagates non-deadlock seed failures", async () => {

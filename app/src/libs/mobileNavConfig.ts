@@ -59,16 +59,14 @@ export const MOBILE_NAV_OPTIONS: MobileNavOption[] = [
 ];
 
 export interface MobileNavConfig {
-  left: string[]; // 2 item IDs
+  left: string[]; // 1 item ID, followed by the fixed Activity control
   right: string[]; // 3 item IDs
 }
 
-// Default configuration for mobile navigation slots.
-// The center button dynamically shows Village (when in village) or Travel (when not).
-// When outside village, any "travel" buttons in user config are hidden (but grid layout preserved).
+// Four shortcuts flank the fixed Activity and center location/compass controls.
 export const DEFAULT_MOBILE_NAV_CONFIG: MobileNavConfig = {
-  left: ["profile", "inbox"],
-  right: ["items", "tavern", "settings"],
+  left: ["profile"],
+  right: ["inbox", "tavern", "settings"],
 };
 
 export const MOBILE_NAV_STORAGE_KEY = "mobile-nav-config";
@@ -83,6 +81,12 @@ export const normalizeMobileNavConfig = (config: unknown): MobileNavConfig => {
   if (!config || typeof config !== "object") return defaults;
 
   const c = config as Record<string, unknown>;
+  // Saved five-shortcut defaults adopt the fixed Activity slot and move Inbox right.
+  if (
+    JSON.stringify(c.left) === JSON.stringify(["profile", "inbox"]) &&
+    JSON.stringify(c.right) === JSON.stringify(["items", "tavern", "settings"])
+  )
+    return defaults;
   const validIds = new Set(MOBILE_NAV_OPTIONS.map((o) => o.id));
 
   const validateArray = (
@@ -100,7 +104,12 @@ export const normalizeMobileNavConfig = (config: unknown): MobileNavConfig => {
     return valid;
   };
 
-  const left = validateArray(c.left, 2, defaults.left);
+  // Keep the outer shortcut from customized five-slot bars; Activity owns the inner slot.
+  const left = validateArray(
+    Array.isArray(c.left) && c.left.length === 2 ? c.left.slice(0, 1) : c.left,
+    1,
+    defaults.left,
+  );
   const right = validateArray(c.right, 3, defaults.right);
 
   // Reject config if there are duplicate IDs across left and right

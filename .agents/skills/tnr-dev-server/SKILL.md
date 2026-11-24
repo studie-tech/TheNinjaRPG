@@ -14,7 +14,7 @@ source `app/.env` or export secrets by hand to fix startup.
 ```bash
 make dev-up                 # start/reuse this worktree's server; wait for /login HTTP 200
 make dev-status             # JSON: url, phase, PID, logPath, browser context prefix
-make dev-doctor             # also show database target and whether broker/Clerk keys exist
+make dev-doctor             # read-only database target, broker/Clerk and LPC catalog checks
 make dev-down               # stop only this worktree's supervisor and descendants
 ```
 
@@ -37,7 +37,15 @@ then rerun `dev-up` to wait again. Status reports the managed process; verify in
 routes by HTTP. Do not adopt or kill an unmanaged server just because its port answers.
 
 Worktrees share the database in `app/.env`; ports do **not** isolate data. Check
-`dev-doctor` before scenarios. Startup never runs migrations, schema pushes or seeds.
+`dev-doctor` before scenarios. Preparation backfills missing bundled LPC designs on
+loopback or Compose database proxies before Next starts. Existing designs and staff edits
+are preserved; remote database URLs and deployed/production processes skip this step.
+It uses the committed CDN references without generating, uploading or downloading artwork.
+An incomplete local schema or invalid existing LPC design fails preparation with a recovery
+message. Apply schema migrations explicitly; startup never migrates, pushes schema or runs
+other content seeds. `dev-doctor` reports LPC readiness without inserting designs.
+After manually backfilling a running server, restart that worktree with `make dev-down`
+then `make dev-up` so it drops any cached empty scene catalog.
 Use a deliberately configured throwaway database for schema changes or destructive SQL
 tests. Do not stop/recreate shared Docker to repair a single worktree.
 

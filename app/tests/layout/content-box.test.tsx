@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as navigation from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Confirm from "@/layout/Confirm";
 import ContentBox, * as contentBox from "@/layout/ContentBox";
 import {
+  ContentBoxHeaderActions,
   type HeaderActionItem,
   layoutHeaderMenu,
   REVEAL_CONTENT_BOX_CONTROLS,
@@ -29,6 +30,10 @@ const originalClientWidth = Object.getOwnPropertyDescriptor(
 const originalScrollWidth = Object.getOwnPropertyDescriptor(
   Element.prototype,
   "scrollWidth",
+);
+const originalScrollHeight = Object.getOwnPropertyDescriptor(
+  Element.prototype,
+  "scrollHeight",
 );
 
 class HeaderResizeObserver {
@@ -92,6 +97,8 @@ afterEach(async () => {
     Object.defineProperty(Element.prototype, "clientWidth", originalClientWidth);
   if (originalScrollWidth)
     Object.defineProperty(Element.prototype, "scrollWidth", originalScrollWidth);
+  if (originalScrollHeight)
+    Object.defineProperty(Element.prototype, "scrollHeight", originalScrollHeight);
   restoreBrowserGlobals();
   resizeCallbacks.clear();
 });
@@ -134,6 +141,76 @@ it("keeps title and controls beside each other when the panel has space", () => 
   expect(header?.className).not.toContain("flex-col");
   expect(view.queryByRole("button", { name: "Town Hall controls" })).toBeNull();
   expect(view.getByRole("textbox", { name: "Control draft" })).toBeDefined();
+});
+
+it("uses available viewport height for menus and flips upward when that offers more room", () => {
+  let top = 0;
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+    () => new window.DOMRect(0, top, 200, 44),
+  );
+  Object.defineProperty(Element.prototype, "scrollHeight", {
+    configurable: true,
+    get: () => 900,
+  });
+  const view = render(
+    <ContentBox
+      title="Travel"
+      collapsedActionsLabel="Map controls"
+      topRightContent={<button type="button">Map action</button>}
+    >
+      Map
+    </ContentBox>,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Map controls" }));
+  const panel = view.getByRole("region", { name: "Map controls" });
+  expect(panel.style.maxHeight).toBe(`${window.innerHeight - 64}px`);
+  expect(Number.parseFloat(panel.style.maxHeight)).toBeGreaterThan(
+    window.innerHeight * 0.6,
+  );
+  top = window.innerHeight - 100;
+  fireEvent.resize(window);
+  expect(panel.style.maxHeight).toBe(`${top - 20}px`);
+  expect(panel.className).toContain("bottom-full");
+  top = 0;
+  document.documentElement.style.setProperty("--game-bottom-nav-h", "80px");
+  try {
+    fireEvent.resize(window);
+    expect(panel.style.maxHeight).toBe(`${window.innerHeight - 144}px`);
+  } finally {
+    document.documentElement.style.removeProperty("--game-bottom-nav-h");
+  }
+});
+
+it("opens a left-edge footer menu upward with the available screen width", () => {
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+    () => new window.DOMRect(0, window.innerHeight - 60, 40, 44),
+  );
+  function FooterMenu() {
+    const headerRef = useRef<HTMLDivElement>(null);
+    const titleRef = useRef<HTMLDivElement>(null);
+    return (
+      <div ref={headerRef}>
+        <ContentBoxHeaderActions
+          headerRef={headerRef}
+          titleRef={titleRef}
+          label="Travel"
+          collapsedLabel="Map controls"
+          align="start"
+          iconOnly
+        >
+          <button type="button">Quick Travel</button>
+        </ContentBoxHeaderActions>
+      </div>
+    );
+  }
+  const view = render(<FooterMenu />);
+  fireEvent.click(view.getByRole("button", { name: "Map controls" }));
+  const panel = view.getByRole("region", { name: "Map controls" });
+  expect(panel.style.left).toBe("16px");
+  expect(panel.style.right).toBe("");
+  expect(Number.parseFloat(panel.style.maxWidth)).toBe(window.innerWidth - 32);
+  expect(panel.className).toContain("bottom-full");
+  expect(panel.style.maxHeight).toBe(`${window.innerHeight - 80}px`);
 });
 
 it("keeps named action menus collapsed at every width and reveals guided targets", () => {
@@ -429,6 +506,24 @@ it("keeps every priority control in the header row while they fit", () => {
     "Tabs",
   ]);
   expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
+});
+
+it("keeps a visually hidden heading accessible without reserving toolbar space", () => {
+  headerWidth = 250;
+  const view = render(
+    <ContentBox title="Travel" hideTitle topRightItems={travelLikeItems()}>
+      Map
+    </ContentBox>,
+  );
+  expect(view.getByRole("heading", { name: "Travel" }).parentElement?.className).toBe(
+    "sr-only",
+  );
+  expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
+  view.rerender(<PriorityBox items={travelLikeItems()} />);
+  expect(view.getByRole("heading", { name: "Travel" }).parentElement?.className).toBe(
+    "min-w-0",
+  );
+  expect(view.getByRole("button", { name: /More Travel controls/ })).toBeDefined();
 });
 
 it("measures the room for controls from the title, not a longer subtitle", () => {

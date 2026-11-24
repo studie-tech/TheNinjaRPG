@@ -60,9 +60,9 @@ export const DayNightIndicator = memo(function DayNightIndicator({
     <>
       <span className="flex items-center gap-2 text-sm font-medium">
         {cycle.phase === "day" ? (
-          <Sun className="h-4 w-4 text-amber-500" />
+          <Sun className="h-4 w-4 text-amber-700 dark:text-amber-400" />
         ) : (
-          <Moon className="h-4 w-4 text-indigo-300" />
+          <Moon className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
         )}
         {cycle.phase === "day" ? "Day" : "Night"}
         {canPreview && (

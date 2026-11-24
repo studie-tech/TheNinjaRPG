@@ -252,6 +252,46 @@ describe("game settings sections", () => {
     expect(screen.getByRole("combobox", { name: "Graphics quality" })).toBeTruthy();
   });
 
+  it("keeps labeled sector account actions connected to their existing handlers", async () => {
+    const account = vi.fn();
+    const events = vi.fn();
+    const theme = vi.fn();
+    vi.spyOn(clerk, "UserButton").mockImplementation(
+      Object.assign(
+        () => <button type="button" aria-label="Open user menu" onClick={account} />,
+        clerk.UserButton,
+        { displayName: "UserButton" },
+      ),
+    );
+    renderInAudio(
+      <SignedInIcons
+        variant="sector"
+        isSignedIn
+        updateUser={async () => undefined}
+        onEventClick={events}
+        onThemeToggle={theme}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open user menu" }));
+    expect(account).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Account")).toBeTruthy();
+    const eventLink = screen.getByRole("link", { name: "Event Notifications" });
+    expect(eventLink.getAttribute("href")).toBe("/event");
+    fireEvent.click(eventLink);
+    expect(events).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("link", { name: "Bugs" }).id).toBe("tutorial-bugs");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Toggle light and dark theme" }),
+    );
+    expect(theme).toHaveBeenCalledTimes(1);
+    const settings = screen.getByRole("button", { name: "Game settings" });
+    expect(settings.textContent).toBe("Settings");
+    await act(async () => {
+      fireEvent.click(settings);
+    });
+    expect(screen.getByLabelText(MUSIC)).toBeTruthy();
+  });
+
   it.each([true, false])(
     "shows the matching audio icon on the top-bar settings gear (music on: %p)",
     (musicOn) => {
