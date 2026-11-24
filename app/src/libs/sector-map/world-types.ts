@@ -70,12 +70,6 @@ export type NpcWalk = {
 export interface SectorUser {
   /** Viewer-safe resolved art; the sector router substitutes uniforms for masked identities. */
   spriteAppearance?: import("@/validators/lpc").SpriteAppearance;
-  /** Full-body art drawn in place of the layered character, at twice an NPC's height. */
-  bodyArt?: string;
-  /** Idle sheet looped in place of `bodyArt`'s still image. */
-  bodyIdle?: CharacterAnimation;
-  /** Walking sheet played in place of `bodyIdle` while the user moves. */
-  bodyMove?: CharacterAnimation;
   /** A village-duty copy has its own map identity and cannot be attacked or healed as a player. */
   isVillageDuty?: boolean;
   /** Owner ID for profile links, present only when the protector is unmasked. */

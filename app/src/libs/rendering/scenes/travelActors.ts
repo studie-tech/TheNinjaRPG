@@ -278,8 +278,6 @@ export const createTravelActors = (
             orderB = movementOrder.get(b.key);
           return (
             Number(ownB) - Number(ownA) ||
-            Number(b.user.username === CREATOR_USERNAME) -
-              Number(a.user.username === CREATOR_USERNAME) ||
             Number(b.onScreen) - Number(a.onScreen) ||
             // Visible quest/hostile NPCs retain their controls within the same body budget;
             // ambient wildlife yields to every player.
@@ -1243,9 +1241,8 @@ export const travelActorRecipes = (
       ? awake.filter((user) => selected.has(travelActorKey(user)))
       : awake;
     shown.forEach((user, index) => {
-      const appearanceUser = user.bodyArt
-        ? { ...user, spriteAppearance: undefined }
-        : !user.spriteAppearance && user.userId === snapshot.viewer?.userId
+      const appearanceUser =
+        !user.spriteAppearance && user.userId === snapshot.viewer?.userId
           ? { ...user, spriteAppearance: resolveSpriteAppearance(snapshot.viewer) }
           : user;
       recipes.push({
@@ -1451,9 +1448,6 @@ export const travelActorKey = (user: SectorUser) =>
 const appearanceInputs = (user: SectorUser) => ({
   spriteAppearance: user.spriteAppearance,
   appearanceJson: JSON.stringify(user.spriteAppearance),
-  bodyArt: user.bodyArt,
-  bodyIdle: user.bodyIdle?.id,
-  bodyMove: user.bodyMove?.id,
   npcIdle: user.npcSheets?.idle?.id,
   npcMove: user.npcSheets?.move?.id,
   npcScale: user.npcScale,
@@ -1468,9 +1462,6 @@ const appearanceInputs = (user: SectorUser) => ({
 type AppearanceInputs = ReturnType<typeof appearanceInputs>;
 /** Whether a user still draws the artwork recorded in `inputs`. */
 const sameAppearance = (inputs: AppearanceInputs, user: SectorUser) =>
-  inputs.bodyArt === user.bodyArt &&
-  inputs.bodyIdle === user.bodyIdle?.id &&
-  inputs.bodyMove === user.bodyMove?.id &&
   inputs.npcIdle === user.npcSheets?.idle?.id &&
   inputs.npcMove === user.npcSheets?.move?.id &&
   inputs.npcScale === user.npcScale &&
@@ -1527,9 +1518,8 @@ const pin = (tile: TerrainHex, tint: number) => [
   }),
 ];
 const userParts = (user: SectorUser, tile: TerrainHex) => {
-  const fullBody = user.isNpc || !!user.bodyArt;
   const parts =
-    fullBody || user.spriteAppearance
+    user.isNpc || user.spriteAppearance
       ? []
       : pin(
           tile,
@@ -1543,14 +1533,12 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
     part(
       tile,
       "avatar",
-      user.bodyArt ?? travelAvatar(user),
+      travelAvatar(user),
       user.spriteAppearance
         ? LPC_TRAVEL_HEIGHT
-        : user.bodyArt
-          ? NPC_TRAVEL_HEIGHT * 2
-          : user.isNpc
-            ? NPC_TRAVEL_HEIGHT * (user.npcScale ?? 1)
-            : 0.8,
+        : user.isNpc
+          ? NPC_TRAVEL_HEIGHT * (user.npcScale ?? 1)
+          : 0.8,
       0.5,
       user.spriteAppearance ? LPC_TRAVEL_FOOT_Y + LPC_TRAVEL_HEIGHT / 2 : 1,
       user.spriteAppearance
@@ -1561,26 +1549,19 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
             shadow: PLAYER_TRAVEL_SHADOW,
             light: PLAYER_TRAVEL_LIGHT,
           }
-        : fullBody
+        : user.isNpc
           ? {
-              // Double-height body art outgrows a 256px rendition; it keeps its native
-              // source and samples smoothly, so its scale never doubles or drops pixels.
-              rendition: user.bodyArt ? 0 : 256,
+              rendition: 256,
               preserveAspect: true,
-              nearest: !user.bodyArt,
+              nearest: true,
               shadowCaster: "character",
-              // Body art and NPCs stand on the ground like players: grounded and animated, and
-              // lit at night unless they are wildlife.
+              // NPCs stand on the ground like players: grounded and animated, and lit at night
+              // unless they are wildlife.
               shadow: PLAYER_TRAVEL_SHADOW,
               ...(user.npcInteractionType === "AMBIENT" && !user.isStoryActor
                 ? {}
                 : { light: PLAYER_TRAVEL_LIGHT }),
-              ...(user.bodyArt
-                ? {
-                    loop: user.bodyIdle && sheetLoop(user.bodyIdle),
-                    walk: user.bodyMove && sheetLoop(user.bodyMove),
-                  }
-                : npcLoops(user)),
+              ...npcLoops(user),
             }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },
     ),

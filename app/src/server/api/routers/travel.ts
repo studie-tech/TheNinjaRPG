@@ -23,7 +23,6 @@ import {
   UserStatuses,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
-import { isCreator } from "@/libs/combat/creatorTrial";
 import {
   anonymousSpriteAppearance,
   resolveSpriteAppearance,
@@ -88,7 +87,6 @@ import { fetchIsolatedPyramid } from "@/queries/quests";
 import {
   fetchSectorWindowData,
   findSectorVillage,
-  findUserDataForCreatorBody,
   findUserDataForGetSectorData,
   findUserDataForGetSectorUsers,
   findUserForGlobalTravelFinish,
@@ -553,9 +551,6 @@ export const travelRouter = createTRPCRouter({
         );
       });
 
-      const creatorBody = processedUsers.some(isCreator)
-        ? await findUserDataForCreatorBody(ctx.drizzle)
-        : undefined;
       const activeQuests = getUserQuests({ ...user, userQuests, completedQuests });
       const boundPlacementIds = new Set(
         activeQuests.flatMap((entry) =>
@@ -587,7 +582,7 @@ export const travelRouter = createTRPCRouter({
       );
 
       return {
-        users: withCreatorBody(processedUsers, creatorBody),
+        users: processedUsers,
         protectors: dutyPatrols,
         patrolShiftAt: dutyShift?.startedAt ?? null,
         patrolRevision: dutyShift?.revision ?? 0,
@@ -642,16 +637,12 @@ export const travelRouter = createTRPCRouter({
       ) {
         return [];
       }
-      const participants = toSectorParticipants(
+      return toSectorParticipants(
         viewer,
         users,
         withMercenaryParticipation(fetchedWarData),
         new Set(liveBattles.map((b) => b.id)),
       );
-      const creatorBody = participants.some(isCreator)
-        ? await findUserDataForCreatorBody(ctx.drizzle)
-        : undefined;
-      return withCreatorBody(participants, creatorBody);
     }),
   // Get village & alliance information for a given sector
   getVillageInSector: protectedProcedure
@@ -1419,25 +1410,6 @@ const toSectorParticipants = (
       }
       return participant;
     });
-
-/** Draw the creator with its full-body art; a disguised creator keeps the disguise's name. */
-const withCreatorBody = <T extends { username: string }>(
-  users: T[],
-  creatorBody: Awaited<ReturnType<typeof findUserDataForCreatorBody>>,
-) => {
-  if (!creatorBody?.avatar) return users;
-  const sheets = snapshotSpriteAnimations(creatorBody.spriteAnimationBindings);
-  return users.map((u) =>
-    isCreator(u)
-      ? {
-          ...u,
-          bodyArt: creatorBody.avatar,
-          bodyIdle: sheets?.idle,
-          bodyMove: sheets?.move,
-        }
-      : u,
-  );
-};
 
 /** Quests whose objectives guide where onboarding players land after global travel. */
 const ONBOARDING_QUEST_IDS = new Set([

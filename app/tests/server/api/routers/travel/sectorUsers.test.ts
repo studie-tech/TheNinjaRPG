@@ -1,15 +1,12 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { CREATOR_TRIAL_FIRST_FORM, CREATOR_USERNAME } from "@/drizzle/constants";
 import {
-  aiSpriteAnimation,
   anbuSquad,
   battle,
   overworldAiPlacement,
   quest,
   questHistory,
   sector,
-  spriteAnimation,
   userData,
   village,
   war,
@@ -45,8 +42,6 @@ describeWithDatabase("travel.getSectorData player visibility", () => {
       overworldAiPlacement,
       questHistory,
       quest,
-      spriteAnimation,
-      aiSpriteAnimation,
     );
     await (await getTestDatabase()).insert(anbuSquad).values({
       ...SQUAD,
@@ -149,58 +144,6 @@ describeWithDatabase("travel.getSectorData player visibility", () => {
       expect(result.users.find((u) => u.userId === VIEWER)?.username).toBe("Viewer");
     },
   );
-
-  it("draws the creator as their trial's opening form, for everyone and themselves", async () => {
-    await insertUsers([
-      {
-        userId: "creator",
-        username: CREATOR_USERNAME,
-        status: "AWAKE",
-        sector: SECTOR,
-      },
-      {
-        userId: CREATOR_TRIAL_FIRST_FORM,
-        isAi: true,
-        avatar: "https://example.com/robot.webp",
-      },
-    ]);
-    const db = await getTestDatabase();
-    await db.insert(spriteAnimation).values(
-      ["idle", "move", "strike"].map((id) => ({
-        id,
-        name: id,
-        url: `https://example.com/${id}.png`,
-        columns: 8,
-        rows: 3,
-        frameCount: 24,
-        fps: 12.5,
-        facing: "left" as const,
-        createdByUserId: "editor",
-      })),
-    );
-    await db.insert(aiSpriteAnimation).values([
-      { userId: CREATOR_TRIAL_FIRST_FORM, actionKey: "idle", animationId: "idle" },
-      { userId: CREATOR_TRIAL_FIRST_FORM, actionKey: "move", animationId: "move" },
-      {
-        userId: CREATOR_TRIAL_FIRST_FORM,
-        actionKey: "basic:basicAttack",
-        animationId: "strike",
-      },
-    ]);
-    for (const callerId of [VIEWER, "creator"]) {
-      const result = await (await callerFor(travelRouter, callerId)).getSectorData({
-        sector: SECTOR,
-      });
-      expect(result.users.find((u) => u.userId === "creator")).toMatchObject({
-        bodyArt: "https://example.com/robot.webp",
-        bodyIdle: { id: "idle", url: "https://example.com/idle.png", frameCount: 24 },
-        bodyMove: { id: "move", url: "https://example.com/move.png", facing: "left" },
-      });
-      expect(result.users.find((u) => u.userId === "active")).not.toHaveProperty(
-        "bodyArt",
-      );
-    }
-  });
 
   it.each(["TRAVEL", "QUEUED"] as const)(
     "does not append a %s caller",

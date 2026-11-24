@@ -2578,8 +2578,8 @@ export const RANKS_RESTRICTED_FROM_PVP: readonly UserRank[] = ["STUDENT", "GENIN
 
 /**
  * The game's creator. Attacking them on the map, or a quest fight naming them, opens a PvE
- * trial instead, so their account never enters combat. The map draws them as the trial's
- * opening form, while still offering the attack.
+ * trial instead, so their account never enters combat. The map offers that attack whatever
+ * their rank and however crowded their tile.
  */
 export const CREATOR_USERNAME = "Terriator";
 /** Sheet an AI plays as it arrives by transformation, from its previous form to its own. */

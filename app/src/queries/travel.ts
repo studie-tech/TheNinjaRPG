@@ -16,10 +16,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import {
-  CREATOR_TRIAL_FIRST_FORM,
-  ROBBING_IMMUNITY_DURATION,
-} from "@/drizzle/constants";
+import { ROBBING_IMMUNITY_DURATION } from "@/drizzle/constants";
 import {
   actionLog,
   battle,
@@ -331,19 +328,6 @@ export const listQuestHistoryForGetSectorData2 = (
       eq(questHistory.userId, ctx.userId),
       or(gte(questHistory.completed, 1), gt(questHistory.previousCompletes, 0)),
     ),
-  });
-
-/** The creator's map body: their trial's opening form, drawn in their place. */
-export const findUserDataForCreatorBody = (client: Pick<DrizzleClient, "query">) =>
-  client.query.userData.findFirst({
-    columns: { avatar: true },
-    with: {
-      spriteAnimationBindings: {
-        where: (binding) => inArray(binding.actionKey, ["idle", "move"]),
-        with: { animation: true },
-      },
-    },
-    where: eq(userData.userId, CREATOR_TRIAL_FIRST_FORM),
   });
 
 /** Build the `userData` update for `startGlobalMove`, including predicates on `userId`, `status`, `sector`. */
