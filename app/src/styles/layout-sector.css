@@ -338,7 +338,7 @@ html[data-game-layout="sector"] {
   flex: 1;
   container-type: inline-size;
   display: grid;
-  grid-template-columns: 36px clamp(60px, 20vw, 100px) clamp(68px, 20vw, 96px) minmax(0, 1fr);
+  grid-template-columns: 36px clamp(60px, 20vw, 100px) minmax(68px, 1fr) minmax(0, max-content);
   gap: 3px;
   width: 100%;
   height: 44px;
@@ -563,13 +563,13 @@ html[data-game-layout="sector"] {
   flex: none;
 }
 .sector-sidebar-toggle {
-  width: 32px;
-  min-width: 32px;
-  height: 38px;
-  min-height: 38px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
   flex-direction: column;
   gap: 0;
-  padding: 3px;
+  padding: 2px;
   border: 1px solid var(--theme-line);
   border-color: color-mix(in srgb, var(--theme-accent) 40%, transparent);
   border-radius: 0.5rem;
