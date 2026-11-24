@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,7 @@ const TravelScreen = dynamic(
   },
 );
 
-/** Keep one map session while route-backed building dialogs open and close. */
+/** Keep one map session while route-backed screen dialogs open and close. */
 export function SectorTravelHost({
   children,
   isGuidedTutorial,
@@ -32,27 +32,33 @@ export function SectorTravelHost({
   const pathname = usePublicPathname();
   const router = useNavigationRouter();
   const returnFocus = useRef<HTMLElement | null>(null);
-  const closeBuilding = useCallback(
+  const closeScreen = useCallback(
     () => router.replace("/travel", { scroll: false }),
     [router],
   );
-  const building =
-    pathname === "/bank" ? "Bank" : pathname === "/itemshop" ? "Item Shop" : undefined;
+  const isScreenOpen = pathname !== "/travel";
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Each destination starts at its own heading; query-string filters keep their scroll.
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [pathname]);
 
   return (
     <>
-      <div className="h-full" inert={!!building}>
-        <TravelScreen immersive isInteractive={!building} />
+      <div className="h-full" inert={isScreenOpen}>
+        <TravelScreen immersive isInteractive={!isScreenOpen} />
       </div>
       <Dialog
-        open={!!building}
+        open={isScreenOpen}
         modal={!isGuidedTutorial}
         onOpenChange={(open) => {
-          if (!open) closeBuilding();
+          if (!open) closeScreen();
         }}
       >
         <DialogContent
-          className="sector-building-dialog"
+          ref={contentRef}
+          className="sector-screen-dialog"
           data-guided-tutorial={isGuidedTutorial || undefined}
           onOpenAutoFocus={() => {
             returnFocus.current =
@@ -74,12 +80,12 @@ export function SectorTravelHost({
             if (isGuidedTutorial) event.preventDefault();
           }}
         >
-          <DialogTitle className="sr-only">{building}</DialogTitle>
+          <DialogTitle className="sr-only">Game screen</DialogTitle>
           <DialogDescription className="sr-only">
-            Visit the {building}. Close to return to the sector map.
+            Close to return to the sector map.
           </DialogDescription>
-          <ScreenNavigationProvider onBack={closeBuilding}>
-            {building ? children : null}
+          <ScreenNavigationProvider onBack={closeScreen}>
+            {isScreenOpen ? children : null}
           </ScreenNavigationProvider>
         </DialogContent>
       </Dialog>

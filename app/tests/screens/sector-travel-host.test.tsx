@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import * as navigation from "@/hooks/navigation";
 import * as media from "@/hooks/useMediaQuery";
 import * as help from "@/layout/LowerRightHelpBtn";
+import { PUBLIC_PAGE_ROUTES } from "@/libs/browserRouteTelemetry";
 import { getGameLayout } from "@/libs/gameLayouts";
 import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
 import { useScreenNavigation } from "@/screens/ScreenNavigationContext";
@@ -92,7 +93,17 @@ it("keeps one session across travel, direct building entries, back and forward",
     </SectorTravelHost>,
   );
   expect(view.queryByText("Unused route")).toBeNull();
-  for (const path of ["/bank", "/travel", "/itemshop", "/bank", "/travel"]) {
+  for (const path of [
+    "/bank",
+    "/auctionhouse",
+    "/forum/board/thread",
+    "/combat",
+    "/profile",
+    "/travel",
+    "/itemshop",
+    "/bank",
+    "/travel",
+  ]) {
     pathname = path;
     await act(async () => {
       view.rerender(
@@ -111,6 +122,48 @@ it("keeps one session across travel, direct building entries, back and forward",
   }
 });
 
+it("hosts every non-travel route in a dialog without replacing the map session", async () => {
+  const view = render(
+    <SectorTravelHost isGuidedTutorial={false}>
+      <p>Route screen</p>
+    </SectorTravelHost>,
+  );
+  for (const path of PUBLIC_PAGE_ROUTES) {
+    pathname = path;
+    await act(async () => {
+      view.rerender(
+        <SectorTravelHost isGuidedTutorial={false}>
+          <p>Route screen</p>
+        </SectorTravelHost>,
+      );
+    });
+    expect(view.queryAllByRole("dialog")).toHaveLength(path === "/travel" ? 0 : 1);
+    expect(view.queryByText("Route screen") !== null).toBe(path !== "/travel");
+    expect(starts).toBe(1);
+    expect(stops).toBe(0);
+  }
+});
+
+it("resets dialog scroll for a new route while retaining the map", () => {
+  pathname = "/auctionhouse";
+  const view = render(
+    <SectorTravelHost isGuidedTutorial={false}>
+      <p>Auctions</p>
+    </SectorTravelHost>,
+  );
+  const dialog = view.getByRole("dialog");
+  dialog.scrollTop = 400;
+  pathname = "/forum";
+  view.rerender(
+    <SectorTravelHost isGuidedTutorial={false}>
+      <p>Forum</p>
+    </SectorTravelHost>,
+  );
+  expect(view.getByRole("dialog")).toBe(dialog);
+  expect(dialog.scrollTop).toBe(0);
+  expect(starts).toBe(1);
+});
+
 it("returns direct building visits to travel through their header and Escape", async () => {
   pathname = "/bank";
   const view = render(
@@ -118,7 +171,7 @@ it("returns direct building visits to travel through their header and Escape", a
       <Building />
     </SectorTravelHost>,
   );
-  expect(view.getByRole("dialog", { name: "Bank" })).toBeTruthy();
+  expect(view.getByRole("dialog", { name: "Game screen" })).toBeTruthy();
   fireEvent.click(view.getByRole("button", { name: "Leave building" }));
   expect(replace).toHaveBeenCalledWith("/travel", { scroll: false });
   replace.mockClear();
@@ -242,6 +295,17 @@ describe("responsive sector menus", () => {
       <div aria-label="Map host" />,
     );
   });
+
+  it.each(["/auctionhouse", "/combat", "/forum/board/thread", "/manual/item"])(
+    "retains the map frame for %s",
+    (path) => {
+      vi.spyOn(routing, "usePublicPathname").mockReturnValue(path);
+      const view = render(<SectorGameLayout {...props()} />);
+      expect(view.getByLabelText("Map host")).toBeTruthy();
+      expect(view.container.querySelector("main.sector-map-main")).toBeTruthy();
+      expect(view.queryByRole("link", { name: "Show global map" })).toBeNull();
+    },
+  );
 
   it("uses corner sidebar toggles and bottom Activity navigation on desktop", () => {
     isDesktop = true;

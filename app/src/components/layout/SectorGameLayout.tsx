@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  Globe,
-  MapPinSearch,
   MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -21,13 +19,11 @@ import {
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Footer from "@/layout/Footer";
-import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
-import { usePublicPathname } from "@/utils/routing";
 import { type GameFrameProps, GameLayout } from "./GameLayout";
 import { SectorPlayerStatus } from "./SectorPlayerStatus";
 import { SectorTravelHost } from "./SectorTravelHost";
@@ -42,7 +38,7 @@ import { MobileGameNav } from "./shared/MobileGameNav";
 import { TravelCompass } from "./shared/TravelCompass";
 import "../../styles/layout-sector.css";
 
-/** A compact frame that gives travel the viewport and keeps other pages reachable. */
+/** Keep the sector behind route-backed screens, with shared player and game controls. */
 export function SectorGameLayout(props: GameLayoutRenderProps) {
   const {
     children,
@@ -63,10 +59,8 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
     userData,
   } = props;
 
-  const pathname = usePublicPathname();
   const isDesktop = useMediaQuery(SIDEBAR_COLUMNS_SHOWN_QUERY);
   const { swapSides } = useActivityDock();
-  const isMapPage = !!userData && ["/travel", "/bank", "/itemshop"].includes(pathname);
   const isGuidedTutorial = isTutorialActive(userData);
   const [controlsTarget, setControlsTarget] = useState<HTMLDivElement | null>(null);
   const [viewTarget, setViewTarget] = useState<HTMLDivElement | null>(null);
@@ -85,7 +79,7 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
         className="sector-tool sector-sidebar-toggle"
         hidden={leftSideBarOpen}
         aria-label="Open player menu"
-        data-sector-travel-link={isMapPage || undefined}
+        data-sector-travel-link
       >
         <PanelLeftOpen aria-hidden="true" />
         <span className="sr-only">Player</span>
@@ -172,10 +166,7 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
 
   return (
     <TravelNavigationContext value={travelNavigation}>
-      <div
-        data-world-page
-        className={cn("sector-game", isMapPage && "sector-game-map")}
-      >
+      <div data-world-page className="sector-game sector-game-map">
         <a href="#game-content" className="theme-skip-link">
           Skip to game content
         </a>
@@ -187,19 +178,10 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
           <div>{gameMenu}</div>
         </div>
 
-        <main
-          id="game-content"
-          tabIndex={-1}
-          className={isMapPage ? "sector-map-main" : "sector-page"}
-          data-reading-surface={!isMapPage || undefined}
-        >
-          {isMapPage ? (
-            <SectorTravelHost isGuidedTutorial={isGuidedTutorial}>
-              {children}
-            </SectorTravelHost>
-          ) : (
-            children
-          )}
+        <main id="game-content" tabIndex={-1} className="sector-map-main">
+          <SectorTravelHost isGuidedTutorial={isGuidedTutorial}>
+            {children}
+          </SectorTravelHost>
         </main>
         <div
           className={cn(
@@ -222,34 +204,8 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
             className="sector-mobile-nav"
             centerControl={location ? undefined : <TravelCompass />}
             travelControls={{
-              menu: (
-                <div ref={setControlsTarget} className="sector-nav-map-controls">
-                  {!isMapPage && (
-                    <Link
-                      href="/travel?controls=open"
-                      aria-label="Map controls"
-                      title="Map controls"
-                      className="sector-nav-control"
-                    >
-                      <MapPinSearch aria-hidden />
-                    </Link>
-                  )}
-                </div>
-              ),
-              view: (
-                <div ref={setViewTarget} className="sector-nav-view">
-                  {!isMapPage && (
-                    <Link
-                      href="/travel?view=global"
-                      aria-label="Show global map"
-                      title="Show global map"
-                      className="sector-nav-control"
-                    >
-                      <Globe aria-hidden />
-                    </Link>
-                  )}
-                </div>
-              ),
+              menu: <div ref={setControlsTarget} className="sector-nav-map-controls" />,
+              view: <div ref={setViewTarget} className="sector-nav-view" />,
             }}
           />
         )}

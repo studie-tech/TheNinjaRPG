@@ -95,12 +95,6 @@ html[data-game-layout="sector"] {
   position: fixed;
   bottom: calc(var(--game-bottom-nav-h, 0px) + 1rem);
 }
-.sector-page {
-  width: min(100%, 80rem);
-  margin-inline: auto;
-  padding: calc(44px + 2rem) max(1rem, env(safe-area-inset-right))
-    calc(var(--sector-bottom-nav-space) + var(--activity-dock-space, 0px) + 2rem) max(1rem, env(safe-area-inset-left));
-}
 .sector-map-main {
   flex: 1;
   min-height: 0;
@@ -156,7 +150,7 @@ html[data-game-layout="sector"] {
   max-height: 22dvh;
   overflow-y: auto;
 }
-.sector-building-dialog {
+.sector-screen-dialog {
   grid-template-columns: minmax(0, 1fr);
   width: calc(100% - 1rem);
   max-width: 72rem;
@@ -166,7 +160,7 @@ html[data-game-layout="sector"] {
   .sector-header {
     gap: 0;
   }
-  .sector-building-dialog {
+  .sector-screen-dialog {
     padding-inline: 0.5rem;
   }
 }
@@ -194,15 +188,15 @@ html[data-game-layout="sector"] {
   }
 }
 
-.sector-building-dialog > [data-content-box] {
+.sector-screen-dialog > [data-content-box] {
   min-width: 0;
   width: 100%;
   max-width: 100%;
 }
 
-/* A collapsed lesson or its Quests tab still needs to open above the building.
+/* A collapsed lesson or its Quests tab still needs to open above a screen.
    Nested confirmations keep the shared dialog layer above that dock. */
-.sector-building-dialog[data-guided-tutorial] {
+.sector-screen-dialog[data-guided-tutorial] {
   z-index: 30;
 }
 
