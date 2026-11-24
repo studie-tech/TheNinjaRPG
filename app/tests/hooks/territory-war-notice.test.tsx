@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { focusManager, onlineManager, QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
+import { getQueryKey } from "@trpc/react-query";
 import type { PropsWithChildren } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
-import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
+import {
+  useCachedTerritoryWar,
+  useTerritoryWarNotice,
+} from "@/hooks/useTerritoryWarNotice";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 type Notice = RouterOutputs["territoryWar"]["getNotice"];
@@ -200,4 +204,27 @@ it("refreshes quiet-window snapshots on focus, reconnect and return from a hidde
   await advance(60_000);
   expect(tab.result.current).toBeNull();
   expect(tab.read).toHaveBeenCalledTimes(4);
+});
+
+it("reads the cached war without requests and drops it at its end", async () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(queryClient);
+  const read = vi.fn();
+  queryClient.setQueryData(
+    getQueryKey(testApi.territoryWar.getNotice, undefined, "query"),
+    { event: event(now + 5000), nextStartsAt: null },
+  );
+  const view = renderHook(() => useCachedTerritoryWar(0), {
+    wrapper: ({ children }: PropsWithChildren) => (
+      <TrpcTestProviders client={fakeTrpcClient(read)} queryClient={queryClient}>
+        {children}
+      </TrpcTestProviders>
+    ),
+  });
+  expect(view.result.current?.sector).toBe(100);
+  await advance(6000);
+  expect(view.result.current).toBeNull();
+  expect(read).not.toHaveBeenCalled();
 });

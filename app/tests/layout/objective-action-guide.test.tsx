@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
+import { MAP_WAR_TORN_BATTLEGROUND_SECTOR } from "@/drizzle/constants";
 import * as image from "@/layout/Image";
 import * as link from "@/layout/Link";
 import { Objective } from "@/layout/Objective";
@@ -37,13 +39,19 @@ describe("objective action guide", () => {
     vi.restoreAllMocks();
   });
 
-  const renderObjective = (task: string, value: number, grayedOut = false) =>
+  const renderObjective = (
+    task: string,
+    value: number,
+    grayedOut = false,
+    questType?: ComponentProps<typeof Objective>["questType"],
+  ) =>
     render(
       <Objective
         objective={AllObjectives.parse({ id: "goal", task, value: 5 })}
         tracker={QuestTracker.parse({ id: "quest", goals: [{ id: "goal", value }] })}
         checkRewards={vi.fn()}
         grayedOut={grayedOut}
+        questType={questType}
       />,
     );
 
@@ -73,6 +81,53 @@ describe("objective action guide", () => {
   it("adds no pointer to objectives the quest itself already locates", () => {
     expect(objectives.getObjectiveActionGuide({ task: "pvp_kills" })).toBeNull();
     expect(renderObjective("pvp_kills", 0).queryByRole("link")).toBeNull();
+  });
+
+  const mockTerritoryWar = (event: { sector: number; endsAt: Date } | null) =>
+    Object.assign(client.api, {
+      territoryWar: {
+        getNotice: {
+          useQuery: () => ({ data: { event, nextStartsAt: null }, dataUpdatedAt: 0 }),
+        },
+      },
+    });
+
+  it("tells PvP mission players where wins count while no Territory War runs", () => {
+    mockTerritoryWar({ sector: 100, endsAt: new Date(Date.now() - 1000) });
+    const view = renderObjective("pvp_kills", 0, false, "pvp");
+    expect(view.container.textContent).toContain(
+      `Wins only count in the War-Torn Battleground (sector ${MAP_WAR_TORN_BATTLEGROUND_SECTOR}) or against players in an active Territory War sector.`,
+    );
+    expect(view.getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual([
+      `/travel?sector=${MAP_WAR_TORN_BATTLEGROUND_SECTOR}`,
+      "/territory-war",
+    ]);
+  });
+
+  it("links the sector of the running Territory War", () => {
+    mockTerritoryWar({ sector: 100, endsAt: new Date(Date.now() + 60_000) });
+    const view = renderObjective("pvp_kills", 0, false, "pvp");
+    expect(view.container.textContent).toContain(
+      "against players in the active Territory War (sector 100).",
+    );
+    expect(view.getByText("sector 100").getAttribute("href")).toBe(
+      "/travel?sector=100",
+    );
+  });
+
+  it("keeps the rule off other quest types, other tasks and finished objectives", () => {
+    mockTerritoryWar(null);
+    for (const [task, value, grayedOut, questType] of [
+      ["pvp_kills", 0, false, "mission"],
+      ["pvp_kills", 0, false, "war"],
+      ["arena_kills", 0, false, "pvp"],
+      ["pvp_kills", 5, false, "pvp"],
+      ["pvp_kills", 0, true, "pvp"],
+    ] as const) {
+      const view = renderObjective(task, value, grayedOut, questType);
+      expect(view.queryByText(/Wins only count/)).toBeNull();
+      cleanup();
+    }
   });
 
   it("offers a tower defense challenge only at the objective's position", () => {

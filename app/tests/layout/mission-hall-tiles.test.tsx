@@ -66,19 +66,25 @@ const user = (overrides: Partial<HallUser> = {}) =>
 
 let pickers: Record<
   string,
-  { ids: string[]; count: number; disabled: boolean | undefined }
+  {
+    ids: string[];
+    count: number;
+    disabled: boolean | undefined;
+    describe: ComponentProps<typeof MissionPicker.default>["dialogDescription"];
+  }
 >;
 
 beforeEach(() => {
   pickers = {};
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(MissionPicker, "default").mockImplementation(
-    ({ setting, missions, disabled }) => {
+    ({ setting, missions, disabled, dialogDescription }) => {
       // The picker shows how many missions it was given.
       pickers[setting.name] = {
         ids: missions.map((m) => m.id),
         count: missions.length,
         disabled,
+        describe: dialogDescription,
       };
       return null;
     },
@@ -92,6 +98,7 @@ beforeEach(() => {
     updateUser: vi.fn(),
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
+    territoryWar: { getNotice: { useQuery: () => ({ data: undefined }) } },
     quests: {
       missionHall: { useQuery: () => ({ data: hallData }) },
       startRandom: { useMutation: () => ({ isPending: false }) },
@@ -147,6 +154,26 @@ describe("Mission Hall tiles", () => {
     ]);
     expect(pickers.Medical?.count).toBe(3);
     expect(pickers.PvP?.ids).toEqual(["a-pvp"]);
+  });
+
+  it("says where wins count before accepting a PvP mission that needs them", () => {
+    const confirmation = (objectives: { task: string }[]) => {
+      Object.assign(client.api.quests, {
+        missionHall: {
+          useQuery: () => ({
+            data: [{ ...hallQuest("a-pvp", "pvp", "A"), content: { objectives } }],
+          }),
+        },
+      });
+      render(<MissionHall userData={user()} />);
+      cleanup();
+      const description = pickers.PvP?.describe({ id: "a-pvp", name: "a-pvp" });
+      const text = render(<>{description}</>).container.textContent;
+      cleanup();
+      return text;
+    };
+    expect(confirmation([{ task: "pvp_kills" }])).toContain("Wins only count in");
+    expect(confirmation([{ task: "arena_kills" }])).not.toContain("Wins only count in");
   });
 
   it("limits medical tiles to the letter ranks a player can take", () => {
