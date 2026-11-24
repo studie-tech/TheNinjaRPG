@@ -582,19 +582,6 @@ html[data-game-layout="sector"] {
   font-weight: 600;
   line-height: 10px;
 }
-@media (min-width: 768px) {
-  .sector-sidebar-toggle {
-    width: auto;
-    height: 32px;
-    min-height: 32px;
-    flex-direction: row;
-    gap: 4px;
-    padding: 4px 6px;
-  }
-  .sector-menu-label {
-    font-size: 10px;
-  }
-}
 .sector-sidebar-toggle:focus-visible {
   outline: 2px solid var(--theme-accent);
   outline-offset: 1px;
