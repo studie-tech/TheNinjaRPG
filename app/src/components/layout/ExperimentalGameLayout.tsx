@@ -4,12 +4,15 @@ import {
   Globe,
   MapPinSearch,
   MessageCircle,
+  PanelLeftClose,
   PanelLeftOpen,
+  PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -89,6 +92,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
       <SheetContent
         side="left"
         className="experimental-drawer"
+        showCloseButton={false}
         data-experimental-sidebar="player"
         data-reading-surface
         onInteractOutside={(event) => {
@@ -96,7 +100,13 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
           else keepSheetOpenForClerk(event);
         }}
       >
-        <SheetHeader>
+        <SheetHeader className="experimental-drawer-header flex-row items-center space-y-0 text-left">
+          <SheetClose
+            className="experimental-drawer-close"
+            aria-label="Close player menu"
+          >
+            <PanelLeftClose aria-hidden="true" />
+          </SheetClose>
           <SheetTitle>Player menu</SheetTitle>
         </SheetHeader>
         <MobileSidebarStack
@@ -125,6 +135,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
       </SheetTrigger>
       <SheetContent
         className="experimental-drawer"
+        showCloseButton={false}
         data-experimental-sidebar="game"
         data-reading-surface
         onInteractOutside={(event) => {
@@ -132,7 +143,13 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
             event.preventDefault();
         }}
       >
-        <SheetHeader>
+        <SheetHeader className="experimental-drawer-header flex-row items-center space-y-0 text-left">
+          <SheetClose
+            className="experimental-drawer-close"
+            aria-label="Close game menu"
+          >
+            <PanelRightClose aria-hidden="true" />
+          </SheetClose>
           <SheetTitle>Game menu</SheetTitle>
         </SheetHeader>
         <Suspense fallback={<Loader explanation="Loading game menu" />}>
