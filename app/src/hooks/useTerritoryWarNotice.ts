@@ -54,6 +54,7 @@ export const useCachedTerritoryWar = (timeDiff: number) => {
   const notice = api.territoryWar.getNotice.useQuery(undefined, { enabled: false });
   const event = notice.data?.event;
   const [now, setNow] = useState(() => Date.now());
+  useEffect(() => setNow(Date.now()), [timeDiff]);
   useRefreshAt([event?.endsAt], () => setNow(Date.now()), timeDiff);
   return event &&
     event.endsAt.getTime() > Math.max(now, notice.dataUpdatedAt) - timeDiff
