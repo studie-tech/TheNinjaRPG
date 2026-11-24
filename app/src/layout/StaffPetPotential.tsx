@@ -1,12 +1,20 @@
 "use client";
+import { Dog } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { PET_POTENTIAL_TIERS } from "@/drizzle/constants";
 import { useStaffPetPotential } from "@/hooks/useStaffPetPotential";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
+import { TOOLBAR_BUTTON_CLASS } from "@/layout/publicUser/toolbarButtonClass";
 
 /** Audited individual potential overrides live beside the account's support controls. */
 export const StaffPetPotential = ({
@@ -34,17 +42,25 @@ export const StaffPetPotential = ({
   const selected = pets.data?.find((pet) => pet.id === petId);
   return (
     <>
-      <Button
-        ref={buttonRef}
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          setMessage("");
-          setIsOpen(true);
-        }}
-      >
-        Edit companion potential
-      </Button>
+      <TooltipProvider delayDuration={50}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              ref={buttonRef}
+              type="button"
+              className={TOOLBAR_BUTTON_CLASS}
+              aria-label="Edit companion potential"
+              onClick={() => {
+                setMessage("");
+                setIsOpen(true);
+              }}
+            >
+              <Dog className="h-6 w-6" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Edit companion potential</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <Modal
         title={`Companion potential · ${username}`}
         isOpen={isOpen}
