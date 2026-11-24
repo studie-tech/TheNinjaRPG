@@ -318,6 +318,7 @@ export function ActivityDock({
     <aside
       ref={dockRef}
       data-activity-dock
+      data-dock-placed={place ? "" : undefined}
       data-battle-focus-layer={lessonShown ? "" : undefined}
       aria-label="Activity"
       className={cn(

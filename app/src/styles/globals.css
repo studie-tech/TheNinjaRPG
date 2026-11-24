@@ -1125,6 +1125,6 @@ html[data-reading-palette] .tnr-pixel-game [data-content-box] :where(h1, h2, h3,
 }
 
 /* The shared mobile bar owns Activity; keep its open panel clear of the raised center. */
-html[data-mobile-activity-nav="true"] [data-activity-dock]:not(:has([data-dodge-highlight="true"])) {
+html[data-mobile-activity-nav="true"] [data-activity-dock]:not([data-dock-placed], :has([data-dodge-highlight="true"])) {
   bottom: calc(var(--game-bottom-nav-h, 0px) + 1rem);
 }

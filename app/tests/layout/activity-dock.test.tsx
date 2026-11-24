@@ -597,6 +597,8 @@ it("stands where the lesson is placed, on both tabs, until the player collapses 
     getDefaultStore().set(activityDockPlaceAtom, { left: 120, top: 200, width: 360 }),
   );
   expect(dock.style.transform).toBe("translate(120px, 200px)");
+  // The bottom bar's own place for the dock leaves it alone.
+  expect(dock.hasAttribute("data-dock-placed")).toBe(true);
   expect(dock.querySelector<HTMLElement>(":scope > div")?.style.width).toBe("360px");
   // The sides it could swap have no bearing on a lesson beside its subject.
   expect(view.queryByRole("button", { name: /Swap/ })).toBeNull();
