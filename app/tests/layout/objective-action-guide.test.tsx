@@ -86,7 +86,9 @@ describe("objective action guide", () => {
   const mockTerritoryWar = (event: { sector: number; endsAt: Date } | null) =>
     Object.assign(client.api, {
       territoryWar: {
-        getNotice: { useQuery: () => ({ data: { event, nextStartsAt: null } }) },
+        getNotice: {
+          useQuery: () => ({ data: { event, nextStartsAt: null }, dataUpdatedAt: 0 }),
+        },
       },
     });
 

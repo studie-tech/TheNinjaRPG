@@ -47,10 +47,16 @@ export const useTerritoryWarNotice = (
 
 /**
  * The active Territory War according to the notice the game layout already loads and
- * refreshes at each deadline. Only reads the query cache, so it adds no request or polling.
+ * refreshes at each deadline. Only reads the query cache, so it adds no request or polling;
+ * a failed refresh cannot keep an ended war on screen.
  */
 export const useCachedTerritoryWar = (timeDiff: number) => {
   const notice = api.territoryWar.getNotice.useQuery(undefined, { enabled: false });
   const event = notice.data?.event;
-  return event && event.endsAt.getTime() > Date.now() - timeDiff ? event : null;
+  const [now, setNow] = useState(() => Date.now());
+  useRefreshAt([event?.endsAt], () => setNow(Date.now()), timeDiff);
+  return event &&
+    event.endsAt.getTime() > Math.max(now, notice.dataUpdatedAt) - timeDiff
+    ? event
+    : null;
 };
