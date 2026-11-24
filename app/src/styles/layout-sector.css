@@ -651,6 +651,14 @@ html[data-game-layout="sector"] {
   height: 18px;
   stroke-width: 1.75;
 }
+@media (min-width: 768px) {
+  .sector-sidebar-toggle {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+}
 .sector-travel [data-sector-weather] {
   top: 1rem;
   right: auto;
