@@ -404,6 +404,24 @@ export const getSpotlightPanel = (element: Element): SpotlightBox | null => {
   );
 };
 
+/** The page the Sector layout hosts over its map, which scrolls on its own. */
+export const HOSTED_PAGE_SELECTOR = ".sector-screen-dialog";
+
+/** The part of a box its page shows, where the Sector layout hosts the page over its map. */
+export const clipToHostedPage = (element: Element, box: SpotlightBox): SpotlightBox => {
+  const page = element.closest(HOSTED_PAGE_SELECTOR);
+  if (!page) return box;
+  const view = boxOf(page);
+  const top = Math.max(box.top, view.top);
+  const left = Math.max(box.left, view.left);
+  return {
+    top,
+    left,
+    width: Math.max(0, Math.min(box.left + box.width, view.left + view.width) - left),
+    height: Math.max(0, Math.min(box.top + box.height, view.top + view.height) - top),
+  };
+};
+
 const boxOf = (element: Element): SpotlightBox => {
   const rect = element.getBoundingClientRect();
   return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
@@ -476,7 +494,8 @@ export const trackLayout = (
   }
   run();
   startPoll();
-  window.addEventListener("scroll", schedule, { passive: true });
+  // Captured, so a page scrolling in a container of its own is followed too.
+  window.addEventListener("scroll", schedule, { passive: true, capture: true });
   window.addEventListener("resize", schedule, { passive: true });
   window.addEventListener(TUTORIAL_LAYOUT_EVENT, schedule);
   if (animations) {
@@ -494,7 +513,7 @@ export const trackLayout = (
   return () => {
     if (poll !== null) clearInterval(poll);
     if (frame !== null) cancelAnimationFrame(frame);
-    window.removeEventListener("scroll", schedule);
+    window.removeEventListener("scroll", schedule, { capture: true });
     window.removeEventListener("resize", schedule);
     window.removeEventListener(TUTORIAL_LAYOUT_EVENT, schedule);
     document.removeEventListener("animationend", schedule, true);

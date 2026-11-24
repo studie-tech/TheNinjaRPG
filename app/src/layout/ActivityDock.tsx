@@ -295,6 +295,7 @@ export function ActivityDock({
     <aside
       ref={dockRef}
       data-activity-dock
+      data-dock-side={swapSides ? "right" : "left"}
       data-battle-focus-layer={lessonShown ? "" : undefined}
       aria-label="Activity"
       className={cn(

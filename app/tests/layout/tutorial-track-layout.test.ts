@@ -35,6 +35,16 @@ describe("tutorial highlight layout tracking", () => {
     expect(update).toHaveBeenCalledTimes(2);
   });
 
+  it("follows a page scrolling in a container of its own", () => {
+    const page = document.body.appendChild(document.createElement("div"));
+    const target = page.appendChild(document.createElement("div"));
+    const update = vi.fn(() => target);
+    stop = trackLayout(update);
+    page.dispatchEvent(new Event("scroll"));
+    vi.advanceTimersByTime(0);
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+
   it("follows an id handed to another control", async () => {
     const target = document.body.appendChild(document.createElement("div"));
     const update = vi.fn(() => target);

@@ -61,11 +61,13 @@ import {
   guidedLessonAtom,
 } from "@/layout/tutorial/guidedLesson";
 import {
+  clipToHostedPage,
   getDodgedPanelTop,
   getPanelPlaceOverDialog,
   getSpotlightPanel,
   getSpotlightScene,
   getUsableHighlightElement,
+  HOSTED_PAGE_SELECTOR,
   isSameBox,
   isSameOptionalBox,
   isUnderModal,
@@ -2201,6 +2203,8 @@ const useHighlightPlacement = <Step extends { id: string }>({
       // scroll both follow it.
       const isFieldPending = isCombat && !fitActivityDockBesideField();
       const before = highlightInfo.element.getBoundingClientRect();
+      const view = getPageView(highlightInfo.element);
+      const scrollTop = getPageScrollTop(view);
       // In a fight the action tiles under the field have to stay in view and clear of
       // the panel together with the target.
       const clear =
@@ -2214,35 +2218,38 @@ const useHighlightPlacement = <Step extends { id: string }>({
             .getElementById("tutorial-combat-action-timer")
             ?.getBoundingClientRect().top
         : undefined;
-      const isTimerAbove = timerTop !== undefined && timerTop < 0;
+      const isTimerAbove = timerTop !== undefined && timerTop < view.top;
+      // A hosted page shows nothing past its edges; elsewhere a bar may cover them.
+      const isPastView = view.isHosted
+        ? before.height <= view.bottom - view.top &&
+          (before.top < view.top || before.bottom > view.bottom)
+        : before.bottom < 80 || before.top > view.bottom - 80;
       const isOffscreen =
-        before.bottom < 80 ||
-        before.top > window.innerHeight - 80 ||
-        before.right < 0 ||
-        before.left > window.innerWidth;
+        isPastView || before.right < 0 || before.left > window.innerWidth;
       // Content that renders after the latch (a fight's jutsu row, say) can push a
       // placed target off the screen or under the panel, its action tiles below the
       // screen, or the AP bar off the top, without the player scrolling; place it again. A page that shrank
       // below the latched position pulls the scroll up to its new bottom, which is not
       // the player scrolling either.
       const isScrollClamped =
-        window.scrollY < placement.settledScrollY &&
-        window.scrollY + window.innerHeight >=
-          document.documentElement.scrollHeight - 1;
+        scrollTop < placement.settledScrollY &&
+        scrollTop + (view.bottom - view.top) >= (view.scroller?.scrollHeight ?? 0) - 1;
       if (
         placement.settled &&
-        (window.scrollY === placement.settledScrollY || isScrollClamped) &&
+        (scrollTop === placement.settledScrollY || isScrollClamped) &&
         ((panel && rectsOverlap(clear, panel)) ||
           (isOffscreen && placement.attempts < 5) ||
           isTimerAbove ||
-          (isCombat && clear.bottom > window.innerHeight))
+          (isCombat && clear.bottom > view.bottom))
       ) {
         placement.settled = false;
       }
       // A target with no room above the lesson at the foot of the screen starts at the top,
       // and the lesson folds.
       // A dialog stays where it is however the page behind it scrolls.
-      const dialog = highlightInfo.element.closest<HTMLElement>(OPEN_DIALOG_SELECTOR);
+      const openDialog =
+        highlightInfo.element.closest<HTMLElement>(OPEN_DIALOG_SELECTOR);
+      const dialog = openDialog === view.scroller ? null : openDialog;
       if (dialog && panel && !placement.gaveWay) {
         // Beside a wide screen's dialog there is room to leave its words readable too.
         const isBeside =
@@ -2258,12 +2265,12 @@ const useHighlightPlacement = <Step extends { id: string }>({
         // A lesson beside the target, over its edge at most, leaves it readable.
         Math.min(panel.right, before.right) - Math.max(panel.left, before.left) >
           before.width / 4 &&
-        before.height + 32 > panel.top;
+        before.height + 32 > panel.top - view.top;
       if (isCrowded && rectsOverlap(before, panel)) setPanelCrowdsHighlight(true);
       if (isCrowded && placement.attempts === 0) {
         placement.attempts = 1;
-        highlightInfo.element.ownerDocument.scrollingElement?.scrollBy({
-          top: before.top - 16,
+        view.scroller?.scrollBy({
+          top: before.top - view.top - 16,
           behavior: "auto",
         });
       }
@@ -2284,28 +2291,28 @@ const useHighlightPlacement = <Step extends { id: string }>({
           : null;
         const litFloor =
           lit && panel && lit.left < panel.right && lit.left + lit.width > panel.left
-            ? panel.top
-            : window.innerHeight;
-        const isLitInView = !!lit && lit.height + 32 <= litFloor;
+            ? Math.min(panel.top, view.bottom)
+            : view.bottom;
+        const isLitInView = !!lit && lit.height + 32 <= litFloor - view.top;
         const aim = isLitInView ? lit : before;
         const preferredCentre = isLitInView
-          ? litFloor / 2
-          : getPreferredHighlightCentre(before.height);
+          ? (view.top + litFloor) / 2
+          : getPreferredHighlightCentre(before.height, view.top);
         let aimOffset = aim.top + aim.height / 2 - preferredCentre;
         let isAimMisplaced = Math.abs(aimOffset) > 100;
         if (isLitInView && !isOffscreen) {
           // A panel partly in view moves no further than it needs, with room below it for
           // the pointer where there is any.
-          const room = Math.min(72, litFloor - lit.height - 16);
+          const room = Math.min(72, litFloor - view.top - lit.height - 16);
           const below = lit.top + lit.height - (litFloor - room);
-          aimOffset = below > 0 ? below : Math.min(0, lit.top - 16);
+          aimOffset = below > 0 ? below : Math.min(0, lit.top - view.top - 16);
           isAimMisplaced = Math.abs(aimOffset) > 1;
         }
         const isCovered = !!panel && rectsOverlap(clear, panel);
         // A scene revealed only (a fight, a card table) must stay in view around the
         // target, so there a visible, uncovered target is left where it is, unless in a
         // fight the action bar runs off the bottom or the AP bar has gone above the screen.
-        const isCutOff = isCombat && clear.bottom > window.innerHeight;
+        const isCutOff = isCombat && clear.bottom > view.bottom;
         const isMisplaced =
           isOffscreen ||
           isCovered ||
@@ -2314,34 +2321,32 @@ const useHighlightPlacement = <Step extends { id: string }>({
           (!isRevealOnly && isAimMisplaced);
         if (!isMisplaced) {
           placement.settled = true;
-          placement.settledScrollY = window.scrollY;
+          placement.settledScrollY = scrollTop;
         } else {
-          const scroller = highlightInfo.element.ownerDocument.scrollingElement;
           // There a target only moves far enough to come into view clear of the
           // panel, so as much of the scene as possible stays visible with it, and in a
           // fight never so far that the AP bar leaves the top of the screen.
           const floor =
             panel && clear.left < panel.right && clear.right > panel.left
-              ? Math.min(panel.top, window.innerHeight)
-              : window.innerHeight;
+              ? Math.min(panel.top, view.bottom)
+              : view.bottom;
           const revealOffset =
             !isOffscreen && !isCovered && !isCutOff
               ? 0
               : clear.bottom + 16 > floor
                 ? clear.bottom + 16 - floor
-                : clear.top - 80;
+                : clear.top - view.top - 80;
           const offset = !isRevealOnly
             ? aimOffset
             : Math.min(
                 revealOffset,
-                timerTop === undefined ? revealOffset : timerTop - 16,
+                timerTop === undefined ? revealOffset : timerTop - view.top - 16,
                 // Where not everything fits, the target itself stays on screen.
-                Math.max(0, before.top - 16),
+                Math.max(0, before.top - view.top - 16),
               );
-          const scrolledFrom = window.scrollY;
-          scroller?.scrollBy({ top: offset, behavior: "auto" });
+          view.scroller?.scrollBy({ top: offset, behavior: "auto" });
           // A page still laying out may have nowhere to scroll yet; that is no attempt.
-          if (window.scrollY !== scrolledFrom) placement.attempts += 1;
+          if (getPageScrollTop(view) !== scrollTop) placement.attempts += 1;
           // Scrolling cannot always win: on a short page the document may already
           // be as far down as it goes, leaving the target stuck under the panel
           // with nothing left to scroll. Rather than stretch the page to make
@@ -2353,7 +2358,13 @@ const useHighlightPlacement = <Step extends { id: string }>({
           if (isCovered && !placement.gaveWay) giveWay(highlightInfo.element);
         }
       }
-      const rect = highlightInfo.element.getBoundingClientRect();
+      const whole = highlightInfo.element.getBoundingClientRect();
+      const shown = clipToHostedPage(highlightInfo.element, whole);
+      // A target scrolled out of its page keeps its place, for the way back to it.
+      const rect = shown.height > 0 ? shown : whole;
+      const scene =
+        getSpotlightScene(highlightInfo.element) ??
+        (highlightInfo.isInPanel ? getSpotlightPanel(highlightInfo.element) : null);
       const next = {
         stepId: currentStepConfig.id,
         elementId: highlightInfo.element.id,
@@ -2362,9 +2373,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
         left: rect.left,
         width: rect.width,
         height: rect.height,
-        scene:
-          getSpotlightScene(highlightInfo.element) ??
-          (highlightInfo.isInPanel ? getSpotlightPanel(highlightInfo.element) : null),
+        scene: scene && clipToHostedPage(highlightInfo.element, scene),
       };
       setHighlight((prev) =>
         prev &&
@@ -2588,26 +2597,32 @@ const waitForIdle = (
   };
 };
 
-/** An open modal: Radix dialogs and alert dialogs portal to the body. */
+/** An open modal: a Radix dialog or alert dialog. */
 const OPEN_DIALOG_SELECTOR =
   '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
 /**
  * Whether one of them holds the player. A popover does not, nor a frame's own panels beside
- * the page: a menu left open, or the page a guided lesson is taught on.
+ * the page: a menu left open, or the page itself, hosted over the sector map.
  */
 const hasOpenModalDialog = () =>
   [...document.querySelectorAll(OPEN_DIALOG_SELECTOR)].some(
     (dialog) => !dialog.closest(NON_MODAL_DIALOG_SELECTOR),
   );
 
-const NON_MODAL_DIALOG_SELECTOR =
-  "[data-radix-popper-content-wrapper], [data-sector-sidebar], [data-guided-tutorial]";
+const NON_MODAL_DIALOG_SELECTOR = `[data-radix-popper-content-wrapper], [data-sector-sidebar], ${HOSTED_PAGE_SELECTOR}`;
 
-/** Follows dialogs mounting and unmounting, as portals directly under the body. */
+/** Follows dialogs mounting and unmounting, as portals under the body or the sector's page. */
 const subscribeToDialogs = (onChange: () => void) => {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.body, { childList: true });
+  const observer = new MutationObserver((mutations) => {
+    const isPortal = mutations.some(
+      ({ target }) =>
+        target === document.body ||
+        (target instanceof Element && target.matches("[data-sector-screen-viewport]")),
+    );
+    if (isPortal) onChange();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
   return () => observer.disconnect();
 };
 
@@ -2708,14 +2723,39 @@ const rectsOverlap = (a: ScreenEdges, b: ScreenEdges) =>
  * middle is not safe: the assistant panel is fixed over the foot of the screen,
  * so on a short viewport the middle is underneath it.
  */
-const getPreferredHighlightCentre = (targetHeight: number) => {
+const getPreferredHighlightCentre = (targetHeight: number, viewTop: number) => {
   const panel = getAssistantPanelRect();
   // Where the usual margin leaves no room above the panel, a narrow one may.
-  const top = [80, 16].find((margin) => panel && panel.top > margin + targetHeight);
+  const top = [80, 16]
+    .map((margin) => viewTop + margin)
+    .find((margin) => panel && panel.top > margin + targetHeight);
   return panel && top !== undefined
     ? (top + panel.top) / 2
     : (80 + window.innerHeight) / 2;
 };
+
+/** What scrolls the page a target is on, and the part of the screen that shows it. */
+type PageView = {
+  scroller: Element | null;
+  isHosted: boolean;
+  top: number;
+  bottom: number;
+};
+
+/** The document, or the page the Sector layout hosts over its map. */
+const getPageView = (element: Element): PageView => {
+  const hosted = element.closest(HOSTED_PAGE_SELECTOR);
+  const rect = hosted?.getBoundingClientRect();
+  return {
+    scroller: hosted ?? element.ownerDocument.scrollingElement,
+    isHosted: !!hosted,
+    top: Math.max(0, rect?.top ?? 0),
+    bottom: Math.min(window.innerHeight, rect?.bottom ?? window.innerHeight),
+  };
+};
+
+const getPageScrollTop = (view: PageView) =>
+  view.isHosted ? (view.scroller?.scrollTop ?? 0) : window.scrollY;
 
 /**
  * The boxes of the elements a step refers to (`step.marks`): every visible match

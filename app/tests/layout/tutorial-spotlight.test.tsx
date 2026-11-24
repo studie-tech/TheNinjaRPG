@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import * as image from "@/layout/Image";
 import {
+  clipToHostedPage,
   getDodgedPanelTop,
   getPanelPlaceOverDialog,
   getSpotlightPanel,
@@ -334,6 +335,19 @@ describe("a spotlight inside a panel", () => {
     expect(
       getSpotlightPanel(nest({ top: 90, left: 380, width: 690, height: 1500 }, card)),
     ).toEqual(padded(card));
+  });
+
+  it("lights no more of a panel than the page hosted over the map shows", () => {
+    const page = { top: 64, left: 520, width: 860, height: 760 };
+    const hosted = place(
+      document.body.appendChild(document.createElement("div")),
+      page,
+    );
+    hosted.className = "sector-screen-dialog";
+    const element = hosted.appendChild(document.createElement("button"));
+    const panel = { top: 500, left: 530, width: 840, height: 400 };
+    expect(clipToHostedPage(element, panel)).toEqual({ ...panel, height: 324 });
+    expect(clipToHostedPage(nest(), panel)).toEqual(panel);
   });
 
   it("lights none where every panel is too large, or there is none", () => {

@@ -94,6 +94,12 @@ html[data-game-layout="sector"] {
   position: fixed;
   bottom: calc(var(--game-bottom-nav-h, 0px) + 1rem);
 }
+/* A phone's open lesson spans the screen, over the launcher rather than under it. */
+@media (max-width: 767px) {
+  body:has(#tutorial-assistant-panel) .sector-chat-launcher {
+    z-index: 30;
+  }
+}
 .sector-map-main {
   flex: 1;
   min-height: 0;
@@ -190,6 +196,10 @@ html[data-game-layout="sector"] {
   max-width: 72rem;
   padding: 2.5rem 1rem 1rem;
 }
+/* An open lesson stands over the foot of the page; its end scrolls clear of it. */
+.sector-screen-dialog[data-guided-tutorial] {
+  padding-bottom: calc(1rem + var(--activity-dock-space, 0px));
+}
 @media (max-width: 480px) {
   .sector-header {
     gap: 4px;
@@ -254,6 +264,19 @@ html[data-game-layout="sector"] {
   min-width: 0;
   width: 100%;
   max-width: 100%;
+}
+
+/* A wide screen gives the open lesson a column of its own beside the page. */
+@media (min-width: 1200px) {
+  .sector-screen-dialog[data-guided-tutorial] {
+    padding-bottom: 1rem;
+  }
+  body:has([data-dock-side="left"] #tutorial-assistant-panel) .sector-game .sector-screen-viewport {
+    left: calc(420px + 3rem);
+  }
+  body:has([data-dock-side="right"] #tutorial-assistant-panel) .sector-game .sector-screen-viewport {
+    right: calc(420px + 3rem);
+  }
 }
 
 /* A collapsed lesson or its Quests tab still needs to open above a screen.
