@@ -20,12 +20,34 @@ describe("where a lesson stands beside its subject", () => {
     expect(found).toEqual({ left: 867, top: 209, width: 420 });
   });
 
-  it("stands beside a lit page, on the side nearer its control", () => {
+  it("keeps to its side of a lit page, wherever the control is", () => {
     const lit = { left: 554, top: 101, width: 702, height: 640 };
     const target = { left: 1100, top: 400, width: 100, height: 100 };
-    expect(place({ target, lit })).toEqual({ left: 1270, top: 350, width: 420 });
-    const left = place({ target: { ...target, left: 600 }, lit });
-    expect(left).toEqual({ left: 120, top: 350, width: 420 });
+    for (const left of [600, 800, 1100]) {
+      const at = { target: { ...target, left }, lit };
+      expect(place({ ...at, preferredSide: "right" })?.left).toBe(1270);
+      expect(place({ ...at, preferredSide: "left" })?.left).toBe(120);
+    }
+  });
+
+  it("leaves a short lit box's top and foot alone while its side has room", () => {
+    const found = place({
+      target: { left: 600, top: 315, width: 80, height: 40 },
+      lit: { left: 554, top: 264, width: 702, height: 110 },
+      preferredSide: "right",
+    });
+    expect(found?.left).toBe(1270);
+  });
+
+  it("takes the other side when its own has no room", () => {
+    const lit = { left: 554, top: 101, width: 702, height: 640 };
+    const found = place({
+      target: { left: 600, top: 400, width: 100, height: 100 },
+      lit,
+      preferredSide: "right",
+      viewport: { width: 1400, height: 809 },
+    });
+    expect(found?.left).toBeLessThan(lit.left);
   });
 
   it("keeps within the screen beside a control at its foot", () => {
@@ -40,7 +62,7 @@ describe("where a lesson stands beside its subject", () => {
     const viewport = { width: 1440, height: 900 };
     const lit = { left: 362, top: 101, width: 702, height: 640 };
     const target = { left: 900, top: 400, width: 100, height: 100 };
-    expect(place({ viewport, lit, target })).toEqual({
+    expect(place({ viewport, lit, target, preferredSide: "right" })).toEqual({
       left: 1078,
       top: 350,
       width: 350,
@@ -49,6 +71,7 @@ describe("where a lesson stands beside its subject", () => {
       viewport: { width: 1280, height: 900 },
       lit: { ...lit, left: 282 },
       target: { ...target, left: 500 },
+      preferredSide: "right",
     });
     expect(narrow?.width).toBe(272);
     expect(narrow && (narrow.left < 282 || narrow.left >= 984 - 64)).toBe(true);

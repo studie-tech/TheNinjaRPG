@@ -746,18 +746,33 @@ describe("highlight placement", () => {
     }
   });
 
-  it("stands beside its target on a wide screen and returns once nothing is marked", async () => {
+  it.each([
+    { where: "stays clear of the page", columnLeft: 700, transform: "translate(214px" },
+    { where: "leaves the page it covers", columnLeft: 200, transform: "" },
+  ])("$where once nothing is marked", async ({ columnLeft, transform }) => {
     const middle = (80 + window.innerHeight) / 2;
     const view = show(
       index,
       {},
       "/village",
-      <Target id={target()} box={new DOMRect(40, middle - 24, 160, 48)} />,
+      <>
+        <div
+          data-reading-surface=""
+          ref={(element) => {
+            if (element)
+              element.getBoundingClientRect = () =>
+                new DOMRect(columnLeft, 0, 300, 2000);
+          }}
+        />
+        <Target id={target()} box={new DOMRect(40, middle - 24, 160, 48)} />
+      </>,
     );
     const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
     await waitFor(() => expect(dock.style.transform).toStartWith("translate(214px"));
     document.getElementById(target())!.style.display = "none";
-    await waitFor(() => expect(dock.style.transform).toBe(""), { timeout: 3000 });
+    await new Promise((done) => setTimeout(done, 1300));
+    if (transform) expect(dock.style.transform).toStartWith(transform);
+    else expect(dock.style.transform).toBe("");
   });
 
   it("keeps its resting place while what is lit fills the screen", async () => {

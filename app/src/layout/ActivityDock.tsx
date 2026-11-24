@@ -333,7 +333,7 @@ export function ActivityDock({
         isLessonRaised && !isUnderModal && "z-[61]",
         place
           ? "top-0 left-0"
-          : "bottom-24 has-[[data-dodge-highlight=true]]:top-[var(--activity-dock-dodge-top,5rem)] has-[[data-dodge-highlight=true]]:bottom-auto md:bottom-[var(--activity-dock-bottom,1.25rem)]",
+          : "bottom-24 has-[[data-dodge-highlight=true]]:top-[var(--activity-dock-dodge-top,5rem)] has-[[data-dodge-highlight=true]]:bottom-auto md:bottom-5",
         !place &&
           (swapSides
             ? "right-4 md:right-[var(--activity-dock-edge,1.25rem)]"

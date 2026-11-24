@@ -2,6 +2,7 @@
 
 import { type RefObject, useEffect, useState } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { isTutorialActive } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
 import { safeLocalStorageRemoveItem } from "@/utils/storage";
@@ -9,14 +10,17 @@ import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Keep chat and activities on opposite sides, following the player's display preference.
- * A tutorial fight's action bar starts at the field's left edge and leaves its right end
- * free, so there Activity takes the right and chat the left, whatever the preference.
+ * In the tutorial Activity takes the right and chat the left, whatever the preference: on a
+ * wide screen, where its lessons stand beside what they point at and the menus are, so it
+ * need not cross the page; and in a fight, whose action bar leaves its right end free.
  */
 export function useActivityDock() {
   const [stored, setSwapSides] = useLocalStorage("swapChatAndActivity", false);
   const { data: isInTutorial } = useUserDataSelector(isTutorialActive);
   const prefersSwapSides = stored === true;
-  const isSideFixed = usePublicPathname() === "/combat" && isInTutorial === true;
+  const isWide = useMediaQuery(WIDE_LESSON_QUERY);
+  const isInFight = usePublicPathname() === "/combat";
+  const isSideFixed = (isWide || isInFight) && isInTutorial === true;
   return {
     swapSides: isSideFixed || prefersSwapSides,
     prefersSwapSides,
@@ -147,6 +151,8 @@ export const resetCharacterPresentation = (userId: string) => {
   }
 };
 
+/** Screens on which a lesson stands beside its target. */
+const WIDE_LESSON_QUERY = "(min-width: 768px)";
 /** Screens this wide fit the open dock to the gutter beside the centre column. */
 const WIDE_SCREEN_QUERY = "(min-width: 1280px)";
 /** Narrowest fitted dock, which still reads as a lesson column. */

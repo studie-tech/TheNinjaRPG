@@ -11,9 +11,10 @@ export const activityDockPlaceAtom = atom<DockPlace | null>(null);
 
 /**
  * Where the dock stands for a highlighted control: beside the lit box around it, level with
- * the control, or above or below the box. The place nearest the control and the middle of
- * the screen wins; one over the page's centre column costs more, as does one above or below
- * the box. `current`, the place it stands at, is kept while it is clear and not worse than
+ * the control, or above or below the box. Beside what is lit in the centre column it keeps to
+ * `preferredSide`, so it stays put while a page's lessons point at one control after another;
+ * beside a sidebar's box the place nearest the middle of the screen wins. One over the centre
+ * column costs more, as does one above or below the box. `current`, the place it stands at, is kept while it is clear and not worse than
  * the best by more than `patience`, so the card moves only when that helps the player. Null
  * when no place leaves the lit box readable.
  */
@@ -46,8 +47,17 @@ export const getDockPlace = ({
   const aim = clipToViewport(target, viewport);
   const pointer = getPointerReach(aim, viewport);
   const keep = [pad(aim, RING_REACH_PX), pointer, ...marks];
+  const isLitInColumn = !column || overlap(clipped, column).width >= clipped.width / 2;
   const maxTop = viewport.height - DOCK_MARGIN_PX - height;
   if (maxTop < DOCK_MARGIN_PX) return null;
+
+  /** The side of the lit box a place is beside, or null above or below it. */
+  const getSide = ({ left, top, width }: DockPlace) => {
+    const isLevel = top < clipped.top + clipped.height && top + height > clipped.top;
+    const reach = isLevel ? MAX_LIT_OVERLAP_PX : 0;
+    if (left + width <= clipped.left + reach) return "left";
+    return left >= clipped.left + clipped.width - reach ? "right" : null;
+  };
 
   /** What a place costs the player, or null when it covers what the lesson shows. */
   const costOf = (place: DockPlace): number | null => {
@@ -62,11 +72,6 @@ export const getDockPlace = ({
       return null;
     const over = overlap(box, clipped);
     if (over.area > 0 && over.width > MAX_LIT_OVERLAP_PX) return null;
-    const isBeside =
-      box.left + box.width <= clipped.left + MAX_LIT_OVERLAP_PX ||
-      box.left >= clipped.left + clipped.width - MAX_LIT_OVERLAP_PX;
-    const isOnPreferredSide =
-      preferredSide === "left" ? box.left < aim.left : box.left > aim.left;
     // Over the column whatever its height, so the column's top pulls no lesson off level.
     const columnShare = column
       ? Math.max(0, overlap(box, column).width) / box.width
@@ -78,8 +83,7 @@ export const getDockPlace = ({
       NARROW_WEIGHT * (ACTIVITY_DOCK_WIDTH_PX - box.width) +
       COLUMN_COST * columnShare +
       (over.area > 0 ? LIT_OVERLAP_WEIGHT * over.width : 0) +
-      (isBeside ? 0 : STACKED_COST) +
-      (isOnPreferredSide ? 0 : OTHER_SIDE_COST)
+      (getSide(place) === null ? STACKED_COST : 0)
     );
   };
 
@@ -120,16 +124,21 @@ export const getDockPlace = ({
   ])
     for (const left of lefts) candidates.push({ left, top, width });
 
+  const costs = candidates.map((place) => ({ place, cost: costOf(place) }));
+  // Anywhere else around the column is for a side of its own without room.
+  const keepsSide =
+    isLitInColumn &&
+    costs.some(({ place, cost }) => cost !== null && getSide(place) === preferredSide);
   let best: DockPlace | null = null;
   let bestCost = Number.POSITIVE_INFINITY;
-  for (const place of candidates) {
-    const cost = costOf(place);
-    if (cost !== null && cost < bestCost) {
+  for (const { place, cost } of costs) {
+    if (cost === null || (keepsSide && getSide(place) !== preferredSide)) continue;
+    if (cost < bestCost) {
       best = place;
       bestCost = cost;
     }
   }
-  if (current) {
+  if (current && !(keepsSide && getSide(current) !== preferredSide)) {
     const cost = costOf(current);
     if (cost !== null && cost <= bestCost + patience) return current;
   }
@@ -234,7 +243,6 @@ const NARROW_WEIGHT = 0.3;
 const LIT_OVERLAP_WEIGHT = 6;
 const COLUMN_COST = 100;
 const STACKED_COST = 220;
-const OTHER_SIDE_COST = 16;
 
 /** The dock's place on screen, in viewport pixels. */
 export interface DockPlace {

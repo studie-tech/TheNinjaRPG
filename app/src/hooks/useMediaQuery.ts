@@ -6,6 +6,9 @@ export const useMediaQuery = (query: string) => {
   const [matches, setMatches] = useState(false);
 
   useEffect(() => {
+    // A document without media queries matches none.
+    if (typeof window.matchMedia !== "function") return;
+
     // Create media query list
     const mediaQuery = window.matchMedia(query);
 
