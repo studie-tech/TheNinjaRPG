@@ -104,7 +104,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
           leftSideBar={leftSideBar}
           mainMenu={leftSideBarMainMenu}
         />
-        <Footer />
+        <Footer compact />
       </SheetContent>
     </Sheet>
   );

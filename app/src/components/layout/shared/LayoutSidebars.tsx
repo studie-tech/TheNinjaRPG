@@ -396,7 +396,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         }
       >
         <Bug className={iconClassName} />
-        {isExperimental && <span>Report bug</span>}
+        {isExperimental && <span>Bugs?</span>}
       </Link>
       <GameSettingsPopover
         userData={userData}
