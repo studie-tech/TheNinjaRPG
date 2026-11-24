@@ -79,10 +79,11 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
         className="sector-tool sector-sidebar-toggle"
         hidden={leftSideBarOpen}
         aria-label="Open player menu"
+        title="Player menu"
         data-sector-travel-link
       >
         <PanelLeftOpen aria-hidden="true" />
-        <span className="sr-only">Player</span>
+        <span className="sector-menu-label">Player</span>
       </SheetTrigger>
       <SheetContent
         side="left"
@@ -124,10 +125,11 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
             ? `Open game menu (${gameMenuNotificationCount} ${gameMenuNotificationCount === 1 ? "notification" : "notifications"})`
             : "Open game menu"
         }
+        title="Game menu"
         id="tutorial-gameBtn"
       >
         <PanelRightOpen aria-hidden="true" />
-        <span className="sr-only">Game menu</span>
+        <span className="sector-menu-label">Game</span>
         {gameMenuNotificationCount > 0 && (
           <span
             aria-hidden="true"
@@ -171,12 +173,14 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
           Skip to game content
         </a>
         <header className="sector-header">
+          <div className="sector-header-menu" hidden={leftSideBarOpen}>
+            {playerMenu}
+          </div>
           {userData && <SectorPlayerStatus hasLocation={!!location} />}
+          <div className="sector-header-menu" hidden={rightSideBarOpen}>
+            {gameMenu}
+          </div>
         </header>
-        <div className="sector-sidebar-controls">
-          <div>{playerMenu}</div>
-          <div>{gameMenu}</div>
-        </div>
 
         <main id="game-content" tabIndex={-1} className="sector-map-main">
           <SectorTravelHost isGuidedTutorial={isGuidedTutorial}>

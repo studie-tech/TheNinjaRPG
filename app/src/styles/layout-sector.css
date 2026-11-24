@@ -19,10 +19,9 @@ html[data-game-layout="sector"] {
   overflow: hidden;
 }
 .sector-header {
-  display: grid;
+  display: flex;
   flex: none;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 44px;
+  min-height: var(--sector-header-height);
   align-items: center;
   gap: 0.5rem;
   border-bottom: 1px solid var(--theme-line);
@@ -150,7 +149,33 @@ html[data-game-layout="sector"] {
   max-height: 22dvh;
   overflow-y: auto;
 }
+/* Page dialogs share the sector's coordinate space; the HUD and navigation stay outside it. */
+.sector-travel-host {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+.sector-screen-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  contain: layout paint;
+  pointer-events: none;
+}
+.sector-screen-layer > * {
+  pointer-events: auto;
+}
+.sector-screen-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.6);
+}
+.sector-screen-layer [role="dialog"]:not(.sector-screen-dialog),
+.sector-screen-layer [role="alertdialog"] {
+  max-height: calc(100% - 1rem);
+}
 .sector-screen-dialog {
+  max-height: calc(100% - 1rem);
   grid-template-columns: minmax(0, 1fr);
   width: calc(100% - 1rem);
   max-width: 72rem;
@@ -158,7 +183,7 @@ html[data-game-layout="sector"] {
 }
 @media (max-width: 480px) {
   .sector-header {
-    gap: 0;
+    gap: 4px;
   }
   .sector-screen-dialog {
     padding-inline: 0.5rem;
@@ -293,6 +318,7 @@ html[data-game-layout="sector"] {
 
 /* Give the character summary the full header width while retaining a 44px row. */
 .sector-player-status {
+  flex: 1;
   container-type: inline-size;
   display: grid;
   grid-template-columns: 36px clamp(60px, 20vw, 100px) clamp(68px, 20vw, 96px) minmax(0, 1fr);
@@ -515,30 +541,54 @@ html[data-game-layout="sector"] {
   }
 }
 
-/* Overlay only the controls themselves, leaving map gestures available between them. */
-.sector-sidebar-controls {
-  position: fixed;
-  z-index: 25;
-  top: calc(var(--sector-header-height) + 1rem);
-  right: max(1rem, env(safe-area-inset-right));
-  left: max(1rem, env(safe-area-inset-left));
-  display: flex;
-  justify-content: space-between;
-  pointer-events: none;
+/* The character summary takes over a collapsed control slot while its drawer is open. */
+.sector-header-menu {
+  flex: none;
 }
 .sector-sidebar-toggle {
-  pointer-events: auto;
+  width: 32px;
+  min-width: 32px;
+  height: 38px;
+  min-height: 38px;
+  flex-direction: column;
+  gap: 0;
+  padding: 3px;
   border: 1px solid var(--theme-line);
-  border-radius: 0.6rem;
-  background: var(--theme-surface);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  border-color: color-mix(in srgb, var(--theme-accent) 40%, transparent);
+  border-radius: 0.5rem;
+  background: var(--theme-bg);
+  background: color-mix(in srgb, var(--theme-accent) 10%, var(--theme-surface));
+  box-shadow: none;
+}
+.sector-menu-label {
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 10px;
+}
+@media (min-width: 768px) {
+  .sector-sidebar-toggle {
+    width: auto;
+    height: 32px;
+    min-height: 32px;
+    flex-direction: row;
+    gap: 4px;
+    padding: 4px 6px;
+  }
+  .sector-menu-label {
+    font-size: 10px;
+  }
+}
+.sector-sidebar-toggle:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 1px;
 }
 .sector-sidebar-toggle[hidden] {
   display: none;
 }
 .sector-sidebar-toggle svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
 }
 .sector-travel [data-sector-weather] {
   top: 1rem;
