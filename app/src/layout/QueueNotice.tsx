@@ -9,6 +9,8 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { useUserDataSelector } from "@/utils/UserContext";
 
+const UNKNOWN_REFETCH_MS = 5000;
+
 /** Tell a queued player what holds them, with its exit, on every page of the game. */
 export const QueueNotice: React.FC<{ className?: string }> = ({ className }) => {
   const { data: status } = useUserDataSelector((user) => user.status);
@@ -22,6 +24,9 @@ const QueuedActivityNotice: React.FC<{ className?: string }> = ({ className }) =
   const { data: activity } = api.raids.getQueuedActivity.useQuery(undefined, {
     staleTime: 0,
     gcTime: 0,
+    // Admission claims the status before it stores the seat, so look again until it exists.
+    refetchInterval: (query) =>
+      query.state.data?.kind === "UNKNOWN" ? UNKNOWN_REFETCH_MS : false,
   });
 
   /** A refused exit means the queue moved on, so the notice reads it again. */

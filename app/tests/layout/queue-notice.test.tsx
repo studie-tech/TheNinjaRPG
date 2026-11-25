@@ -15,7 +15,10 @@ const leave = {
 };
 let activity: QueuedActivity;
 let status: string;
-const read = vi.fn(() => ({ data: activity }));
+type ReadOptions = {
+  refetchInterval: (query: { state: { data: QueuedActivity } }) => number | false;
+};
+const read = vi.fn((_input: undefined, _options: ReadOptions) => ({ data: activity }));
 
 beforeEach(() => {
   status = "QUEUED";
@@ -105,5 +108,9 @@ describe("queue notice", () => {
     const view = render(<QueueNotice />);
     expect(view.getByText(/resets within ten minutes/)).toBeTruthy();
     expect(view.queryByRole("button")).toBeNull();
+    // A seat stored just after the status claim must replace this text with its exit.
+    const interval = read.mock.calls[0]![1].refetchInterval;
+    expect(interval({ state: { data: { kind: "UNKNOWN" } } })).toBeGreaterThan(0);
+    expect(interval({ state: { data: { kind: "RANKED" } } })).toBe(false);
   });
 });

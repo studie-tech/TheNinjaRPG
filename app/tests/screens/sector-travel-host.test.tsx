@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import * as navigation from "@/hooks/navigation";
 import * as media from "@/hooks/useMediaQuery";
 import * as help from "@/layout/LowerRightHelpBtn";
+import * as queueNotice from "@/layout/QueueNotice";
 import { PUBLIC_PAGE_ROUTES } from "@/libs/browserRouteTelemetry";
 import { getGameLayout } from "@/libs/gameLayouts";
 import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
@@ -342,6 +343,7 @@ describe("responsive sector menus", () => {
     isDesktop = false;
     vi.spyOn(media, "useMediaQuery").mockImplementation(() => isDesktop);
     vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
+    vi.spyOn(queueNotice, "QueueNotice").mockReturnValue(null);
     vi.spyOn(help, "default").mockImplementation(({ children }) => (
       <button type="button" aria-label="Chat">
         {children}
