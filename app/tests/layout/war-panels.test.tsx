@@ -381,7 +381,7 @@ describe("war field objectives", () => {
     );
     openTab(view, "Contributions");
     expect(view.getByText(/Defeating an opposing/).textContent).toContain(
-      "4–55 points",
+      "up to 4–55 points",
     );
     expect(view.getByText(/Destroying an objective shrine/).textContent).toContain(
       "up to 2,222 points",

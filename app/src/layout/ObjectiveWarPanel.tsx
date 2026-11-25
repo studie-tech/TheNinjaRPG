@@ -592,7 +592,7 @@ export const ObjectiveWarPanel = ({
             </p>
             <ul className="list-disc space-y-1 pl-5 text-muted-foreground text-sm">
               <li>
-                Defeating an opposing war participant: {getRolePointRange(rules)}{" "}
+                Defeating an opposing war participant: up to {getRolePointRange(rules)}{" "}
                 points, depending on your role.
               </li>
               <li>
