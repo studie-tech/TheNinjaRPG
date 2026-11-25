@@ -93,7 +93,7 @@ export const CoachCard = ({
             {eyebrow && (
               <p
                 className={cn(
-                  "text-muted-foreground truncate text-xs font-semibold tracking-wider uppercase @max-[34rem]/dock:text-sm @max-[34rem]/dock:tracking-normal @max-[34rem]/dock:whitespace-normal @max-[18rem]/dock:hidden",
+                  "text-muted-foreground truncate text-xs font-semibold tracking-wider uppercase @max-[34rem]/dock:text-sm @max-[34rem]/dock:tracking-normal @max-[34rem]/dock:whitespace-normal",
                   isFolded && "@max-[34rem]/dock:hidden",
                 )}
               >

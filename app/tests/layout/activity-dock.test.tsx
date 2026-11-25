@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, mock, vi } from "bun:test";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import { MobileGameNav } from "@/components/layout/shared/MobileGameNav";
+import { ROOMY_FIGHT_QUERY } from "@/hooks/useActivityDock";
 import * as storyGuidanceHook from "@/hooks/useStoryGuidance";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { ActivityDockButton } from "@/layout/ActivityDockButton";
@@ -181,7 +182,7 @@ it("keeps its side in a tutorial fight with room around it", () => {
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/combat");
   const matchMedia = window.matchMedia;
   window.matchMedia = ((query: string) => ({
-    matches: query === "(min-width: 768px) and (min-height: 600px)",
+    matches: query === ROOMY_FIGHT_QUERY,
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
   })) as never;

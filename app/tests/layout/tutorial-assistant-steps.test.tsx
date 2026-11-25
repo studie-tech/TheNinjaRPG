@@ -859,19 +859,19 @@ describe("fight placement", () => {
     }
   });
 
-  it("narrows the lesson to the space beside the field and restores it after", async () => {
+  it("keeps its own width beside the field and gives the width up after", async () => {
     const root = document.documentElement;
     const view = show(
       fight,
       {},
       "/combat",
-      <Target id="tutorial-combat-field" box={new DOMRect(40, 92, 600, 300)} />,
+      <Target id="tutorial-combat-field" box={new DOMRect(40, 92, 500, 300)} />,
     );
     const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
-    // The dock ends at 1020 and the field at 640; 16px stay between them.
+    // The dock ends at 1020 and the field at 540, with 16px between them.
     dock.getBoundingClientRect = () => new DOMRect(600, 350, 420, 300);
     await waitFor(
-      () => expect(root.style.getPropertyValue("--activity-dock-width")).toBe("364px"),
+      () => expect(root.style.getPropertyValue("--activity-dock-width")).toBe("420px"),
       { timeout: 3000 },
     );
     view.unmount();
@@ -895,11 +895,10 @@ describe("fight placement", () => {
       );
       view.unmount();
     };
-    // 179px beside the field wrap every word; the screen's foot has room for the strip...
+    // Only 179px stand beside the field; the screen's foot has room for the strip...
     await expectWidth(new DOMRect(210, 92, 348, 250), "737px");
-    // ...which a taller fight does not leave, so the dock squeezes beside it.
-    await expectWidth(new DOMRect(210, 92, 348, window.innerHeight), "179px");
-    // A tall field across the whole screen has neither, and the dock keeps its width.
+    // ...which a taller fight does not leave, so the dock keeps its own width.
+    await expectWidth(new DOMRect(210, 92, 348, window.innerHeight), "420px");
     await expectWidth(new DOMRect(10, 92, 740, window.innerHeight), "420px");
   });
 

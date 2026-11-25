@@ -96,8 +96,13 @@ export const resetCharacterPresentation = (userId: string) => {
   }
 };
 
-/** Screens with room for a lesson beside a fight or in a strip under it. */
-const ROOMY_FIGHT_QUERY = "(min-width: 768px) and (min-height: 600px)";
+/**
+ * Screens with room for a lesson beside a fight or in a strip under it. The field grows with
+ * the page's column, up to its full width from 1280px, and the gutter holds the lesson from
+ * 1640px.
+ */
+export const ROOMY_FIGHT_QUERY =
+  "(min-width: 768px) and (max-width: 1099px) and (min-height: 740px), (min-width: 1100px) and (min-height: 860px), (min-width: 1640px)";
 
 const isUntaughtModalOpen = (dock: HTMLElement, targetIds: readonly string[]) => {
   if (!dock.closest('[aria-hidden="true"]')) return false;

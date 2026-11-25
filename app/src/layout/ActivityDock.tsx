@@ -307,8 +307,7 @@ export function ActivityDock({
       )}
     >
       {open ? (
-        // A tutorial fight narrows the dock to the space beside the battlefield, where
-        // its tabs keep only their icons.
+        // A tutorial fight without room beside the battlefield widens the dock to a strip.
         <Tabs
           value={tab}
           onValueChange={changeTab}
@@ -339,7 +338,7 @@ export function ActivityDock({
                     ) : (
                       <ListChecks className="h-4 w-4" />
                     )}
-                    <span className="@max-[17rem]/dock:sr-only">
+                    <span>
                       {value === "tutorial" && !isTutorialActive(user)
                         ? "Story"
                         : capitalizeFirstLetter(value)}

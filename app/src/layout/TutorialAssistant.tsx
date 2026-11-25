@@ -136,16 +136,12 @@ const DODGE_TOP_PROPERTY = "--activity-dock-dodge-top";
 const ACTIVITY_DOCK_WIDTH_PROPERTY = "--activity-dock-width";
 /** The Activity dock's own width. */
 const ACTIVITY_DOCK_FULL_WIDTH_PX = 420;
-/** Narrowest dock beside a fight whose lesson still reads in comfortable lines. */
-const ACTIVITY_DOCK_READABLE_WIDTH_PX = 240;
-/** Narrowest dock that still fits its tabs, for a screen too short for anything else. */
-const ACTIVITY_DOCK_MIN_WIDTH_PX = 176;
 /** Widest strip the dock becomes under a fight, and the height its lessons take there. */
 const ACTIVITY_DOCK_STRIP_WIDTH_PX = 760;
 const ACTIVITY_DOCK_STRIP_HEIGHT_PX = 190;
 /** The button that leaves a finished fight, after which its action tiles do nothing. */
 const COMBAT_RETURN_ID = "return";
-/** Space kept between the battlefield's highlight ring and the narrowed dock. */
+/** Space kept between the battlefield's highlight ring and the dock. */
 const ACTIVITY_DOCK_FIELD_GAP_PX = 16;
 
 /** Seconds a step without a Next button stays up before a "skip" escape appears. */
@@ -1242,7 +1238,7 @@ const PlayerTutorialAssistant: React.FC<
   const isStuck = canOfferSkip && stuckKey === lessonKey;
   // Like the shortcut, the skip stays out from under a dialog the player has open.
   const isSkipShown = isStuck && !isModalDialogOpen;
-  // In a phone battle, or a fight's dock narrowed beside the field, a step that only
+  // In a phone battle a step that only
   // coaches shows its instruction alone, which carries the facts, so the field and the
   // controls stay visible. A step pointing at a control keeps the reason for it, and a
   // rematch's instruction only says to win, so its advice stays too.
@@ -1253,7 +1249,7 @@ const PlayerTutorialAssistant: React.FC<
     currentTutorialStep.title !== TUTORIAL_REMATCH_TITLE;
   const leadClassName = cn(
     "text-base leading-relaxed",
-    hidesLeadInFight && "max-md:hidden @max-[17rem]/dock:hidden",
+    hidesLeadInFight && "max-md:hidden",
   );
 
   // The lesson's own trip, answer and claim, and its skip. Until they are offered they
@@ -1713,8 +1709,7 @@ const AssistantPortrait: React.FC<{ image: string }> = ({ image }) => (
   <div
     aria-hidden="true"
     data-tutorial-portrait
-    // A dock squeezed beside a fight gives its whole width to the words.
-    className="from-primary/10 relative w-1/5 max-w-36 min-w-[4.5rem] shrink-0 rounded-bl-xl bg-linear-to-r to-transparent @max-[18rem]/dock:hidden"
+    className="from-primary/10 relative w-1/5 max-w-36 min-w-[4.5rem] shrink-0 rounded-bl-xl bg-linear-to-r to-transparent"
   >
     <span className="via-primary/50 absolute inset-y-4 right-0 w-px bg-linear-to-b from-transparent to-transparent" />
     <Image
@@ -2686,10 +2681,9 @@ const getAssistantPanelRect = (): DOMRect | null => {
 
 /**
  * Sizes the dock for a fight so it covers neither the field nor the action tiles under it.
- * It narrows into the space beside the battlefield while a lesson reads well there. On a
- * slimmer screen it becomes a strip along the foot, which the placement scrolls the fight
- * clear of; a screen too short for the strip keeps it beside the field, however narrow,
- * or at its own width where a field spans the screen.
+ * It never narrows: where its own width does not fit beside the battlefield it becomes a
+ * strip along the foot, which the placement scrolls the fight clear of. A screen too short
+ * for the strip keeps its own width, on the side the action tiles leave free.
  * Measured from the dock's fixed edge, so resizing it never changes the answer.
  * Returns false while the field has not laid out yet.
  */
@@ -2716,11 +2710,9 @@ const fitActivityDockBesideField = () => {
   const fitsStrip =
     fightHeight + ACTIVITY_DOCK_STRIP_HEIGHT_PX + 2 * ACTIVITY_DOCK_FIELD_GAP_PX <=
     window.innerHeight;
-  const isBeside =
-    room >= ACTIVITY_DOCK_READABLE_WIDTH_PX ||
-    (room >= ACTIVITY_DOCK_MIN_WIDTH_PX && !fitsStrip);
+  const isBeside = room >= ACTIVITY_DOCK_FULL_WIDTH_PX;
   const width = isBeside
-    ? Math.min(room, ACTIVITY_DOCK_FULL_WIDTH_PX)
+    ? ACTIVITY_DOCK_FULL_WIDTH_PX
     : Math.min(
         (isOnLeft ? viewportWidth - dock.left : dock.right) -
           ACTIVITY_DOCK_FIELD_GAP_PX,
