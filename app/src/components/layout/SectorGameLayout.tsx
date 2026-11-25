@@ -21,6 +21,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Footer from "@/layout/Footer";
 import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
+import { QueueNotice } from "@/layout/QueueNotice";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
@@ -186,6 +187,7 @@ export function SectorGameLayout(props: GameLayoutRenderProps) {
             {gameMenu}
           </div>
         </header>
+        <QueueNotice className="flex-none rounded-none border-x-0 border-t-0" />
 
         <main id="game-content" tabIndex={-1} className="sector-map-main">
           <SectorTravelHost isGuidedTutorial={isGuidedTutorial}>

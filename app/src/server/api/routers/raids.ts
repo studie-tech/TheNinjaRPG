@@ -19,6 +19,7 @@ import type { Quest } from "@/drizzle/schema";
 import { getWarSide } from "@/libs/objectiveWar";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest/rewards";
+import { getQueuedActivity } from "@/libs/queuedActivity";
 import {
   createBattleClaimId,
   getRaidChatConversationId,
@@ -41,8 +42,13 @@ import {
   queueAwakeUser,
   wakeQueuedUser,
 } from "@/queries/profile";
-import { deleteRankedQueueForUser } from "@/queries/pvprank";
+import { deleteRankedQueueForUser, fetchUserRankedQueue } from "@/queries/pvprank";
 import { fetchQuest } from "@/queries/quests";
+import {
+  findQueuedBattleSeat,
+  selectQueuedDungeon,
+  selectQueuedEscort,
+} from "@/queries/queuedActivity";
 import {
   claimBattleQueue,
   deleteEmptyQueueById,
@@ -379,6 +385,24 @@ export const raidsRouter = createTRPCRouter({
           members: queue.clanBattle.queue,
         },
       };
+    }),
+
+  /** Name the activity that holds a queued player, so any page can offer its exit. */
+  getQueuedActivity: protectedProcedure
+    .meta({ mcp: { description: "Get the activity the user is queued for" } })
+    .query(async ({ ctx }) => {
+      const [seat, dungeons, escorts, ranked] = await Promise.all([
+        findQueuedBattleSeat(ctx.drizzle, ctx.userId),
+        selectQueuedDungeon(ctx.drizzle, ctx.userId),
+        selectQueuedEscort(ctx.drizzle, ctx.userId),
+        fetchUserRankedQueue(ctx.drizzle, ctx.userId),
+      ]);
+      return getQueuedActivity({
+        seat,
+        hasDungeon: dungeons.length > 0,
+        hasEscort: escorts.length > 0,
+        hasRanked: !!ranked,
+      });
     }),
 
   /**

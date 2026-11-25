@@ -25,6 +25,7 @@ import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
+import { QueueNotice } from "@/layout/QueueNotice";
 import { cn } from "@/libs/shadui";
 import { type GameFrameProps, GameLayout } from "./GameLayout";
 import { LayoutBackground } from "./shared/LayoutBackground";
@@ -253,6 +254,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                     Phones leave room to scroll content clear of the fixed bottom bar and an
                     open lesson. */}
                 <div className="p-3 pb-[calc(7rem+env(safe-area-inset-bottom)+var(--activity-dock-space,0px))] md:min-h-svh md:pb-3">
+                  <QueueNotice className="mb-3" />
                   {children}
                 </div>
               </div>

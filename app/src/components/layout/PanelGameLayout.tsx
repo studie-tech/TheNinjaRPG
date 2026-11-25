@@ -16,6 +16,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
+import { QueueNotice } from "@/layout/QueueNotice";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { type GameFrameProps, GameLayout } from "./GameLayout";
@@ -206,6 +207,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
           data-reading-surface
           data-compact-content
         >
+          <QueueNotice className="mb-3" />
           {children}
         </main>
         <aside
