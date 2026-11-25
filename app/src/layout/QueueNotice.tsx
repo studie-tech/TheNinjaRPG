@@ -105,29 +105,32 @@ const QueuedActivityNotice: React.FC<{ className?: string }> = ({ className }) =
     <section
       aria-label="Queue status"
       className={cn(
-        "bg-card text-card-foreground flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-orange-500 px-3 py-2 text-sm",
+        "bg-card text-card-foreground @container rounded-lg border border-orange-500 px-3 py-2 text-sm",
         className,
       )}
     >
-      <p className="flex min-w-0 flex-1 basis-52 items-center gap-2 font-medium">
-        <Swords className="h-5 w-5 shrink-0 text-orange-500" aria-hidden />
-        <span>{text}</span>
-      </p>
-      {(href || canLeave) && (
-        <div className="flex grow justify-end gap-2 sm:grow-0">
-          {href && (
-            <Button asChild variant="outline" className="grow sm:grow-0">
-              <Link href={href}>{linkLabel}</Link>
-            </Button>
-          )}
-          {canLeave && (
-            <Button onClick={leave} disabled={isLeaving} className="grow sm:grow-0">
-              <DoorOpen className="mr-2 h-4 w-4" aria-hidden />
-              {isLeaving ? "Leaving..." : "Leave queue"}
-            </Button>
-          )}
-        </div>
-      )}
+      {/* @lg is 384px here: phones and the narrow classic column stack full-width actions. */}
+      <div className="flex flex-col gap-2 @lg:flex-row @lg:items-center @lg:gap-3">
+        <p className="flex min-w-0 flex-1 items-center gap-2 font-medium">
+          <Swords className="h-5 w-5 shrink-0 text-orange-500" aria-hidden />
+          <span>{text}</span>
+        </p>
+        {(href || canLeave) && (
+          <div className="flex gap-2 *:min-h-[44px] *:flex-1 @lg:*:min-h-0 @lg:*:flex-none">
+            {href && (
+              <Button asChild variant="outline">
+                <Link href={href}>{linkLabel}</Link>
+              </Button>
+            )}
+            {canLeave && (
+              <Button onClick={leave} disabled={isLeaving}>
+                <DoorOpen className="mr-2 h-4 w-4" aria-hidden />
+                {isLeaving ? "Leaving..." : "Leave queue"}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   );
 };
