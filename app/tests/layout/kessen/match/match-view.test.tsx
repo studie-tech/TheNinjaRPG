@@ -397,7 +397,7 @@ describe("KessenMatchView", () => {
 
   it("leaves its content box's title room above the frame", () => {
     const top = vi
-      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .spyOn(Element.prototype, "getBoundingClientRect")
       .mockImplementation(function (this: HTMLElement) {
         return new DOMRect(
           0,

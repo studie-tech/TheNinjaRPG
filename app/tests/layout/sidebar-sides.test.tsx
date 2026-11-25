@@ -26,6 +26,7 @@ import { GameSettingsPanel } from "@/layout/GameSettings";
 import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import * as Image from "@/layout/Image";
 import * as HelpButton from "@/layout/LowerRightHelpBtn";
+import * as QueueNotice from "@/layout/QueueNotice";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import {
   SWAP_SIDEBARS_ATTRIBUTE,
@@ -99,6 +100,7 @@ const mockFrameChrome = () => {
     <img {...props} alt={alt} src={typeof src === "string" ? src : undefined} />
   ));
   vi.spyOn(Footer, "default").mockImplementation(() => <div>Footer</div>);
+  vi.spyOn(QueueNotice, "QueueNotice").mockReturnValue(null);
   vi.spyOn(HelpButton, "default").mockImplementation(({ children }) => <>{children}</>);
   vi.spyOn(LayoutSidebars, "StrongestUsersBanner").mockImplementation(() => (
     <div>Strongest users</div>

@@ -56,12 +56,40 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
       success: false,
       message: "Already in queue",
     });
-    expect((await caller.leaveRankedPvpQueue()).success).toBe(true);
+    expect(await caller.leaveRankedPvpQueue()).toMatchObject({
+      success: true,
+      userPatch: { status: "AWAKE" },
+    });
     expect((await storedUser())?.status).toBe("AWAKE");
     expect(await storedQueue()).toHaveLength(0);
     expect(await caller.getRankedQueueCount()).toBe(0);
     expect(Pusher.prototype.trigger).toHaveBeenCalledTimes(2);
   });
+
+  it.each(["AWAKE", "BATTLE"] as const)(
+    "withholds the exit patch when the guarded wake loses to %s",
+    async (status) => {
+      const db = await getTestDatabase();
+      const caller = await callerFor(pvpRankRouter, USER);
+      expect((await caller.queueForRankedPvp()).success).toBe(true);
+      const client = beforeStatements(db, userData, [
+        async () => {
+          await db
+            .update(userData)
+            .set({ status, battleId: status === "BATTLE" ? "ranked-battle" : null })
+            .where(eq(userData.userId, USER));
+        },
+      ]);
+      const result = await callerForDatabase(
+        pvpRankRouter,
+        USER,
+        client,
+      ).leaveRankedPvpQueue();
+      expect(result.success).toBe(status === "AWAKE");
+      expect(result.userPatch).toBeUndefined();
+      expect((await storedUser())?.status).toBe(status);
+    },
+  );
 
   it("removes only a losing join's row after another preloaded join wins", async () => {
     const db = await getTestDatabase();

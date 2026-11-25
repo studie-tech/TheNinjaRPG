@@ -19,6 +19,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
+import { QueueNotice } from "@/layout/QueueNotice";
 import { cn } from "@/libs/shadui";
 import { type GameFrameProps, GameLayout } from "./GameLayout";
 import { LayoutBackground } from "./shared/LayoutBackground";
@@ -298,6 +299,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                       : "p-5 pb-8 md:p-7"
                   }
                 >
+                  <QueueNotice className="mb-3" />
                   {children}
                 </div>
               </div>
