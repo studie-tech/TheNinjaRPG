@@ -14,9 +14,9 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
 }
 .splash-dialog {
   display: flex;
-  width: min(1120px, calc(100vw - 2rem));
+  width: min(100rem, calc(100vw - 2rem));
   max-width: none;
-  max-height: calc(100dvh - 2rem);
+  max-height: calc(100dvh - 1.5rem);
   flex-direction: column;
   gap: 0;
   overflow: hidden;
@@ -31,6 +31,7 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
     0 25px 100px #000b;
 }
 .splash-dialog-scroll {
+  container: splashDialog / inline-size;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -39,12 +40,12 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   position: relative;
   isolation: isolate;
   display: flex;
-  min-height: 17rem;
+  min-height: 11rem;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   border-bottom: 3px solid var(--dispatch-gold);
-  padding: 2rem 1.5rem 1.7rem;
+  padding: 0.8rem 0.5rem;
   text-align: center;
 }
 .splash-masthead-art {
@@ -73,15 +74,16 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   max-width: 100%;
   flex-direction: column;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.35rem;
 }
 .splash-brand {
   display: flex;
   align-items: center;
   gap: 0.8rem;
   font-family: Georgia, serif;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
+  line-height: 1.3;
   color: #fff2cd;
   text-shadow: 0 2px 3px #171310;
 }
@@ -92,7 +94,7 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
 }
 .splash-title {
   margin: 0;
-  padding: 0.3rem 2.4rem 0.6rem;
+  padding: 0.2rem 1.4rem 0.4rem;
   background: linear-gradient(
     100deg,
     transparent,
@@ -128,7 +130,7 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   );
   color: #ffe7a3;
   font-family: Impact, "Arial Narrow", sans-serif;
-  font-size: clamp(2.8rem, 6vw, 5.4rem);
+  font-size: clamp(2.2rem, 9cqi, 3.5rem);
   font-style: italic;
   font-weight: 900;
   line-height: 1.08;
@@ -138,17 +140,18 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
 }
 .splash-subtitle {
   margin: 0;
-  padding: 0.3rem 1.4rem;
+  max-width: 100%;
+  padding: 0.15rem 0.8rem;
   border-block: 1px solid #e7bb59;
   background: var(--dispatch-shade);
   color: #fff4d8;
   font-family: Georgia, serif;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-style: italic;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 .splash-body {
-  padding: 1.15rem;
+  padding: 0.65rem;
   background:
     radial-gradient(ellipse at top, var(--dispatch-shade) 0, transparent 65%),
     var(--dispatch-surface);
@@ -160,10 +163,13 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
 .splash-stories {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 1.1rem;
+  gap: 0.65rem;
 }
 .splash-story {
   position: relative;
+  container: splashStory / inline-size;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   overflow: hidden;
   border: 2px solid #f0c768;
@@ -181,14 +187,14 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   position: relative;
   z-index: 1;
   display: flex;
-  min-height: 4.2rem;
+  min-height: 3.2rem;
   align-items: center;
-  gap: 0.85rem;
-  margin: 0.5rem 0.75rem 0 0.45rem;
-  padding: 0.3rem 1.3rem 0.3rem 0.3rem;
+  gap: 0.6rem;
+  margin: 0.4rem 0.3rem 0 0.4rem;
+  padding: 0.45rem 2rem 0.45rem 0.2rem;
   color: var(--dispatch-on-accent);
   font-family: Georgia, serif;
-  font-size: 1.65rem;
+  font-size: 1.5rem;
   font-style: italic;
   font-weight: 800;
   line-height: 1.15;
@@ -201,7 +207,7 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   background: linear-gradient(
     90deg,
     var(--dispatch-accent),
-    var(--dispatch-accent) 78%,
+    var(--dispatch-accent) calc(100% - 2.2rem),
     transparent
   );
   clip-path: polygon(
@@ -223,8 +229,10 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
 }
 .splash-story-seal {
   display: grid;
-  width: 3.6rem;
-  height: 3.6rem;
+  width: 2.8rem;
+  height: 2.8rem;
+  /* The seal overlaps the padding that multi-line headings need inside the band. */
+  margin-block: -0.3rem;
   flex-shrink: 0;
   place-items: center;
   border: 2px solid #ffe18b;
@@ -245,17 +253,15 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   );
 }
 .splash-story-seal svg {
-  width: 1.95rem;
-  height: 1.95rem;
+  width: 1.6rem;
+  height: 1.6rem;
   stroke-width: 1.7;
 }
 .splash-story-body {
   display: grid;
-  min-height: 16.5rem;
+  min-height: 10rem;
+  flex: 1;
   grid-template-columns: minmax(0, 1fr) 36%;
-}
-.splash-story-without-art {
-  grid-template-columns: minmax(0, 1fr);
 }
 .splash-story-copy {
   position: relative;
@@ -265,14 +271,14 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 1.2rem;
-  padding: 1rem 1.4rem 1.5rem;
+  gap: 0.8rem;
+  padding: 0.6rem 1rem 1rem;
 }
 .splash-story-copy p {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.16rem;
   font-weight: 500;
-  line-height: 1.55;
+  line-height: 1.45;
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
@@ -316,7 +322,7 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   min-width: 0;
   overflow: hidden;
   align-self: stretch;
-  margin: -0.5rem 0 0;
+  margin: -0.4rem 0 0;
 }
 .splash-story-art::after {
   position: absolute;
@@ -324,16 +330,17 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   background: linear-gradient(90deg, #f9e7bf 0, transparent 28%);
   content: "";
 }
+/* Out of flow, so the copy decides the panel height and the artwork fills it. */
 .splash-story-art img {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  min-height: 100%;
   object-fit: cover;
   object-position: 50% 50%;
 }
 .splash-rewards {
-  margin-bottom: 1.1rem;
+  margin-bottom: 0.65rem;
   border: 1px solid #d7a54d;
   border-radius: 3px;
   background: var(--dispatch-accent);
@@ -341,10 +348,10 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
 }
 .splash-rewards-summary {
   display: flex;
-  min-height: 4rem;
+  min-height: 3.5rem;
   align-items: center;
-  gap: 0.9rem;
-  padding: 0.8rem 1.2rem;
+  gap: 0.55rem;
+  padding: 0.4rem 0.8rem;
   cursor: pointer;
   list-style: none;
 }
@@ -352,19 +359,19 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   display: none;
 }
 .splash-rewards-summary > svg {
-  width: 1.6rem;
-  height: 1.6rem;
+  width: 1.4rem;
+  height: 1.4rem;
   flex-shrink: 0;
   color: currentColor;
 }
 .splash-rewards-summary strong {
   font-family: Georgia, serif;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
 }
 .splash-rewards-summary span {
   margin-left: auto;
   color: currentColor;
-  font-size: 1.08rem;
+  font-size: 1rem;
 }
 .splash-rewards-summary .splash-rewards-chevron {
   width: 1.3rem;
@@ -389,14 +396,15 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem;
   border-top: 1px solid #b07c3d;
-  padding: 0.8rem 1.2rem;
+  padding: 0.5rem 0.65rem;
   background: var(--dispatch-surface);
 }
 .splash-dialog-footer button {
   font-size: 1.1rem;
   min-height: 3.5rem;
+  padding-inline: 0.8rem;
   border-color: #ae7d42;
   background: var(--dispatch-accent);
   color: var(--dispatch-on-accent);
@@ -409,36 +417,126 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   outline: 2px solid #ffe18b;
   outline-offset: 2px;
 }
-/* Two panels need at least 384px each at the game's 12px root font size. */
-@container splashBoard (min-width: 64rem) {
+/*
+ * Columns follow the board's own width, in rem at the game's 12px root font size: two from
+ * 540px and three from 900px. The leading panel and the remainder of the count share the
+ * first row, so every row is filled whatever number of announcements is live.
+ */
+@container splashBoard (min-width: 45rem) {
   .splash-stories {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .splash-story-featured {
+  .splash-story-featured:nth-last-child(odd) {
     grid-column: 1 / -1;
   }
-  .splash-story-featured .splash-story-body {
-    min-height: 20rem;
+}
+@container splashBoard (min-width: 75rem) {
+  .splash-stories {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .splash-story-featured:nth-last-child(3n) {
+    grid-column: auto;
+  }
+  .splash-story-featured:nth-last-child(3n + 1) {
+    grid-column: 1 / -1;
+  }
+  .splash-story-featured:nth-last-child(3n + 2) {
+    grid-column: span 2;
+  }
+}
+/* Wider boards set tighter type so the whole edition fits a laptop screen. */
+@container splashBoard (min-width: 45rem) {
+  .splash-story-heading {
+    min-height: 2.6rem;
+    margin-top: 0.25rem;
+    font-size: 1.35rem;
+  }
+  .splash-story-seal {
+    width: 2.3rem;
+    height: 2.3rem;
+  }
+  .splash-story-seal svg {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+  .splash-story-body {
+    grid-template-columns: minmax(0, 1fr) 28%;
+  }
+  .splash-story-copy {
+    gap: 0.45rem;
+    padding: 0.3rem 0.4rem 0.6rem 0.8rem;
+  }
+  .splash-story-copy p {
+    font-size: 1.05rem;
+    line-height: 1.35;
+  }
+}
+/* Narrow panels keep their headings on one line where the words allow. */
+@container splashStory (max-width: 25rem) {
+  .splash-story-heading {
+    gap: 0.4rem;
+    font-size: 1.25rem;
+  }
+}
+/* A panel spanning several columns has room for larger type and scene art. */
+@container splashStory (min-width: 44rem) {
+  .splash-story-body {
     grid-template-columns: minmax(0, 1fr) 45%;
   }
-  .splash-story-featured .splash-story-without-art {
-    grid-template-columns: minmax(0, 1fr);
+  .splash-story-heading {
+    font-size: 1.6rem;
   }
-  .splash-story-featured .splash-story-heading {
-    font-size: 2.3rem;
+  .splash-story-copy {
+    gap: 0.9rem;
+    padding-inline: 1.4rem 1rem;
   }
-  .splash-story-featured .splash-story-copy {
-    padding: 1.5rem 2rem 2rem;
+  .splash-story-copy p {
+    max-width: 60ch;
+    font-size: 1.25rem;
+    line-height: 1.5;
   }
-  .splash-story-featured .splash-story-copy p {
-    max-width: 56ch;
-    font-size: 1.4rem;
+}
+.splash-story-body.splash-story-without-art {
+  grid-template-columns: minmax(0, 1fr);
+}
+@container splashDialog (min-width: 45rem) {
+  .splash-masthead {
+    min-height: 7rem;
+    padding-block: 0.3rem 0.4rem;
   }
-  .splash-story-featured .splash-story-art {
-    max-height: 23rem;
+  .splash-title {
+    padding-inline: 2rem;
+    font-size: 3rem;
   }
-  .splash-story-featured .splash-story-art img {
-    object-position: 50% 58%;
+  .splash-masthead-title {
+    gap: 0.15rem;
+  }
+  .splash-brand {
+    font-size: 0.95rem;
+  }
+}
+/* Compact controls suit a mouse; touch screens keep full-size targets. */
+@media (pointer: fine) {
+  .splash-story-link {
+    min-height: 2.35rem;
+    padding: 0.15rem 0.7rem;
+    font-size: 1rem;
+  }
+  .splash-story-link svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  .splash-rewards-summary {
+    min-height: 2.6rem;
+    padding-block: 0.1rem;
+  }
+  .splash-dialog-footer {
+    padding-block: 0.35rem;
+  }
+  .splash-dialog-footer button {
+    height: 2.8rem;
+    min-height: 2.8rem;
+    font-size: 1rem;
   }
 }
 @media (max-width: 480px) {
@@ -448,50 +546,6 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   }
   .splash-masthead-art {
     transform: scale(1.5);
-  }
-  .splash-masthead {
-    min-height: 14rem;
-    padding-inline: 0.5rem;
-  }
-  .splash-title {
-    padding-inline: 1rem;
-    font-size: clamp(2.2rem, 9vw, 3.5rem);
-  }
-  .splash-subtitle {
-    max-width: 95%;
-    padding-inline: 0.6rem;
-    font-size: 1.05rem;
-  }
-  .splash-body {
-    padding: 0.65rem;
-  }
-  .splash-story-heading {
-    gap: 0.6rem;
-    margin-right: 0.1rem;
-    font-size: 1.55rem;
-  }
-  .splash-story-copy {
-    padding: 0.8rem 1rem 1.2rem;
-  }
-  .splash-story-copy p {
-    font-size: 1.16rem;
-  }
-  .splash-rewards-summary {
-    gap: 0.55rem;
-    padding-inline: 0.8rem;
-  }
-  .splash-rewards-summary strong {
-    font-size: 1.15rem;
-  }
-  .splash-rewards-summary span {
-    font-size: 1rem;
-  }
-  .splash-dialog-footer {
-    gap: 0.6rem;
-    padding: 0.7rem;
-  }
-  .splash-dialog-footer button {
-    padding-inline: 0.8rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {
