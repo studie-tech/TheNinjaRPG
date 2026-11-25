@@ -89,7 +89,7 @@ export const describeQueuedActivity = (
       };
     case "UNKNOWN":
       return {
-        text: "Your queue has already ended. Your status resets within ten minutes.",
+        text: "Waiting for queue details...",
       };
   }
 };

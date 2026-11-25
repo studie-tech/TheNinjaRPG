@@ -103,10 +103,10 @@ describe("queue notice", () => {
     expect(view.queryByRole("button")).toBeNull();
   });
 
-  it("explains a queue that has already ended", () => {
+  it("waits for details while the queued activity is unknown", () => {
     activity = { kind: "UNKNOWN" };
     const view = render(<QueueNotice />);
-    expect(view.getByText(/resets within ten minutes/)).toBeTruthy();
+    expect(view.getByText("Waiting for queue details...")).toBeTruthy();
     expect(view.queryByRole("button")).toBeNull();
     // A seat stored just after the status claim must replace this text with its exit.
     const interval = read.mock.calls[0]![1].refetchInterval;
