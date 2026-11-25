@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   getEnterRankedSeasonUserUpdate,
+  getLeaveRankedQueueUserUpdate,
   getRankedQueueUserUpdate,
 } from "@/deltas/pvprank";
 import { getRewardUserUpdate } from "@/deltas/quests";
@@ -575,7 +576,7 @@ export const pvpRankRouter = createTRPCRouter({
     .meta({
       mcp: { description: "Leave the ranked PvP matchmaking queue" },
     })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -601,7 +602,11 @@ export const pvpRankRouter = createTRPCRouter({
           return errorResponse("You've been matched into a ranked battle");
         }
       }
-      return { success: true, message: "Left ranked PvP queue" };
+      return {
+        success: true,
+        message: "Left ranked PvP queue",
+        ...getLeaveRankedQueueUserUpdate(leaveResult.rowsAffected === 1),
+      };
     }),
 
   // Check for ranked PvP matches

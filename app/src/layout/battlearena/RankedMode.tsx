@@ -19,6 +19,7 @@ import {
   RANKED_LOADOUT_MAX_JUTSUS,
   RANKED_LOADOUT_MAX_WEAPONS,
 } from "@/drizzle/constants";
+import { useLeaveRankedQueue } from "@/hooks/useLeaveRankedQueue";
 import { useRankedQueueCountCache } from "@/hooks/useRankedQueueCount";
 import { QueueTimer } from "@/layout/Countdown";
 import Loader from "@/layout/Loader";
@@ -86,18 +87,7 @@ export function RankedMode() {
       },
     });
 
-  const { mutate: leaveQueue, isPending: isLeaving } =
-    api.pvpRank.leaveRankedPvpQueue.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            utils.pvpRank.getRankedPvpQueue.invalidate(),
-            refreshRankedQueueCount(),
-          ]);
-        }
-      },
-    });
+  const { mutate: leaveQueue, isPending: isLeaving } = useLeaveRankedQueue();
 
   // One match check at a time while queued
   const isCheckingRef = useRef(false);

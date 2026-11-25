@@ -3,6 +3,7 @@
 import { DoorOpen, Swords } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useLeaveRankedQueue } from "@/hooks/useLeaveRankedQueue";
 import Link from "@/layout/Link";
 import { describeQueuedActivity } from "@/libs/queuedActivity";
 import { cn } from "@/libs/shadui";
@@ -77,17 +78,7 @@ const QueuedActivityNotice: React.FC<{ className?: string }> = ({ className }) =
         void utils.territoryWar.getCurrent.invalidate();
       },
     });
-  const { mutate: leaveRanked, isPending: isLeavingRanked } =
-    api.pvpRank.leaveRankedPvpQueue.useMutation({
-      onMutate: prepareUserUpdate,
-      onSettled: recover,
-      onSuccess: (data, _variables, revision) => {
-        showMutationToast(data);
-        void updateUser(undefined, { revision });
-        void utils.pvpRank.getRankedPvpQueue.invalidate();
-        void utils.pvpRank.getRankedQueueCount.invalidate();
-      },
-    });
+  const { mutate: leaveRanked, isPending: isLeavingRanked } = useLeaveRankedQueue();
 
   if (!activity) return null;
   const { text, href, linkLabel } = describeQueuedActivity(activity);

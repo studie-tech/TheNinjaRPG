@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render } from "@testing-library/react";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
+import * as queueCount from "@/hooks/useRankedQueueCount";
 import * as Link from "@/layout/Link";
 import { QueueNotice } from "@/layout/QueueNotice";
 import type { QueuedActivity } from "@/libs/queuedActivity";
+import * as toast from "@/libs/toast";
 import { mockUserContextValue } from "../setup/userContext";
 
 const leave = {
@@ -15,6 +18,19 @@ const leave = {
 };
 let activity: QueuedActivity;
 let status: string;
+let rankedOptions: {
+  onSuccess: (
+    data: RouterOutputs["pvpRank"]["leaveRankedPvpQueue"],
+    input: undefined,
+    revision: number,
+  ) => Promise<void>;
+  onError: (error: unknown, input: undefined, revision: number) => void;
+  onSettled: (data: { success: boolean } | undefined) => void;
+};
+const updateUser = vi.fn(async () => true);
+const refreshRankedQueueCount = vi.fn(async () => true);
+const refreshRankedQueue = vi.fn();
+const refreshActivity = vi.fn();
 type ReadOptions = {
   refetchInterval: (query: { state: { data: QueuedActivity } }) => number | false;
 };
@@ -22,7 +38,19 @@ const read = vi.fn((_input: undefined, _options: ReadOptions) => ({ data: activi
 
 beforeEach(() => {
   status = "QUEUED";
-  for (const mock of [...Object.values(leave), read]) mock.mockClear();
+  for (const mock of [
+    ...Object.values(leave),
+    read,
+    updateUser,
+    refreshRankedQueueCount,
+    refreshRankedQueue,
+    refreshActivity,
+  ])
+    mock.mockClear();
+  vi.spyOn(queueCount, "useRankedQueueCountCache").mockReturnValue({
+    refreshRankedQueueCount,
+  });
+  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined as never);
   vi.spyOn(Link, "default").mockImplementation((({
     href,
     children,
@@ -34,15 +62,18 @@ beforeEach(() => {
     () =>
       ({
         data: { userId: "player", status },
-        prepareUserUpdate: () => undefined,
-        updateUser: async () => true,
+        prepareUserUpdate: () => 7,
+        updateUser,
       }) as never,
   );
   const mutation = (mutate: () => void) => ({
     useMutation: () => ({ mutate, isPending: false }),
   });
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({}),
+    useUtils: () => ({
+      pvpRank: { getRankedPvpQueue: { invalidate: refreshRankedQueue } },
+      raids: { getQueuedActivity: { invalidate: refreshActivity } },
+    }),
     raids: {
       getQueuedActivity: { useQuery: read },
       leaveRaidQueue: mutation(leave.raid),
@@ -50,7 +81,14 @@ beforeEach(() => {
     shrine: { leaveShrineBattle: mutation(leave.shrine) },
     clan: { leaveClanBattle: mutation(leave.clan) },
     territoryWar: { leaveTeam: mutation(leave.territory) },
-    pvpRank: { leaveRankedPvpQueue: mutation(leave.ranked) },
+    pvpRank: {
+      leaveRankedPvpQueue: {
+        useMutation: (options: typeof rankedOptions) => {
+          rankedOptions = options;
+          return { mutate: leave.ranked, isPending: false };
+        },
+      },
+    },
   });
 });
 
@@ -101,6 +139,29 @@ describe("queue notice", () => {
     const view = render(<QueueNotice />);
     expect(view.getByRole("link").getAttribute("href")).toBe(href);
     expect(view.queryByRole("button")).toBeNull();
+  });
+
+  it("uses the confirmed ranked exit patch and shared count reconciliation", async () => {
+    activity = { kind: "RANKED" };
+    render(<QueueNotice />);
+    const result = {
+      success: true,
+      message: "Left ranked PvP queue",
+      userPatch: { status: "AWAKE" as const },
+    };
+    await rankedOptions.onSuccess(result, undefined, 7);
+    expect(updateUser).toHaveBeenCalledWith(result, { revision: 7 });
+    expect(refreshRankedQueue).toHaveBeenCalledTimes(1);
+    expect(refreshRankedQueueCount).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles an unconfirmed ranked exit against the captured profile", () => {
+    activity = { kind: "RANKED" };
+    render(<QueueNotice />);
+    rankedOptions.onError(new Error("Connection lost"), undefined, 7);
+    rankedOptions.onSettled(undefined);
+    expect(updateUser).toHaveBeenCalledWith(undefined, { revision: 7 });
+    expect(refreshActivity).toHaveBeenCalledTimes(1);
   });
 
   it("waits for details while the queued activity is unknown", () => {
