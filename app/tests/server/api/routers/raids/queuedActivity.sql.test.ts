@@ -12,6 +12,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { raidsRouter } from "@/server/api/routers/raids";
+import { dungeonBattleState } from "../../../../setup/dungeon";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { resetServerModuleStubs } from "../../../../setup/serverModules";
@@ -90,6 +91,26 @@ describeWithDatabase("queued activity", () => {
       joinedAt: new Date(),
     });
     expect(await read()).toEqual({ kind: "CARAVAN" });
+    const party = dungeonBattleState();
+    await db.insert(dungeonRun).values({
+      id: party.runId,
+      dungeonId: party.dungeonId,
+      leaderId: "queued",
+      content: party.content,
+      state: { ...party.runState, memberIds: ["queued"] },
+      status: "LOBBY",
+      createdAt: new Date(),
+    });
+    await db.insert(dungeonMember).values({
+      runId: party.runId,
+      userId: "queued",
+      activeUserId: "queued",
+    });
+    expect(await read()).toEqual({ kind: "DUNGEON" });
+    for (const status of ["COMPLETED", "ENDED"] as const) {
+      await db.update(dungeonRun).set({ status }).where(eq(dungeonRun.id, party.runId));
+      expect(await read()).toEqual({ kind: "CARAVAN" });
+    }
   });
 
   it.each(["ended", "defeated", "hidden", "deleted", "orphaned"])(
