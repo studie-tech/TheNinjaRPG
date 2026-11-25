@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   WAR_CAMP_DURATION_HOURS,
   WAR_CAMP_INTERVAL_HOURS,
+  WAR_CAMP_SCORE_PER_WIN,
   WAR_ESPIONAGE_TARGET,
 } from "@/drizzle/constants";
 import { useCombatEntry } from "@/hooks/combatEntry";
@@ -32,6 +33,7 @@ import { pushToCombat } from "@/utils/routing";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
+import type { WarRules } from "@/validators/war";
 
 /** Present masked objectives and war actions using the shared game surfaces and controls. */
 export const ObjectiveWarPanel = ({
@@ -168,7 +170,8 @@ export const ObjectiveWarPanel = ({
     ) : null;
   const w = data.war;
   const side = getWarSide(w, user.villageId, user.userId);
-  if (!side || !w.combatStartedAt || !endsAt) return null;
+  const rules = w.rules;
+  if (!side || !rules || !w.combatStartedAt || !endsAt) return null;
   const now = Date.now() - timeDiff;
   const isNotice = w.combatStartedAt.getTime() > now;
   const isRevealed = getWarEspionage(w, side) >= WAR_ESPIONAGE_TARGET;
@@ -370,6 +373,13 @@ export const ObjectiveWarPanel = ({
               Leaders can see locations in advance.
             </p>
           )}
+          {isRevealed && !hasEnded && (
+            <p className="text-muted-foreground text-sm">
+              Each guardian win removes {rules.guardianDamage.toLocaleString()} shrine
+              health. War points for a shrine go only to the ninja who destroys it: up
+              to {rules.objectiveDamage.toLocaleString()}.
+            </p>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             {w.objectiveState?.objectives.map((objective) => (
               <div
@@ -503,8 +513,10 @@ export const ObjectiveWarPanel = ({
         <TabsContent value="camps" className="space-y-3 pt-2">
           <p className="text-muted-foreground text-sm">
             A camp opens every {WAR_CAMP_INTERVAL_HOURS} hours for{" "}
-            {WAR_CAMP_DURATION_HOURS} hour. Win battles to help your side deal townhall
-            damage. Ties deal no damage.
+            {WAR_CAMP_DURATION_HOURS} hour. Each win scores {WAR_CAMP_SCORE_PER_WIN}{" "}
+            camp points for your side but no personal war points. The side with the most
+            camp points deals {rules.campDamage.toLocaleString()} townhall damage. Ties
+            deal no damage.
           </p>
           {!openCamps.length && (
             <EmptyNote>
@@ -578,6 +590,21 @@ export const ObjectiveWarPanel = ({
               War points equal actual damage dealt to the enemy townhall. Health
               recovered is tracked separately.
             </p>
+            <ul className="list-disc space-y-1 pl-5 text-muted-foreground text-sm">
+              <li>
+                Defeating an opposing war participant: {getRolePointRange(rules)}{" "}
+                points, depending on your role.
+              </li>
+              <li>
+                Destroying an objective shrine: up to{" "}
+                {rules.objectiveDamage.toLocaleString()} points, for the ninja who lands
+                the final blow.
+              </li>
+              <li>
+                Guardian wins and sabotage that leave a shrine standing, espionage and
+                war camps help your side but earn no points.
+              </li>
+            </ul>
             {data.contributions.length ? (
               <Table
                 data={[...data.contributions].sort((a, b) => b.damage - a.damage)}
@@ -654,3 +681,18 @@ const EmptyNote = ({ children }: { children: ReactNode }) => (
     {children}
   </p>
 );
+
+/** Townhall damage a PvP win deals across all roles, as a range under the war's own rules. */
+const getRolePointRange = (rules: WarRules) => {
+  const points = [
+    rules.regularDamage,
+    rules.anbuDamage,
+    rules.assassinDamage,
+    rules.elderDamage,
+    rules.coleaderDamage,
+    rules.leaderDamage,
+  ];
+  const min = Math.min(...points).toLocaleString();
+  const max = Math.max(...points).toLocaleString();
+  return min === max ? min : `${min}–${max}`;
+};
