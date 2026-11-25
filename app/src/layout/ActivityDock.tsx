@@ -26,7 +26,6 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import {
   characterStorageKey,
   useActivityDock,
-  useActivityDockFitWidth,
   useUntaughtModalOpen,
 } from "@/hooks/useActivityDock";
 import { storyDockPulseAtom, useStoryGuidance } from "@/hooks/useStoryGuidance";
@@ -271,7 +270,6 @@ export function ActivityDock({
     lessonStep?.elementIds,
   );
   const isQuestsTabMarked = leadsToQuests && lessonShown && !isUnderModal;
-  const fitWidth = useActivityDockFitWidth(dockRef, open, swapSides);
   // During a lesson the Quests tab takes the lesson's height on a phone, so switching
   // tabs leaves the bottom-anchored dock's tab bar where it was.
   const lessonPanelRef = useRef<HTMLDivElement>(null);
@@ -319,11 +317,6 @@ export function ActivityDock({
             "border-primary/60 bg-card text-card-foreground @container/dock pointer-events-auto relative w-[var(--activity-dock-width,420px)] max-w-[calc(100vw-2rem)] rounded-xl border-2 shadow-xl",
             isPulsing && ATTENTION_PULSE,
           )}
-          style={
-            fitWidth === null
-              ? undefined
-              : { width: `min(var(--activity-dock-width, 420px), ${fitWidth}px)` }
-          }
         >
           <header className="bg-card relative z-10 flex items-center gap-1 rounded-t-[calc(var(--radius)-2px)] border-b px-2 py-1.5">
             <TabsList

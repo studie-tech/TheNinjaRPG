@@ -19,6 +19,7 @@ import {
   TUTORIAL_LAYOUT_EVENT,
   type TutorialScreenBox,
 } from "@/libs/tutorial";
+import { getScrollBehavior } from "@/utils/dom";
 
 /**
  * The tutorial's spotlight over the viewport: the page dims around one control, an amber
@@ -325,12 +326,13 @@ const SpotlightEdgePointer = ({
       type="button"
       data-spotlight-keep
       aria-label={`Scroll ${direction} to the highlighted control`}
-      className="bg-card pointer-events-auto fixed z-[62] flex w-max items-center gap-1.5 rounded-xl border-2 border-amber-400 px-3 py-1.5 text-sm font-semibold whitespace-nowrap shadow-[0_0_18px_rgba(245,158,11,0.8)]"
+      // The page glides to a new highlight by itself; the pill is for one left off screen.
+      className="animate-in fade-in-0 fill-mode-backwards delay-700 bg-card pointer-events-auto fixed z-[62] flex w-max items-center gap-1.5 rounded-xl border-2 border-amber-400 px-3 py-1.5 text-sm font-semibold whitespace-nowrap shadow-[0_0_18px_rgba(245,158,11,0.8)]"
       style={direction === "up" ? { top: 12 } : { bottom }}
       onClick={() =>
-        window.scrollBy({
+        (document.querySelector(HOSTED_PAGE_SELECTOR) ?? window).scrollBy({
           top: box.top - window.innerHeight * 0.35,
-          behavior: "smooth",
+          behavior: getScrollBehavior(),
         })
       }
     >

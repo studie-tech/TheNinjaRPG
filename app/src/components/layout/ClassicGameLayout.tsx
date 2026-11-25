@@ -253,7 +253,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                     of minimum height keeps it below the fold (see PixelGameLayout.tsx).
                     Phones leave room to scroll content clear of the fixed bottom bar and an
                     open lesson. */}
-                <div className="p-3 pb-[calc(7rem+env(safe-area-inset-bottom)+var(--activity-dock-space,0px))] md:min-h-svh md:pb-3">
+                <div className="p-3 pb-[calc(7rem+env(safe-area-inset-bottom)+var(--activity-dock-space,0px))] md:min-h-svh md:pb-[calc(0.75rem+var(--activity-dock-space,0px))]">
                   <QueueNotice className="mb-3" />
                   {children}
                 </div>

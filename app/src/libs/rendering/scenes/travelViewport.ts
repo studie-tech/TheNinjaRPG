@@ -1,7 +1,7 @@
 /**
  * Height of a travel map. A phone's map, and any loadout row under it, reaches down to the
- * first thing covering the foot of the screen: the fixed activity dock when it overlaps the
- * map's column, otherwise the navigation bar. Wider layouts keep the map in a column narrower
+ * first thing covering the foot of the screen: the fixed activity dock when it overlaps more
+ * than a corner of the map, otherwise the navigation bar. Wider layouts keep the map in a column narrower
  * than the window, so it stands at most `wideMaximum` tall there. Measured against the page's
  * own position rather than the scroll, so scrolling never resizes the map; never below
  * `minimum`.
@@ -30,8 +30,8 @@ export const travelViewportHeight = (
   const dockTop =
     dock &&
     dock.height > 0 &&
-    dock.left < rect.right &&
-    dock.right > rect.left &&
+    Math.min(dock.right, rect.right) - Math.max(dock.left, rect.left) >
+      rect.width * DOCK_CORNER_SHARE &&
     coveredTop > pageTop + minimum
       ? coveredTop
       : null;
@@ -128,6 +128,8 @@ const PHONE_NAV_REM = 7;
 const WIDE_EDGE_REM = 1;
 /** The loadout and fullscreen row under the sector map, with its gap. */
 const LOADOUT_ROW_REM = 4.5;
+/** A dock over no more of the map's width than this covers a corner, which costs no height. */
+const DOCK_CORNER_SHARE = 0.25;
 /** Space between the map and whatever covers the foot of the screen. */
 const GAP_REM = 1;
 /** The travel box's title row and the frame above it, kept in view over the map. */

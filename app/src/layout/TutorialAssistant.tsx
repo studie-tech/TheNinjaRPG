@@ -89,6 +89,7 @@ import {
 import { levelUpBlockMessage } from "@/libs/profile";
 import { sceneCharactersAtom } from "@/libs/questScene";
 import { getEnergyQueue } from "@/libs/queue";
+import { glideScrollBy, type ScrollGlide } from "@/libs/scrollGlide";
 import { cn } from "@/libs/shadui";
 import { getChapterForQuest, getNavigationLevel } from "@/libs/storyGuidance";
 import {
@@ -103,6 +104,7 @@ import {
   isTutorialJutsuPickStep,
   isTutorialPageMatch,
   isUsableHighlightRect,
+  TUTORIAL_LAYOUT_EVENT,
   TUTORIAL_QUEUE_CHECK_STEP_ID,
   TUTORIAL_VILLAGE_CHOICE_STEP_ID,
   toObjectiveIds,
@@ -2117,7 +2119,16 @@ const useHighlightPlacement = <Step extends { id: string }>({
     settledScrollY: number;
     /** The dock stepped aside for this target. */
     gaveWay: boolean;
-  }>({ key: "", attempts: 0, settled: false, settledScrollY: 0, gaveWay: false });
+    /** The page gliding to the target. */
+    glide: ScrollGlide | null;
+  }>({
+    key: "",
+    attempts: 0,
+    settled: false,
+    settledScrollY: 0,
+    gaveWay: false,
+    glide: null,
+  });
   // Set while the panel would otherwise be sitting on top of the highlight, so
   // it can step aside. Latched per target: recomputing it from the moved panel
   // would say "no longer covered" and send it straight back.
@@ -2185,12 +2196,14 @@ const useHighlightPlacement = <Step extends { id: string }>({
       // out: a phone's address bar changes it as the player scrolls.
       const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}:${window.innerWidth}`;
       if (placementRef.current.key !== targetKey) {
+        placementRef.current.glide?.stop();
         placementRef.current = {
           key: targetKey,
           attempts: 0,
           settled: false,
           settledScrollY: 0,
           gaveWay: false,
+          glide: null,
         };
         document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
         setPanelDodgesHighlight(false);
@@ -2205,6 +2218,8 @@ const useHighlightPlacement = <Step extends { id: string }>({
       const before = highlightInfo.element.getBoundingClientRect();
       const view = getPageView(highlightInfo.element);
       const scrollTop = getPageScrollTop(view);
+      // Nothing is placed while the page glides; where it ends up is judged then.
+      const isGliding = !!placement.glide?.isActive;
       // In a fight the action tiles under the field have to stay in view and clear of
       // the panel together with the target.
       const clear =
@@ -2267,15 +2282,13 @@ const useHighlightPlacement = <Step extends { id: string }>({
           before.width / 4 &&
         before.height + 32 > panel.top - view.top;
       if (isCrowded && rectsOverlap(before, panel)) setPanelCrowdsHighlight(true);
-      if (isCrowded && placement.attempts === 0) {
+      if (isCrowded && !isGliding && placement.attempts === 0) {
         placement.attempts = 1;
-        view.scroller?.scrollBy({
-          top: before.top - view.top - 16,
-          behavior: "auto",
-        });
+        placement.glide = glidePage(view, before.top - view.top - 16);
       }
       if (
         !placement.settled &&
+        !isGliding &&
         placement.attempts < 5 &&
         !dialog &&
         !isCrowded &&
@@ -2344,9 +2357,12 @@ const useHighlightPlacement = <Step extends { id: string }>({
                 // Where not everything fits, the target itself stays on screen.
                 Math.max(0, before.top - view.top - 16),
               );
-          view.scroller?.scrollBy({ top: offset, behavior: "auto" });
+          const canScroll = getScrollRoom(view, scrollTop, offset) >= 1;
           // A page still laying out may have nowhere to scroll yet; that is no attempt.
-          if (getPageScrollTop(view) !== scrollTop) placement.attempts += 1;
+          if (canScroll) {
+            placement.attempts += 1;
+            placement.glide = glidePage(view, offset);
+          }
           // Scrolling cannot always win: on a short page the document may already
           // be as far down as it goes, leaving the target stuck under the panel
           // with nothing left to scroll. Rather than stretch the page to make
@@ -2355,7 +2371,12 @@ const useHighlightPlacement = <Step extends { id: string }>({
           // target is clear of where it lands, or it would cover it from above.
           // Inside a dialog it takes the band that hides the least of the dialog's
           // header and controls instead of the top of the screen.
-          if (isCovered && !placement.gaveWay) giveWay(highlightInfo.element);
+          if (
+            isCovered &&
+            !placement.gaveWay &&
+            (!canScroll || placement.attempts >= GLIDES_BEFORE_GIVING_WAY)
+          )
+            giveWay(highlightInfo.element);
         }
       }
       const whole = highlightInfo.element.getBoundingClientRect();
@@ -2403,8 +2424,21 @@ const useHighlightPlacement = <Step extends { id: string }>({
       return;
     }
     const stopTracking = trackLayout(() => updateHighlightPosition(step));
+    // A player who scrolls during the glide has taken the page over.
+    const yieldToPlayer = () => {
+      const placement = placementRef.current;
+      if (!placement.glide?.isActive) return;
+      placement.settled = true;
+      placement.settledScrollY = -1;
+      placement.glide.stop();
+    };
+    window.addEventListener("wheel", yieldToPlayer, { passive: true });
+    window.addEventListener("touchmove", yieldToPlayer, { passive: true });
     return () => {
       stopTracking();
+      placementRef.current.glide?.stop();
+      window.removeEventListener("wheel", yieldToPlayer);
+      window.removeEventListener("touchmove", yieldToPlayer);
       document.documentElement.style.removeProperty(ACTIVITY_DOCK_WIDTH_PROPERTY);
       document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
     };
@@ -2756,6 +2790,24 @@ const getPageView = (element: Element): PageView => {
 
 const getPageScrollTop = (view: PageView) =>
   view.isHosted ? (view.scroller?.scrollTop ?? 0) : window.scrollY;
+
+/** How far the page can scroll of an offset wanted. */
+const getScrollRoom = (view: PageView, scrollTop: number, offset: number) => {
+  const { scrollHeight = Number.NaN, clientHeight = 0 } = view.scroller ?? {};
+  const end = scrollHeight - clientHeight;
+  if (Number.isNaN(end)) return Math.abs(offset);
+  return Math.min(Math.abs(offset), offset > 0 ? end - scrollTop : scrollTop);
+};
+
+/** Glides the page, measuring the highlight again where it stops. */
+const glidePage = (view: PageView, offset: number) =>
+  view.scroller &&
+  glideScrollBy(view.scroller, offset, () =>
+    window.dispatchEvent(new Event(TUTORIAL_LAYOUT_EVENT)),
+  );
+
+/** Glides that left a target covered before the lesson moves instead. */
+const GLIDES_BEFORE_GIVING_WAY = 3;
 
 /**
  * The boxes of the elements a step refers to (`step.marks`): every visible match

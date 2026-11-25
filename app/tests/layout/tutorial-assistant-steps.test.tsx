@@ -488,7 +488,7 @@ describe("step overrides", () => {
     );
     expect(scrollBy).toHaveBeenCalledWith({
       top: below - window.innerHeight * 0.35,
-      behavior: "smooth",
+      behavior: "auto",
     });
     window.scrollBy = original;
   });

@@ -575,37 +575,6 @@ it("steps a lesson below a modal it does not teach, and stays above one it does"
   expect(dock.className).toContain("z-[61]");
 });
 
-it("fits the open dock to the gutter beside the centre column on a wide screen", () => {
-  const column = document.createElement("div");
-  column.setAttribute("data-reading-surface", "");
-  document.body.append(column);
-  const matchMedia = window.matchMedia;
-  window.matchMedia = ((query: string) => ({
-    matches: query === "(min-width: 1280px)",
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  })) as never;
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return (
-      this === column
-        ? { left: 358, right: 1058, width: 700 }
-        : { left: 15, right: 435, width: 420 }
-    ) as DOMRect;
-  });
-  try {
-    const view = render(<ActivityDock>Lesson</ActivityDock>);
-    const panel = view.container.querySelector<HTMLElement>(
-      "[data-activity-dock] > div",
-    );
-    expect(panel?.style.width).toBe("min(var(--activity-dock-width, 420px), 335px)");
-  } finally {
-    window.matchMedia = matchMedia;
-    column.remove();
-  }
-});
-
 it("returns from Quests to the lesson when the step moves on there", () => {
   user.tutorialStep = TUTORIAL_STEPS.findIndex((step) => !step.questsTab);
   const view = render(<ActivityDock>Lesson</ActivityDock>);
