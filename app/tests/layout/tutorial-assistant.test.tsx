@@ -630,6 +630,80 @@ describe("TutorialAssistant guided lessons", () => {
     expect(view.getByRole("region", { name: "Tutorial: Welcome" })).toBeTruthy();
   });
 
+  it("steps aside for each step in turn while the page cannot scroll a target clear", async () => {
+    const scrollBy = vi.fn();
+    Object.defineProperty(document, "scrollingElement", {
+      configurable: true,
+      value: {
+        scrollBy,
+        scrollTop: 0,
+        scrollHeight: window.innerHeight,
+        clientHeight: window.innerHeight,
+      },
+    });
+    let scrollY = 0;
+    const realScrollY = Object.getOwnPropertyDescriptor(window, "scrollY");
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      get: () => scrollY,
+    });
+    const step = (id: string) => ({
+      id: "lesson",
+      step: { id, title: id, action: "Tap Pass.", target: "[data-foot-target]" },
+    });
+    try {
+      getDefaultStore().set(guidedLessonAtom, step("Take the round"));
+      const view = render(
+        <>
+          <button
+            type="button"
+            data-foot-target=""
+            ref={(element) => {
+              if (element)
+                element.getBoundingClientRect = () => new DOMRect(40, 600, 160, 44);
+            }}
+          >
+            Pass
+          </button>
+          {assistantElement()}
+        </>,
+      );
+      const dodged = (title: string) =>
+        view
+          .getByRole("region", { name: `Tutorial: ${title}` })
+          .getAttribute("data-dodge-highlight");
+      // The dock stands over the target at the foot of the screen, and clear of it at the top.
+      const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]");
+      if (!dock) throw new Error("No dock");
+      dock.getBoundingClientRect = () =>
+        new DOMRect(
+          0,
+          dock.querySelector("[data-dodge-highlight]") ? 60 : 590,
+          420,
+          150,
+        );
+      await waitFor(() => expect(dodged("Take the round")).toBe("true"), {
+        timeout: 3000,
+      });
+      // The scene keeps its place.
+      expect(scrollBy).not.toHaveBeenCalledWith({ top: 70, behavior: "auto" });
+
+      // The next step finds the dock still aside, and the page has moved by a pixel or two.
+      act(() => getDefaultStore().set(guidedLessonAtom, step("Give this round away")));
+      scrollY = 2;
+      await waitFor(() => expect(dodged("Give this round away")).toBe("true"), {
+        timeout: 3000,
+      });
+      await new Promise((done) => setTimeout(done, 600));
+      expect(dodged("Give this round away")).toBe("true");
+      act(() => getDefaultStore().set(guidedLessonAtom, null));
+    } finally {
+      Reflect.deleteProperty(document, "scrollingElement");
+      if (realScrollY) Object.defineProperty(window, "scrollY", realScrollY);
+      else Reflect.deleteProperty(window, "scrollY");
+    }
+  });
+
   it("dims the page behind a blocking step and focuses its first answer", async () => {
     const off = profile();
     off.userData.tutorialOn = false;

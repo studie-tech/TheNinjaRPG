@@ -14,19 +14,21 @@
 .kessen-match {
   /* Room kept free in the bottom-right corner of the docked layouts' edge. */
   --km-corner: 0px;
-  /* A phone's proportions at the content box's width, no taller than the screen leaves
-     under the content box's title and above the game's bottom navigation, so the whole
-     table is in view once the page scrolls to it. */
+  /* The same in the bottom-left corner. */
+  --km-corner-left: 0px;
+  /* The height the content box can show at once: the screen above the game's bottom
+     navigation. A host with less room (the Sector layout's dialog) sets its own. */
+  --km-room: calc(100dvh - var(--game-bottom-nav-h, 0px));
+  /* A phone's proportions at the content box's width, no taller than that room leaves
+     under the content box's title (MatchView measures it), so the whole table is in view
+     once the page scrolls to it. */
   container: km-frame / size;
   position: relative;
   display: block;
   width: 100%;
   aspect-ratio: 1 / 2;
   min-height: 320px;
-  max-height: min(
-    1000px,
-    calc(100dvh - var(--game-bottom-nav-h, 0px) - var(--km-frame-chrome, 44px))
-  );
+  max-height: min(1000px, calc(var(--km-room) - var(--km-frame-chrome, 50px)));
   overflow: hidden;
   --km-line: rgb(217 180 90 / 0.28);
   --km-line-strong: rgb(217 180 90 / 0.6);
@@ -48,9 +50,13 @@
 
 /* ------------------------------------------------------------------- layouts */
 
+/* Pinned to the frame rather than `height: 100%`: the frame's height is its aspect ratio
+   cut by max-height, and WebKit resolves a percentage against the uncut height, which
+   would push the hand and the actions out of the frame. */
 .km-layout {
+  position: absolute;
+  inset: 0;
   display: flex;
-  height: 100%;
   min-height: 0;
   flex-direction: column;
 }
@@ -889,6 +895,29 @@
     display: none;
   }
 }
+/* The smallest tighten the band, so the hand counts keep the opponent's name. */
+@container km-board (max-width: 370px) {
+  .km-center {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+  .km-rounds {
+    gap: 3px;
+    padding-inline: 5px;
+  }
+  .km-edge-badge {
+    gap: 3px;
+    padding-inline: 6px;
+    font-size: 11px;
+  }
+  .km-edge-label {
+    letter-spacing: 0;
+  }
+  .km-need {
+    padding-inline: 5px;
+    font-size: 11px;
+  }
+}
 
 /* ----------------------------------------------------------- prompt and hand */
 
@@ -970,9 +999,6 @@
 @container km-main (max-width: 400px) {
   .km-action-square span {
     display: none;
-  }
-  .km-pass-wrap {
-    min-width: 96px;
   }
 }
 /* Narrow strips give the instruction its own line instead of cutting it off. */
@@ -1169,7 +1195,8 @@
   flex-shrink: 0;
   align-items: center;
   gap: 8px;
-  padding: 6px max(8px, var(--km-corner)) calc(6px + env(safe-area-inset-bottom, 0px)) 8px;
+  padding: 6px max(8px, var(--km-corner)) calc(6px + env(safe-area-inset-bottom, 0px))
+    max(8px, var(--km-corner-left));
   background: linear-gradient(180deg, #1c0f0a, #0d0705);
   box-shadow: inset 0 1px 0 var(--km-line);
 }
@@ -2639,6 +2666,89 @@
   .km-end-actions > button {
     height: auto;
     min-height: 44px;
+  }
+}
+
+/* On the narrowest tables Pass gives up width first, so the last button stays inside the
+   table (beside the Sector layout's Chat launcher too). */
+@container km-main (max-width: 400px) {
+  .km-actions {
+    gap: 6px;
+  }
+  .km-pass-wrap {
+    min-width: 64px;
+    margin-right: 2px;
+  }
+  .km-btn-pass {
+    padding-inline: 4px;
+  }
+  .kessen-match .km-btn-pass[data-long] {
+    font-size: 12px;
+  }
+  .kessen-match .km-action {
+    padding-inline: 8px;
+  }
+  .kessen-match .km-action-square {
+    min-width: 40px;
+  }
+}
+
+/* ------------------------------------------------------- short upright tables */
+
+/* An upright frame short of height (a phone with the browser's bars and the game's
+   navigation on screen) gives up spacing before the table loses anything: the bars, the
+   hand and the prompt tighten and the tiles shrink, so the hand and Pass stay in view. A
+   board still too tall scrolls on its own between them. */
+@container km-frame (max-height: 640px) and (orientation: portrait) {
+  .km-bar-them {
+    height: 32px;
+  }
+  .km-bar-me {
+    height: 28px;
+  }
+  .km-board {
+    min-height: 0;
+    padding: 2px 0;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+  }
+  .km-board-inner {
+    --tile: clamp(26px, min((100cqw - 16px) / 5.7, (100cqh - 46px) / 6.1), 110px);
+    min-height: max-content;
+    gap: 1px;
+  }
+  .km-row {
+    min-height: calc(var(--tile) + 2px);
+  }
+  .km-center {
+    height: max(24px, calc(var(--tile) * 0.5));
+    margin-block: 1px;
+  }
+  .km-prompt {
+    min-height: 36px;
+    padding-block: 2px;
+  }
+  .km-hand {
+    --hand-card: 54px;
+  }
+  .km-hand[data-layout="strip"] {
+    height: calc(var(--hand-card) * 1.4 + 10px + var(--name-line));
+    padding: 6px 8px 2px;
+  }
+  .km-actions {
+    padding-block: 3px;
+  }
+}
+/* The shortest (the Sector layout's dialog on a small phone) keep the rows over the hand. */
+@container km-frame (max-height: 460px) and (orientation: portrait) {
+  .km-bar-them {
+    height: 28px;
+  }
+  .km-bar-me {
+    height: 26px;
+  }
+  .km-prompt {
+    min-height: 30px;
   }
 }
 

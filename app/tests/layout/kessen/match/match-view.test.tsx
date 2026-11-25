@@ -395,6 +395,41 @@ describe("KessenMatchView", () => {
     expect(document.querySelector(".kessen-match")).toBeTruthy();
   });
 
+  it("leaves its content box's title room above the frame", () => {
+    const top = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        return new DOMRect(
+          0,
+          this.classList.contains("kessen-match") ? 61.4 : 10,
+          360,
+          500,
+        );
+      });
+    try {
+      render(
+        <div data-content-box="">
+          <div data-content-box-header="">Card Hall</div>
+          <KessenMatchView
+            payload={payloadOf(practiceMatch())}
+            catalog={catalog}
+            onAction={localServer(practiceMatch()).onAction}
+            onConcede={() => undefined}
+            onClose={() => undefined}
+          />
+        </div>,
+      );
+      // 51.4 px of title, rounded up, and the box's 2 px lower border.
+      expect(
+        document
+          .querySelector<HTMLElement>(".kessen-match")
+          ?.style.getPropertyValue("--km-frame-chrome"),
+      ).toBe("54px");
+    } finally {
+      top.mockRestore();
+    }
+  });
+
   it("sits in the page as a region, its content box's way back focused", () => {
     const state = practiceMatch();
     render(

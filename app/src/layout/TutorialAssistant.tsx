@@ -1723,7 +1723,10 @@ const useHighlightPlacement = <Step extends { id: string }>({
       // away is never fought. The attempt cap stops a target that can never be
       // placed well from scrolling on every tick.
       const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
-      if (placementRef.current.key !== targetKey) {
+      const isNewTarget = placementRef.current.key !== targetKey;
+      const isDockReturning =
+        isNewTarget && !!document.querySelector('[data-dodge-highlight="true"]');
+      if (isNewTarget) {
         placementRef.current = {
           key: targetKey,
           attempts: 0,
@@ -1765,7 +1768,9 @@ const useHighlightPlacement = <Step extends { id: string }>({
           isCovered ||
           (!revealOnly && Math.abs(centre - preferredCentre) > 100);
         if (!isMisplaced) {
-          placement.settled = true;
+          // A dock still aside for the last target is about to return to the foot of the
+          // screen, so this placement only counts once it is measured there.
+          placement.settled = !isDockReturning;
           placement.settledScrollY = window.scrollY;
         } else {
           placement.attempts += 1;
@@ -1776,12 +1781,31 @@ const useHighlightPlacement = <Step extends { id: string }>({
             panel && before.left < panel.right && before.right > panel.left
               ? Math.min(panel.top, window.innerHeight)
               : window.innerHeight;
+          const dodgedPanelBottom =
+            DODGED_PANEL_TOP_REM *
+              Number.parseFloat(getComputedStyle(document.documentElement).fontSize) +
+            (panel?.height ?? 0);
           const offset = !revealOnly
             ? centre - preferredCentre
             : before.top < 80
               ? before.top - 80
               : before.bottom + 16 - floor;
-          scroller?.scrollBy({ top: offset, behavior: "auto" });
+          // A scene the page cannot scroll clear of the dock keeps its place, moving back
+          // down only as far as the target needs to clear the dock's other place.
+          const isOutOfScroll =
+            !!scroller &&
+            offset > scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+          const backOffset = Math.min(0, before.top - dodgedPanelBottom - 16);
+          const dodgesInPlace =
+            revealOnly &&
+            isCovered &&
+            !isDockReturning &&
+            isOutOfScroll &&
+            before.bottom - backOffset < window.innerHeight - 80;
+          scroller?.scrollBy({
+            top: dodgesInPlace ? backOffset : offset,
+            behavior: "auto",
+          });
           // Scrolling cannot always win: on a short page the document may already
           // be as far down as it goes, leaving the target stuck under the panel
           // with nothing left to scroll. Rather than stretch the page to make
@@ -1794,12 +1818,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
             if (
               panelAfter &&
               rectsOverlap(after, panelAfter) &&
-              after.top >
-                DODGED_PANEL_TOP_REM *
-                  Number.parseFloat(
-                    getComputedStyle(document.documentElement).fontSize,
-                  ) +
-                  panelAfter.height
+              after.top > dodgedPanelBottom
             ) {
               setPanelDodgesHighlight(true);
             }
