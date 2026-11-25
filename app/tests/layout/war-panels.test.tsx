@@ -362,6 +362,35 @@ describe("war field objectives", () => {
     }
   });
 
+  it("states what earns war points with the war's own rules", () => {
+    info!.war.rules = {
+      ...info!.war.rules!,
+      guardianDamage: 111,
+      objectiveDamage: 2222,
+      campDamage: 333,
+      regularDamage: 4,
+      leaderDamage: 55,
+    };
+    const view = mount(<ObjectiveWarPanel warId="war-1" />);
+    expect(
+      view.getByText(/Each guardian win removes 111 shrine health/).textContent,
+    ).toContain("only to the ninja who destroys it: up to 2,222.");
+    openTab(view, /Camps/);
+    expect(view.getByText(/no personal war points/).textContent).toContain(
+      "deals 333 townhall damage",
+    );
+    openTab(view, "Contributions");
+    expect(view.getByText(/Defeating an opposing/).textContent).toContain(
+      "up to 4–55 points",
+    );
+    expect(view.getByText(/Destroying an objective shrine/).textContent).toContain(
+      "up to 2,222 points",
+    );
+    expect(view.getByText(/leave a shrine standing/).textContent).toContain(
+      "earn no points",
+    );
+  });
+
   it("mounts one field panel only while its toolbar dialog is open", () => {
     const view = mount(<WarFieldActions />);
     const query = client.api.war.getObjectiveWarInfo.useQuery;
