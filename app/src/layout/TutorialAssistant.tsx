@@ -2190,7 +2190,10 @@ const useHighlightPlacement = <Step extends { id: string }>({
       // A rotated phone or a resized window is a new layout, placed afresh. Height is left
       // out: a phone's address bar changes it as the player scrolls.
       const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}:${window.innerWidth}`;
-      if (placementRef.current.key !== targetKey) {
+      const isNewTarget = placementRef.current.key !== targetKey;
+      const isDockReturning =
+        isNewTarget && !!document.querySelector('[data-dodge-highlight="true"]');
+      if (isNewTarget) {
         placementRef.current.glide?.stop();
         placementRef.current = {
           key: targetKey,
@@ -2328,7 +2331,9 @@ const useHighlightPlacement = <Step extends { id: string }>({
           isTimerAbove ||
           (!isRevealOnly && isAimMisplaced);
         if (!isMisplaced) {
-          placement.settled = true;
+          // A dock still aside for the last target is about to return to the foot of the
+          // screen, so this placement only counts once it is measured there.
+          placement.settled = !isDockReturning;
           placement.settledScrollY = scrollTop;
         } else {
           // There a target only moves far enough to come into view clear of the
@@ -2344,7 +2349,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
               : clear.bottom + 16 > floor
                 ? clear.bottom + 16 - floor
                 : clear.top - view.top - 80;
-          const offset = !isRevealOnly
+          const aimedOffset = !isRevealOnly
             ? aimOffset
             : Math.min(
                 revealOffset,
@@ -2352,6 +2357,21 @@ const useHighlightPlacement = <Step extends { id: string }>({
                 // Where not everything fits, the target itself stays on screen.
                 Math.max(0, before.top - view.top - 16),
               );
+          // A scene the page cannot scroll clear of the dock keeps its place, moving back
+          // down only as far as the target needs to clear the dock's other place.
+          const dodgedPanelBottom =
+            DODGED_PANEL_TOP_REM *
+              Number.parseFloat(getComputedStyle(document.documentElement).fontSize) +
+            (panel?.height ?? 0);
+          const backOffset = Math.min(0, before.top - dodgedPanelBottom - 16);
+          const dodgesInPlace =
+            isRevealOnly &&
+            !isCombat &&
+            isCovered &&
+            !isDockReturning &&
+            aimedOffset > getScrollRoom(view, scrollTop, aimedOffset) &&
+            before.bottom - backOffset < view.bottom - 80;
+          const offset = dodgesInPlace ? backOffset : aimedOffset;
           const canScroll = getScrollRoom(view, scrollTop, offset) >= 1;
           // A page still laying out may have nowhere to scroll yet; that is no attempt.
           if (canScroll) {
@@ -2369,6 +2389,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
           if (
             isCovered &&
             !placement.gaveWay &&
+            !isDockReturning &&
             (!canScroll || placement.attempts >= GLIDES_BEFORE_GIVING_WAY)
           )
             giveWay(highlightInfo.element);
