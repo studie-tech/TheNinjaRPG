@@ -130,6 +130,8 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
   );
   color: #ffe7a3;
   font-family: Impact, "Arial Narrow", sans-serif;
+  /* Safari 15.4 has no container units and sizes the title by the viewport. */
+  font-size: clamp(2.2rem, 8vw, 3.5rem);
   font-size: clamp(2.2rem, 9cqi, 3.5rem);
   font-style: italic;
   font-weight: 900;
@@ -515,7 +517,7 @@ html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
     font-size: 0.95rem;
   }
 }
-/* Compact controls suit a mouse; touch screens keep full-size targets. */
+/* Compact controls suit a primary mouse; touch-first devices keep full-size targets. */
 @media (pointer: fine) {
   .splash-story-link {
     min-height: 2.35rem;
