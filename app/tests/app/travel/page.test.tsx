@@ -31,8 +31,12 @@ import {
 } from "../../setup/browserGlobals";
 
 const sensoryCapture = vi.spyOn(client, "api" as never);
+// The imported controls retain this procedure, so delegate to each test's current hook.
 const sensoryEndpoint = {
-  useMutation: (_options: unknown) => ({ mutate: vi.fn(), isPending: false }),
+  useMutation: (options: unknown) =>
+    client.api.stealth.useSensory.useMutation(
+      options as Parameters<typeof client.api.stealth.useSensory.useMutation>[0],
+    ),
 };
 Object.assign(sensoryCapture, {
   stealth: {
@@ -387,7 +391,7 @@ for (const procedure of ["activateStealth", "useSensory"] as const)
       if (procedure === "useSensory")
         vi.spyOn(sensoryEndpoint, "useMutation").mockImplementation((options) => {
           callbacks = options as typeof callbacks;
-          return mutation;
+          return mutation as never;
         });
       try {
         render(<TravelPage />);
