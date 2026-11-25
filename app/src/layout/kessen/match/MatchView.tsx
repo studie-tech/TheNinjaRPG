@@ -3,7 +3,7 @@
 import "../kessen.css";
 import "./kessenMatch.css";
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -167,6 +167,8 @@ export const KessenMatchView = ({
   useEffect(() => {
     if (busy) setSheet(null);
   }, [busy]);
+
+  useFrameChrome(frame);
 
   // An opened table brings the content box to the top of the screen, where the frame
   // fits, and its title's way back to the hall takes the focus unless an overlay (the
@@ -525,6 +527,34 @@ const useDockedFrame = (frame: HTMLElement | null) => {
   }, [frame]);
   return docked;
 };
+
+/**
+ * Tells the frame how much of its content box stands above it (the title and a subtitle
+ * that may wrap), as `--km-frame-chrome`, so title and table fit the screen together.
+ */
+const useFrameChrome = (frame: HTMLElement | null) => {
+  useLayoutEffect(() => {
+    const box = frame?.closest("[data-content-box]");
+    if (!frame || !box) return;
+    const measure = () => {
+      const above = frame.getBoundingClientRect().top - box.getBoundingClientRect().top;
+      frame.style.setProperty(
+        "--km-frame-chrome",
+        `${Math.ceil(above) + FRAME_BORDER_BELOW}px`,
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const header = box.querySelector("[data-content-box-header]");
+    if (!header) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [frame]);
+};
+
+/** The content box's lower border, kept in view under the frame. */
+const FRAME_BORDER_BELOW = 2;
 
 /** Mirrors the docked container queries of kessenMatch.css. */
 const DOCKED_MAX_HEIGHT = 500;

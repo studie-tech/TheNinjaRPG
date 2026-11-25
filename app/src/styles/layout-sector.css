@@ -166,6 +166,8 @@ html[data-game-layout="sector"] {
   position: absolute;
   inset: 0;
   contain: layout paint;
+  /* Screens size full-height scenes from the room the dialog can take. */
+  container-type: size;
   pointer-events: none;
 }
 .sector-screen-viewport > * {
@@ -194,6 +196,24 @@ html[data-game-layout="sector"] {
   }
   .sector-screen-dialog {
     padding-inline: 0.5rem;
+  }
+}
+/* An open Kessen table fits the dialog whole: the dialog's height limit less its padding,
+   with the table's title beside the close button. */
+.sector-screen-dialog:has(.kessen-match) {
+  padding-block: 0.5rem;
+}
+.sector-screen-dialog .kessen-match {
+  --km-room: calc(100cqh - 2rem - 2px);
+}
+/* On phones the Chat launcher stands over the dialog's bottom corner; the table's action
+   bar leaves it that corner. */
+@media (max-width: 767.98px) {
+  .sector-game:has(.sector-chat-launcher.right-4) .kessen-match {
+    --km-corner: 46px;
+  }
+  .sector-game:has(.sector-chat-launcher.left-4) .kessen-match {
+    --km-corner-left: 46px;
   }
 }
 
