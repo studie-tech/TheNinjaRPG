@@ -30,8 +30,10 @@ import { trackConversion } from "@/libs/conversionTracking";
 import {
   dialogChoiceContentId,
   getActiveObjective,
+  getSeenQuestDialogue,
   isQuestComplete,
   isQuestObjectiveAvailable,
+  type QuestDialogueEntry,
 } from "@/libs/objectives";
 import { useInfinitePagination } from "@/libs/pagination";
 import { questProgressBlockedMessage } from "@/libs/quest/missionHall";
@@ -492,6 +494,10 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     !canProgress && !isPaused && awaitsPlayerAction
       ? questProgressBlockedMessage(userData?.status)
       : null;
+  // The scene shows the current text itself; without it, keep what was said readable.
+  const [latestDialogue, ...earlierDialogue] = showScene
+    ? []
+    : getSeenQuestDialogue(quest, tracker).reverse();
   const assetIds: string[] = [];
   let shownText = quest.description;
   if (quest.consecutiveObjectives) {
@@ -742,6 +748,12 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             description={shownText}
           />
         )}
+        {latestDialogue && (
+          <section aria-label="Quest dialogue">
+            <h3 className="font-bold">Dialogue</h3>
+            <QuestDialogueText entry={latestDialogue} />
+          </section>
+        )}
         {progressBlockedMessage && (
           <p
             role="status"
@@ -838,6 +850,11 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             </Button>
           </div>
         )}
+        <EarlierQuestDialogue
+          key={abandonIdentity}
+          entries={earlierDialogue}
+          compact={props.compact}
+        />
       </div>
     </Post>
   );
@@ -892,6 +909,53 @@ export const QuestObjectives: React.FC<{
     );
   });
 };
+
+/**
+ * The parts of a quest's dialogue before the latest one, newest first, at the foot of the entry.
+ * The narrow dock keeps them folded.
+ */
+const EarlierQuestDialogue: React.FC<{
+  entries: QuestDialogueEntry[];
+  compact?: boolean;
+}> = ({ entries, compact }) => {
+  const [isOpen, setIsOpen] = useState(!compact);
+  if (entries.length === 0) return null;
+  return (
+    <section className="@container" aria-label="Earlier quest dialogue">
+      {compact ? (
+        <Button
+          type="button"
+          variant="link"
+          className="h-auto p-0"
+          aria-expanded={isOpen}
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          {isOpen ? "Hide" : "Read"} earlier dialogue ({entries.length})
+        </Button>
+      ) : (
+        <h3 className="font-bold">Earlier dialogue</h3>
+      )}
+      {isOpen && (
+        // One readable column in the classic 650px centre, two where a wide layout has 768px.
+        <div className="grid grid-cols-1 gap-3 @5xl:grid-cols-2">
+          {entries.map((entry) => (
+            <QuestDialogueText key={entry.objectiveId} entry={entry} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
+/** One part of a quest's dialogue and the player's answer to it. */
+const QuestDialogueText: React.FC<{ entry: QuestDialogueEntry }> = ({ entry }) => (
+  <div className="min-w-0 border-l-4 pl-2 break-words">
+    <div data-reading-text>{parseHtml(entry.text)}</div>
+    {entry.answer && (
+      <p className="text-muted-foreground mt-1 italic">You: {entry.answer}</p>
+    )}
+  </div>
+);
 
 /** The "Quest Update" dialog for a quest whose objective just changed on the map or in battle. */
 export const QuestUpdateModal: React.FC<{

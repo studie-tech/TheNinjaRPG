@@ -259,6 +259,54 @@ export const getActiveObjective = (quest: Quest, tracker: QuestTrackerType) => {
   });
 };
 
+/** Objectives that resolve by themselves, so their text is never put in front of the player. */
+const UNSEEN_DIALOGUE_TASKS = ["win_quest", "fail_quest", "reset_quest", "new_quest"];
+
+export type QuestDialogueEntry = {
+  objectiveId: string;
+  text: string;
+  /** The choice the player made, when it can be told apart from the other choices. */
+  answer?: string;
+};
+
+/**
+ * Quest text the player has already been given, oldest first. Consecutive quests give it along
+ * the selected branch, up to the active objective; the rest of the branch and the branches not
+ * taken stay unread. A conversation held at an overworld NPC counts once it has been answered
+ * there, and other quests only count their answered conversations.
+ */
+export const getSeenQuestDialogue = (
+  quest: Pick<Quest, "content" | "consecutiveObjectives">,
+  tracker: QuestTrackerType,
+): QuestDialogueEntry[] => {
+  const { objectives } = quest.content;
+  const reached = quest.consecutiveObjectives
+    ? selectedObjectivePath(objectives, tracker).ids.flatMap(
+        (id) => objectives.find((objective) => objective.id === id) ?? [],
+      )
+    : objectives.filter((objective) => objective.task === "dialog");
+  return reached.flatMap((objective) => {
+    const text = objective.description;
+    if (!text || UNSEEN_DIALOGUE_TASKS.includes(objective.task)) return [];
+    const goal = tracker.goals.find((g) => g.id === objective.id);
+    const isHeldAtNpc = objective.task === "dialog" && !!objective.overworldPlacementId;
+    if (!goal?.done && (!quest.consecutiveObjectives || isHeldAtNpc)) return [];
+    const answers =
+      objective.task === "dialog" && goal?.done
+        ? objective.nextObjectiveId.filter(
+            (branch) => branch.nextObjectiveId === goal.selectedNextObjectiveId,
+          )
+        : [];
+    return [
+      {
+        objectiveId: objective.id,
+        text,
+        answer: answers.length === 1 ? answers[0]?.text : undefined,
+      },
+    ];
+  });
+};
+
 /**
  * Builds Cytoscape edge definitions for a list of quest objectives.
  *
