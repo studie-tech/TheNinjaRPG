@@ -103,6 +103,16 @@ describe("logbook dialog steps", () => {
     expect(screen.queryByText(/continues in person/)).toBeNull();
   });
 
+  it("shows what the dialog says beside its choices", () => {
+    renderDialogStep();
+    expect(screen.getByText("Hello there")).toBeTruthy();
+  });
+
+  it("does not give away what an NPC will say", () => {
+    renderDialogStep("larry-placement");
+    expect(screen.queryByText("Hello there")).toBeNull();
+  });
+
   it("sends the player to the NPC for a dialog bound to an overworld placement", () => {
     renderDialogStep("larry-placement");
     expect(screen.queryByRole("button", { name: "Tell me more" })).toBeNull();
