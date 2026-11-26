@@ -159,7 +159,7 @@ describeWithDatabase("Kessen card sets migration", () => {
     expect(saved).toBeDefined();
     if (!saved) throw new Error("Missing migrated card");
     const migrated = itemToKessenCard(saved);
-    expect(migrated?.sets.toSorted()).toEqual(sets.toSorted());
+    expect(migrated?.sets.slice().sort()).toEqual(sets.slice().sort());
     expect(migrated?.abilities).toEqual(card.abilities);
     const [match] = await client
       .select()
