@@ -61,6 +61,8 @@ export function PetAcquisition() {
   const [selection, setSelection] = useState<PetSelection>(emptySelection);
   const [stage, setStage] = useState(0);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  // The player chose to design a companion over taking the Sanctuary pup.
+  const [prefersDesign, setPrefersDesign] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [acquiredPetId, setAcquiredPetId] = useState<string | null>(null);
   const [isAcquiring, setIsAcquiring] = useState(false);
@@ -322,7 +324,8 @@ export function PetAcquisition() {
     !isReplacement && data.pets.length === 0 && data.canAdoptSanctuaryPup;
   const isPupOffered = canOfferPup && isPupHandedOver;
   // The one control the tutorial points at: the pup's until the player designs their own.
-  const isDesigning = !isPupOffered || stage > 0 || selectedTraits.some(Boolean);
+  const isDesigning =
+    !isPupOffered || prefersDesign || stage > 0 || selectedTraits.some(Boolean);
   const nextControl = !isDesigning
     ? "pup"
     : activeTrait
@@ -392,12 +395,22 @@ export function PetAcquisition() {
       {!acquiredPetId &&
         canOfferPup &&
         (isPupHandedOver ? (
-          <SanctuaryPupOffer
+          <FirstCompanionChoice
             name={name}
             onNameChange={setName}
             isGuided={!isDesigning}
             isBusy={isBusy}
             onAdopt={() => void adoptPup()}
+            onDesign={() => {
+              setPrefersDesign(true);
+              // A lesson moves the page to the designer itself.
+              if (!isTutorialActive(userData))
+                stageHeading.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              stageHeading.current?.focus({ preventScroll: true });
+            }}
           />
         ) : (
           isCarryingPup && (
@@ -895,53 +908,91 @@ const traitStages = [
   { title: "Aura", field: "auraIndex", options: "auras" },
 ] as const;
 
-/** The rescued pup, offered ready-made as the first companion; the designer stays below. */
-const SanctuaryPupOffer: React.FC<{
+/**
+ * The first companion is a choice between two free paths: the rescued pup, ready-made with
+ * a suggested name, or one the player designs in the steps below.
+ */
+const FirstCompanionChoice: React.FC<{
   name: string;
   onNameChange: (name: string) => void;
-  /** The tutorial points at the offer. */
+  /** The tutorial points at the choice. */
   isGuided: boolean;
   isBusy: boolean;
   onAdopt: () => void;
-}> = ({ name, onNameChange, isGuided, isBusy, onAdopt }) => (
-  <section
-    aria-labelledby="sanctuary-pup-title"
-    data-spotlight-panel=""
-    className="@container mb-4 flex flex-col gap-3 rounded-lg border-2 border-violet-500/50 bg-violet-500/10 p-4"
-  >
-    <div>
-      <h3 id="sanctuary-pup-title" className="font-bold text-lg">
-        The Sanctuary pup
-      </h3>
-      <p className="text-sm">
-        The pup you rescued won&apos;t leave your side. Its collar still carries a faint
-        violet scorch. Give it a name, or keep the one the Bondkeepers chose.
-      </p>
-    </div>
-    <div className="flex flex-col gap-2 @lg:flex-row @lg:items-end">
-      <div className="space-y-1 @lg:w-60">
-        <Label htmlFor="sanctuary-pup-name">Its name</Label>
-        <Input
-          id="sanctuary-pup-name"
-          value={name}
-          placeholder={SANCTUARY_PUP.name}
-          maxLength={PET_NAME_MAX_LENGTH}
-          onChange={(event) => onNameChange(event.target.value)}
-          data-pup-name={isGuided || undefined}
-        />
+  onDesign: () => void;
+}> = ({ name, onNameChange, isGuided, isBusy, onAdopt, onDesign }) => (
+  <section aria-labelledby="first-companion-title" className="@container mb-4">
+    <h3 id="first-companion-title" className="mb-2 font-bold text-lg">
+      Choose your first companion
+    </h3>
+    {/* Side by side in the classic centre column (about 650px), stacked on a phone. */}
+    <div
+      id={isGuided ? "tutorial-sanctuary-pup" : undefined}
+      data-spotlight-panel=""
+      className="grid gap-3 @xl:grid-cols-2"
+    >
+      <div className="flex flex-col gap-3 rounded-lg border-2 border-violet-500/50 bg-violet-500/10 p-4">
+        <div className="grow">
+          <p className="flex items-center gap-2 font-bold">
+            <PawPrint className="h-5 w-5 shrink-0" aria-hidden="true" />
+            Adopt the Sanctuary pup
+          </p>
+          <p className="text-sm">
+            The pup you rescued won&apos;t leave your side. Its collar still carries a
+            faint violet scorch. Keep the name the Bondkeepers chose, or give it your
+            own.
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="sanctuary-pup-name">Its name</Label>
+          <Input
+            id="sanctuary-pup-name"
+            value={name}
+            placeholder={SANCTUARY_PUP.name}
+            maxLength={PET_NAME_MAX_LENGTH}
+            onChange={(event) => onNameChange(event.target.value)}
+          />
+        </div>
+        <Button
+          decoration="gold"
+          disabled={isBusy}
+          onClick={onAdopt}
+          className="w-full"
+        >
+          {isBusy ? "Adopting..." : "Adopt the pup"}
+        </Button>
       </div>
-      <Button
-        id={isGuided ? "tutorial-sanctuary-pup" : undefined}
-        decoration="gold"
-        disabled={isBusy}
-        onClick={onAdopt}
-        className="w-full @lg:flex-1"
-      >
-        {isBusy ? "Adopting..." : "Adopt the pup"}
-      </Button>
+      <div className="flex flex-col gap-3 rounded-lg border-2 border-amber-500/50 bg-amber-500/10 p-4">
+        <div className="grow">
+          <p className="flex items-center gap-2 font-bold">
+            <Sparkles className="h-5 w-5 shrink-0" aria-hidden="true" />
+            Design your own
+          </p>
+          <p className="text-sm">
+            Choose its species, colours, look and aura, then name it. Its portrait is
+            painted for you, and it is just as free.
+          </p>
+          <ol className="mt-2 flex flex-wrap gap-1" aria-label="Design steps">
+            {[...traitStages.map((stage) => stage.title), "Name"].map(
+              (title, index) => (
+                <li key={title}>
+                  <Badge variant="outline">
+                    {index + 1}. {title}
+                  </Badge>
+                </li>
+              ),
+            )}
+          </ol>
+        </div>
+        <Button
+          decoration="gold"
+          disabled={isBusy}
+          onClick={onDesign}
+          className="w-full"
+        >
+          Design my own
+        </Button>
+      </div>
     </div>
-    <p className="text-muted-foreground text-xs">
-      Prefer a different companion? Design your own below instead.
-    </p>
   </section>
 );

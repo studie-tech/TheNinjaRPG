@@ -785,8 +785,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Your first companion",
     speaker: bondkeeperElder,
     description:
-      "It refuses to let you out of its sight! Then it belongs with you, and your <b>first bond is free</b>. Give the pup a name, or design a companion of your own below it instead.",
-    action: "Name the pup, then tap Adopt the pup.",
+      "It refuses to let you out of its sight! Then it belongs with you, if you'll have it. Your <b>first bond is free</b>: take the pup home, or design a companion of your own.",
+    action: "Adopt the pup, or tap Design my own.",
     // The page gives its ids to the one control the player needs next.
     elementIds: [
       "tutorial-pet-meet",
@@ -822,7 +822,6 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       "tutorial-pet-identity": "Name your companion and choose its gender.",
       "tutorial-pet-meet": "Tap Meet my first companion.",
     },
-    marks: [{ selector: "[data-pup-name]", label: "" }],
     page: "/pets",
     advanceOn: "petAdopt",
   },

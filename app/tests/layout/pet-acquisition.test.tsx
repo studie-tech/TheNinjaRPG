@@ -1099,17 +1099,23 @@ it("offers the rescued pup only after it has been handed to the Bondkeepers", as
     await handedOver.view.findByRole("button", { name: "Adopt the pup" });
     expect(handedOver.view.queryByText(/still at your side/)).toBeNull();
     // The lesson and quest call the rescued companion a pup; the offer must agree.
-    const offer = handedOver.view.getByRole("region", { name: "The Sanctuary pup" });
+    const offer = handedOver.view.getByRole("region", {
+      name: "Choose your first companion",
+    });
     expect(offer.textContent).toContain("The pup you rescued");
     expect(offer.textContent).not.toMatch(/hound/i);
 
-    // The lesson points at one control at a time: the pup's, then the designer's.
+    // The pup and a design of one's own are offered as equal choices.
+    expect(offer.textContent).toContain("Design your own");
+    // The lesson points at one control at a time: the choice, then the designer's.
     const { container } = handedOver.view;
     const target = () =>
       [...container.querySelectorAll('[id^="tutorial-"]')]
         .map((element) => element.id)
         .filter((id) => id !== "tutorial-pet-acquisition");
     expect(target()).toEqual(["tutorial-sanctuary-pup"]);
+    fireEvent.click(handedOver.view.getByRole("button", { name: "Design my own" }));
+    expect(target()).toEqual(["tutorial-pet-speciesId"]);
     for (const field of [
       "speciesId",
       "paletteIndex",
