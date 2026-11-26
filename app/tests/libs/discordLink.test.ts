@@ -5,6 +5,8 @@ import {
   describeDiscordLinkResult,
   discordAccountEligibleAt,
   discordNicknameFor,
+  discordRankRoleId,
+  discordRankRoleKey,
   discordSnowflakeCreatedAt,
   isDiscordLinkResult,
   maskName,
@@ -77,5 +79,27 @@ describe("result copy", () => {
       describeDiscordLinkResult("cooldown", { until: "2026-11-01T00:00:00.000Z" })
         .description,
     ).toContain("01 Nov 2026");
+  });
+});
+
+describe("discord rank roles", () => {
+  it("keys a character by rank, with outlaws apart", () => {
+    expect(discordRankRoleKey({ rank: "STUDENT", isOutlaw: false })).toBe("STUDENT");
+    expect(discordRankRoleKey({ rank: "ELITE JONIN", isOutlaw: false })).toBe(
+      "ELITE JONIN",
+    );
+    expect(discordRankRoleKey({ rank: "CHUNIN", isOutlaw: true })).toBe(
+      "OUTLAW CHUNIN",
+    );
+    expect(discordRankRoleKey({ rank: "NONE", isOutlaw: false })).toBeNull();
+  });
+
+  it("uses the outlaw role when mapped and the plain rank's otherwise", () => {
+    const roles = { GENIN: "1", CHUNIN: "2", "OUTLAW CHUNIN": "3" };
+    expect(discordRankRoleId(roles, "CHUNIN")).toBe("2");
+    expect(discordRankRoleId(roles, "OUTLAW CHUNIN")).toBe("3");
+    expect(discordRankRoleId(roles, "OUTLAW GENIN")).toBe("1");
+    expect(discordRankRoleId(roles, "JONIN")).toBeUndefined();
+    expect(discordRankRoleId(roles, null)).toBeUndefined();
   });
 });

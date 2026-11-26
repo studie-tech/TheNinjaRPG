@@ -55,7 +55,7 @@ export const discordRouter = createTRPCRouter({
   }),
   /**
    * Make the signed-in character the primary of its Discord account: the server nickname,
-   * village role and Linked Roles metadata follow it.
+   * village and rank roles and Linked Roles metadata follow it.
    */
   setPrimary: protectedProcedure
     .output(baseServerResponse)
@@ -75,7 +75,8 @@ export const discordRouter = createTRPCRouter({
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
       return {
         success: true,
-        message: "Your Discord nickname and village role now follow this character.",
+        message:
+          "Your Discord nickname, village and rank roles now follow this character.",
       };
     }),
   /** Unlink the signed-in character's Discord account. */

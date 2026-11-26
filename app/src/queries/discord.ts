@@ -266,7 +266,17 @@ export const fetchDiscordAccountSanctions = (
 export const fetchDiscordAccountLinks = (client: DrizzleClient, discordId: string) =>
   client.query.discordLink.findMany({
     where: eq(discordLink.discordId, discordId),
-    with: { user: { columns: { username: true, level: true, villageId: true } } },
+    with: {
+      user: {
+        columns: {
+          username: true,
+          level: true,
+          villageId: true,
+          rank: true,
+          isOutlaw: true,
+        },
+      },
+    },
     orderBy: [desc(discordLink.isPrimary), asc(discordLink.slot)],
   });
 
@@ -585,6 +595,8 @@ export const selectDiscordLinkForFetchLinksNeedingSync = (
             sql`NOT (${discordLink.syncedUsername} <=> ${userData.username})`,
             sql`NOT (${discordLink.syncedVillageId} <=> ${userData.villageId})`,
             sql`NOT (${discordLink.syncedLevel} <=> ${userData.level})`,
+            // Mirrors discordRankRoleKey.
+            sql`NOT (${discordLink.syncedRank} <=> CASE WHEN ${userData.rank} = 'NONE' THEN NULL WHEN ${userData.isOutlaw} THEN CONCAT('OUTLAW ', ${userData.rank}) ELSE ${userData.rank} END)`,
           ),
         ),
       ),

@@ -1,3 +1,5 @@
+import { DiscordRankRoleKeys } from "@/libs/discordLink";
+
 /**
  * Discord linking configuration. The feature stays off unless `DISCORD_LINKING_ENABLED` is
  * exactly "true" and the application, bot, guild and token key are all configured: routes then
@@ -15,6 +17,8 @@ export type DiscordConfig = {
   verifiedRoleId: string | null;
   /** TNR village id to Discord role id. */
   villageRoleIds: Record<string, string>;
+  /** Rank role key (see `discordRankRoleKey`) to Discord role id. */
+  rankRoleIds: Record<string, string>;
   /** AES-256 key for stored OAuth tokens. */
   tokenKey: Buffer;
   /** OAuth redirect URI; must be registered in the Discord developer portal. */
@@ -24,27 +28,44 @@ export type DiscordConfig = {
 const SNOWFLAKE = /^\d{17,20}$/;
 
 /**
- * Parse `DISCORD_VILLAGE_ROLE_IDS`. Invalid JSON or entries are ignored rather than taking the
- * feature down, since a role mapping typo should not block linking.
+ * Parse a JSON object of key to Discord role id. Invalid JSON or entries are ignored rather
+ * than taking the feature down, since a role mapping typo should not block linking.
  */
-export const parseVillageRoleIds = (
+const parseRoleIdMap = (
   raw: string | undefined,
+  variable: string,
+  /** Maps a key to its canonical form, or null to drop the entry. */
+  normalizeKey: (key: string) => string | null = (key) => key,
 ): Record<string, string> => {
   if (!raw?.trim()) return {};
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, string] =>
-          typeof entry[1] === "string" && SNOWFLAKE.test(entry[1]),
-      ),
-    );
+    const roles: Record<string, string> = {};
+    for (const [rawKey, role] of Object.entries(parsed)) {
+      const key = normalizeKey(rawKey);
+      if (key && typeof role === "string" && SNOWFLAKE.test(role)) roles[key] = role;
+    }
+    return roles;
   } catch {
-    console.error("[Discord] DISCORD_VILLAGE_ROLE_IDS is not valid JSON");
+    console.error(`[Discord] ${variable} is not valid JSON`);
     return {};
   }
 };
+
+/** Parse `DISCORD_VILLAGE_ROLE_IDS`: TNR village id to Discord role id. */
+export const parseVillageRoleIds = (raw: string | undefined) =>
+  parseRoleIdMap(raw, "DISCORD_VILLAGE_ROLE_IDS");
+
+/**
+ * Parse `DISCORD_RANK_ROLE_IDS`: rank role key (`STUDENT`, `GENIN`, ..., `OUTLAW CHUNIN`) to
+ * Discord role id. Keys are matched case-insensitively; unknown keys are ignored.
+ */
+export const parseRankRoleIds = (raw: string | undefined) =>
+  parseRoleIdMap(raw, "DISCORD_RANK_ROLE_IDS", (key) => {
+    const upper = key.trim().replace(/\s+/g, " ").toUpperCase();
+    return DiscordRankRoleKeys.includes(upper) ? upper : null;
+  });
 
 /** Accept a 32-byte key as 64 hex characters or base64; anything else disables linking. */
 export const parseTokenKey = (raw: string | undefined): Buffer | null => {
@@ -78,6 +99,7 @@ export const getDiscordConfig = (): DiscordConfig | null => {
     guildId: env.DISCORD_GUILD_ID,
     verifiedRoleId: env.DISCORD_VERIFIED_ROLE_ID?.trim() || null,
     villageRoleIds: parseVillageRoleIds(env.DISCORD_VILLAGE_ROLE_IDS),
+    rankRoleIds: parseRankRoleIds(env.DISCORD_RANK_ROLE_IDS),
     tokenKey,
     redirectUri: `${baseUrl}/api/discord/callback`,
   };

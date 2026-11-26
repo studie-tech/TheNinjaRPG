@@ -1,5 +1,6 @@
 import { exists } from "drizzle-orm";
 import { after } from "next/server";
+import type { UserRank } from "@/drizzle/constants";
 import {
   ActiveBanStates,
   DISCORD_INDEFINITE_SANCTION_DAYS,
@@ -7,7 +8,12 @@ import {
   DISCORD_SYNC_REFRESH_DAYS,
 } from "@/drizzle/constants";
 import type { DiscordLink, discordLink } from "@/drizzle/schema";
-import { DISCORD_RELINK_REQUIRED, discordNicknameFor } from "@/libs/discordLink";
+import {
+  DISCORD_RELINK_REQUIRED,
+  discordNicknameFor,
+  discordRankRoleId,
+  discordRankRoleKey,
+} from "@/libs/discordLink";
 import {
   fetchDiscordAccountLinks,
   fetchDiscordAccountSanctions,
@@ -45,8 +51,8 @@ import { clientErrorMessage } from "@/server/utils/mysqlErrors";
 import { logDatabaseFailure } from "@/server/utils/sentry";
 
 /**
- * Discord side of a link: Linked Roles metadata, server membership, nickname, village role
- * and the ban that mirrors an indefinite in-game ban or silence.
+ * Discord side of a link: Linked Roles metadata, server membership, nickname, village and
+ * rank roles and the ban that mirrors an indefinite in-game ban or silence.
  *
  * Every function here is best-effort. In-game actions never wait on or fail because of
  * Discord; whatever did not apply is left out of the `synced*` columns, and the hourly sync
@@ -57,7 +63,13 @@ const AUDIT_REASON = "TNR account link sync";
 /** Refresh access tokens this long before they expire. */
 const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
-type SyncCharacter = { username: string; level: number; villageId: string | null };
+type SyncCharacter = {
+  username: string;
+  level: number;
+  villageId: string | null;
+  rank: UserRank;
+  isOutlaw: boolean;
+};
 
 /** Sync errors are stored on the link and shown to whoever asked for the sync. */
 export const errorText = (error: unknown) => {
@@ -145,19 +157,25 @@ const getClerkLinkAccessToken = async (
   return token.accessToken;
 };
 
-/** Roles the sync owns: the verified role and every mapped village role. */
+/** Roles the sync owns: the verified role and every mapped village and rank role. */
 const managedRoles = (config: DiscordConfig) =>
   new Set(
-    [config.verifiedRoleId, ...Object.values(config.villageRoleIds)].filter(
-      (role): role is string => !!role,
-    ),
+    [
+      config.verifiedRoleId,
+      ...Object.values(config.villageRoleIds),
+      ...Object.values(config.rankRoleIds),
+    ].filter((role): role is string => !!role),
   );
 
-const desiredRoles = (config: DiscordConfig, character: SyncCharacter) =>
-  [
-    config.verifiedRoleId,
-    character.villageId ? config.villageRoleIds[character.villageId] : undefined,
-  ].filter((role): role is string => !!role);
+export const desiredRoles = (config: DiscordConfig, character: SyncCharacter) => [
+  ...new Set(
+    [
+      config.verifiedRoleId,
+      character.villageId ? config.villageRoleIds[character.villageId] : undefined,
+      discordRankRoleId(config.rankRoleIds, discordRankRoleKey(character)),
+    ].filter((role): role is string => !!role),
+  ),
+];
 
 /**
  * Bring Discord in line with the character's Discord account. The account shows its primary
@@ -177,8 +195,8 @@ export const syncDiscordMember = async (
 type AccountLink = Awaited<ReturnType<typeof fetchDiscordAccountLinks>>[number];
 
 /**
- * Bring a Discord account in line with its linked characters. Nickname, village role and
- * Linked Roles metadata follow the primary character; the account is banned while any linked
+ * Bring a Discord account in line with its linked characters. Nickname, village and rank
+ * roles and Linked Roles metadata follow the primary character; the account is banned while any linked
  * character has an indefinite sanction, or while the tombstone of a deleted linked account
  * holds one. With `force`, everything is re-applied even when the stored state already matches
  * (the periodic full refresh and staff resync). The applied state is written to every link of
@@ -269,10 +287,12 @@ export const syncDiscordAccount = async (
   // Server membership, nickname and roles.
   const nick = discordNicknameFor(character.username);
   const wanted = desiredRoles(config, character);
+  const rankKey = discordRankRoleKey(character);
   const needsMember =
     force ||
     primary.syncedUsername !== character.username ||
     primary.syncedVillageId !== character.villageId ||
+    primary.syncedRank !== rankKey ||
     update.syncedBanned === false;
   if (needsMember) {
     let applied = true;
@@ -311,6 +331,7 @@ export const syncDiscordAccount = async (
     if (applied) {
       update.syncedUsername = character.username;
       update.syncedVillageId = character.villageId;
+      update.syncedRank = rankKey;
     }
   }
   await saveSyncState(client, discordId, update, errors);
@@ -417,7 +438,7 @@ export const releaseDiscordMember = async (
 };
 
 /**
- * Run a sync after the response is sent. Moderation, renames and village changes call this
+ * Run a sync after the response is sent. Moderation, renames, village and rank changes call this
  * so the player sees no Discord latency; failures are left for the cron.
  */
 export const scheduleDiscordSync = (client: DrizzleClient, userId: string | null) => {

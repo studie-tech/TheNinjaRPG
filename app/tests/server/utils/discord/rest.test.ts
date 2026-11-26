@@ -16,6 +16,7 @@ const config = {
   guildId: "2222222222222222222",
   verifiedRoleId: null,
   villageRoleIds: {},
+  rankRoleIds: {},
   tokenKey: Buffer.alloc(32),
   redirectUri: "http://localhost/api/discord/callback",
 } satisfies DiscordConfig;

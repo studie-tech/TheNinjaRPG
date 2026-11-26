@@ -7,7 +7,7 @@ gates its channels behind a **Verified Ninja** role that Discord grants through
 [Linked Roles](https://discord.com/developers/docs/tutorials/configuring-app-metadata-for-linked-roles):
 the role requires the application's `linked` metadata, which the game pushes when a player
 links. A bot token (REST only, no gateway) sets each member's nickname to the character name,
-manages village roles and mirrors indefinite in-game sanctions as server bans.
+manages village and rank roles and mirrors indefinite in-game sanctions as server bans.
 
 Code: `app/src/server/utils/discord/`,
 `app/src/app/api/discord/{authorize,callback}`, `app/src/app/api/hourly-discord-sync`,
@@ -24,7 +24,7 @@ staff page `/reports/discord`.
   The ActionLog of both characters records it, and the staff page lists the two characters
   together, marked "same owner (declared via Discord link)".
 - One link per Discord account is **primary** (`isPrimary`): its character sets the server
-  nickname, the village role and the Linked Roles metadata. The first link is primary; a
+  nickname, the village and rank roles and the Linked Roles metadata. The first link is primary; a
   second link keeps the existing primary. Either character can take over with "Set as primary
   for Discord" in the profile. When the primary unlinks or is deleted, the other character
   becomes primary and the account is synced to it. Should no link be flagged (an unlink racing
@@ -117,6 +117,7 @@ every link at least weekly.
 | `DISCORD_GUILD_ID` | TNR server id |
 | `DISCORD_VERIFIED_ROLE_ID` | Optional. Role the bot adds to every linked member. Leave unset when the Verified role is a Linked Role, which Discord grants itself |
 | `DISCORD_VILLAGE_ROLE_IDS` | Optional JSON object of village id to role id, e.g. `{"<villageId>":"<roleId>"}`. Changing it needs a redeploy |
+| `DISCORD_RANK_ROLE_IDS` | Optional JSON object of rank to role id, e.g. `{"STUDENT":"<roleId>","GENIN":"<roleId>","OUTLAW CHUNIN":"<roleId>"}`; see [Rank roles](#rank-roles). Changing it needs a redeploy |
 | `DISCORD_TOKEN_ENCRYPTION_KEY` | 32 random bytes as base64 or hex (`openssl rand -base64 32`); encrypts stored OAuth tokens with AES-256-GCM. Rotating it invalidates stored tokens until players relink |
 
 The feature also needs `NEXT_PUBLIC_BASE_URL` (redirect URI) and `CRON_SECRET` (sync cron).
@@ -165,6 +166,37 @@ change lack them until their next Discord sign-in; those players get the consent
    the steps and links to `https://www.theninja-rpg.com/discord/link`. Grant *View Channels*
    to Verified Ninja.
 4. Create one role per village and put their ids in `DISCORD_VILLAGE_ROLE_IDS`.
+5. Create the rank roles (below) and put their ids in `DISCORD_RANK_ROLE_IDS`.
+
+### Rank roles
+
+The primary character's rank gives one rank role, swapped by the sync when the rank changes
+(a quest promotion schedules a sync right away; Kage, Elder and staff rank changes are picked
+up by the hourly cron) and removed with the other managed roles on unlink. Keys of
+`DISCORD_RANK_ROLE_IDS` are the game's ranks, optionally prefixed with `OUTLAW ` for outlaws
+(case-insensitive); unmapped keys give no role, and an unmapped outlaw key falls back to the
+plain rank's role, so outlaw Students and Genin share the village roles.
+
+| Key | Suggested Discord role name |
+| --- | --- |
+| `STUDENT` | Academy Student |
+| `GENIN` | Genin |
+| `CHUNIN` | Chunin |
+| `JONIN` | Jonin |
+| `ELDER` | Elder |
+| `ELITE JONIN` | Elite Jonin |
+| `OUTLAW CHUNIN` | Lower Outlaw |
+| `OUTLAW JONIN` | Higher Outlaw |
+| `OUTLAW ELDER` | Outlaw Council |
+| `OUTLAW ELITE JONIN` | Warlord |
+
+The names match the in-game rank titles (`showUserRank`); the role names themselves are free,
+only the ids matter. The applied rank key is stored in `DiscordLink.syncedRank`, and a link
+whose character's rank or outlaw status no longer matches it is re-synced by the hourly cron.
+Links synced before the column existed start out mismatched, so set the variable before the
+first deploy that has it to give every linked member a rank role within a cron run or two.
+After changing the mapping later, existing members pick it up on the weekly full refresh, or
+right away through a staff resync.
 
 ## Rollout
 

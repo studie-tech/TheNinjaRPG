@@ -44,6 +44,7 @@ import { fetchActiveWars } from "@/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import { runRewardTasks } from "@/server/utils/concurrency";
+import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { awardRecruitRankMilestonesSafely } from "@/server/utils/recruitment";
 import { grantTitles } from "@/server/utils/titleGrants";
@@ -382,6 +383,8 @@ export const updateRewards = async (info: {
       rank: rewards.reward_rank,
     });
   }
+  // A new rank or village changes the linked Discord member's roles.
+  if (getNewRank || getNewVillage) scheduleDiscordSync(client, user.userId);
   // Update rewards for readability
   return {
     items: itemsToInsert,

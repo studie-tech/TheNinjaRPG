@@ -48,6 +48,9 @@ const DAY = 86_400_000;
 const GUILD = "2222222222222222222";
 const VILLAGE_ROLE = "5555555555555555555";
 const VERIFIED_ROLE = "6666666666666666666";
+const STUDENT_ROLE = "8888888888888888881";
+const CHUNIN_ROLE = "8888888888888888883";
+const LOWER_OUTLAW_ROLE = "8888888888888888884";
 /** Created 2016, well past the minimum account age. */
 const OLD_DISCORD = "175928847299117063";
 const OTHER_DISCORD = "175928847299117064";
@@ -61,6 +64,11 @@ const ENV = {
   DISCORD_GUILD_ID: GUILD,
   DISCORD_VERIFIED_ROLE_ID: VERIFIED_ROLE,
   DISCORD_VILLAGE_ROLE_IDS: JSON.stringify({ "village-a": VILLAGE_ROLE }),
+  DISCORD_RANK_ROLE_IDS: JSON.stringify({
+    STUDENT: STUDENT_ROLE,
+    CHUNIN: CHUNIN_ROLE,
+    "OUTLAW CHUNIN": LOWER_OUTLAW_ROLE,
+  }),
   DISCORD_TOKEN_ENCRYPTION_KEY: KEY.toString("base64"),
   NEXT_PUBLIC_BASE_URL: "http://localhost:3000",
 };
@@ -387,6 +395,7 @@ describeWithDatabase("Discord links (SQL)", () => {
       syncedUsername: "Alpha",
       syncedVillageId: "village-a",
       syncedLevel: 20,
+      syncedRank: "STUDENT",
       syncError: null,
     });
     // Tokens are stored encrypted.
@@ -405,7 +414,7 @@ describeWithDatabase("Discord links (SQL)", () => {
     ).toEqual({
       access_token: "access-1",
       nick: "Alpha",
-      roles: [VERIFIED_ROLE, VILLAGE_ROLE],
+      roles: [VERIFIED_ROLE, VILLAGE_ROLE, STUDENT_ROLE],
     });
     const logs = await database.query.actionLog.findMany({
       where: eq(actionLog.tableName, "discordLink"),
@@ -840,6 +849,59 @@ describeWithDatabase("Discord links (SQL)", () => {
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
   });
 
+  it("swaps the rank role on a promotion and for an outlaw rank", async () => {
+    const database = await getTestDatabase();
+    await insertDiscordLink(database, linkValues("user-a", OLD_DISCORD));
+    guildMember = { nick: "Alpha", roles: [VERIFIED_ROLE, VILLAGE_ROLE, STUDENT_ROLE] };
+    await syncDiscordMember(database, "user-a", { force: true });
+    expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
+    const rolePaths = (method: string) =>
+      calls
+        .filter((call) => call.method === method && call.path.includes("/roles/"))
+        .map((call) => call.path.split("/roles/")[1]);
+
+    // Promotion: the next sync swaps Academy Student for Chunin.
+    await database
+      .update(userData)
+      .set({ rank: "CHUNIN" })
+      .where(eq(userData.userId, "user-a"));
+    expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(1);
+    calls = [];
+    await reconcileDiscordLinks(database);
+    expect(rolePaths("PUT")).toEqual([CHUNIN_ROLE]);
+    expect(rolePaths("DELETE")).toEqual([STUDENT_ROLE]);
+    expect((await database.query.discordLink.findFirst())?.syncedRank).toBe("CHUNIN");
+    expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
+
+    // Turning outlaw alone (same village id) is a rank role change too.
+    guildMember = { nick: "Alpha", roles: [VERIFIED_ROLE, VILLAGE_ROLE, CHUNIN_ROLE] };
+    await database
+      .update(userData)
+      .set({ isOutlaw: true })
+      .where(eq(userData.userId, "user-a"));
+    expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(1);
+    calls = [];
+    await reconcileDiscordLinks(database);
+    expect(rolePaths("PUT")).toEqual([LOWER_OUTLAW_ROLE]);
+    expect(rolePaths("DELETE")).toEqual([CHUNIN_ROLE]);
+    expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
+
+    // An unmapped rank keeps no rank role.
+    guildMember = {
+      nick: "Alpha",
+      roles: [VERIFIED_ROLE, VILLAGE_ROLE, LOWER_OUTLAW_ROLE],
+    };
+    await database
+      .update(userData)
+      .set({ rank: "JONIN" })
+      .where(eq(userData.userId, "user-a"));
+    calls = [];
+    await reconcileDiscordLinks(database);
+    expect(rolePaths("PUT")).toEqual([]);
+    expect(rolePaths("DELETE")).toEqual([LOWER_OUTLAW_ROLE]);
+    expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
+  });
+
   it("does nothing on Discord while the feature is off", async () => {
     const database = await getTestDatabase();
     await insertDiscordLink(database, linkValues("user-a", OLD_DISCORD));
@@ -855,9 +917,15 @@ describeWithDatabase("Discord links (SQL)", () => {
   it("unlinks: drops the Linked Role, archives the link and logs it", async () => {
     const database = await getTestDatabase();
     await insertDiscordLink(database, linkValues("user-a", OLD_DISCORD));
-    guildMember = { nick: "Alpha", roles: [VILLAGE_ROLE] };
+    guildMember = { nick: "Alpha", roles: [VILLAGE_ROLE, STUDENT_ROLE] };
     const caller = await callerFor(discordRouter, "user-a");
     expect((await caller.unlink()).success).toBe(true);
+    expect(
+      calls.filter((call) => call.method === "DELETE").map((call) => call.path),
+    ).toEqual([
+      `/guilds/${GUILD}/members/${OLD_DISCORD}/roles/${VILLAGE_ROLE}`,
+      `/guilds/${GUILD}/members/${OLD_DISCORD}/roles/${STUDENT_ROLE}`,
+    ]);
     expect(
       calls.find((call) => call.path.endsWith("/role-connection"))?.body,
     ).toMatchObject({
