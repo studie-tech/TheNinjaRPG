@@ -77,6 +77,7 @@ describe("Block Struggle Next.js route boundary", () => {
     const first = await GET(request(), context);
     const setCookie = first.headers.get("set-cookie") ?? "";
     expect(first.status).toBe(200);
+    expect(first.headers.get("X-BlockStruggle-Player-Id")).toBe("p_player");
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("SameSite=strict");
     expect(setCookie).not.toContain("a".repeat(43));

@@ -7,14 +7,20 @@ export const BlockStruggleBridgeConfig = Schema.Struct({
   trustedVercelSource: Schema.optional(Schema.Literal("true", "false")),
 });
 
+export const BlockStrugglePlayerId = Schema.String.pipe(
+  Schema.pattern(/^[A-Za-z0-9_-]{1,128}$/),
+  Schema.filter((id) => !Object.hasOwn(Object.prototype, id)),
+);
+
 export const BlockStruggleSession = Schema.Struct({
   token: Schema.String.pipe(Schema.pattern(/^[A-Za-z0-9_-]{43}$/)),
-  playerId: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)),
+  playerId: BlockStrugglePlayerId,
   expiresAt: Schema.String,
 });
 
 export const BlockStruggleBridgeCookie = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literal(2),
+  playerId: BlockStrugglePlayerId,
   token: BlockStruggleSession.fields.token,
   userId: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(256)),
   sessionId: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(256)),

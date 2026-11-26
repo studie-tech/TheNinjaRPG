@@ -3,10 +3,11 @@ import { Clock, Data, Effect, Either, Schema } from "effect";
 import {
   BlockStruggleBridgeConfig,
   BlockStruggleBridgeCookie,
+  BlockStrugglePlayerId,
   BlockStruggleSession,
 } from "@/validators/blockStruggleBridge";
 
-const COOKIE_AAD = Buffer.from("tnr-blockstruggle-bridge-v1");
+const COOKIE_AAD = Buffer.from("tnr-blockstruggle-bridge-v2");
 const MAX_BODY = 64 * 1024;
 const MAX_QUERY = 2048;
 const REFRESH_MARGIN_MS = 30_000;
@@ -16,7 +17,7 @@ const segmentPattern = /^[A-Za-z0-9_-]{1,128}$/;
 export class BlockStruggleBridgeError extends Data.TaggedError(
   "BlockStruggleBridgeError",
 )<{
-  readonly status: 400 | 401 | 403 | 405 | 413 | 429 | 502 | 503;
+  readonly status: 400 | 401 | 403 | 405 | 412 | 413 | 429 | 502 | 503;
   readonly code: string;
   readonly retryAfter?: string;
 }> {}
@@ -305,7 +306,8 @@ export const makeBlockStruggleBridge = (
         )
           return yield* fail(502, "InvalidUpstream");
         return {
-          version: 1 as const,
+          version: 2 as const,
+          playerId: issued.playerId,
           token: issued.token,
           userId: identity.userId,
           sessionId: identity.sessionId,
@@ -388,6 +390,17 @@ export const makeBlockStruggleBridge = (
               ...(upstream.status === 200 ? { clearCookie: true } : {}),
             };
           }
+          const logout = method === "DELETE" && segments[0] === "session";
+          const suppliedPlayer = request.headers.get("X-BlockStruggle-Player-Id");
+          let expectedPlayer: string | undefined;
+          if (!logout) {
+            if (suppliedPlayer === null && method !== "GET")
+              return yield* fail(400, "PlayerIdentityRequired");
+            if (suppliedPlayer !== null)
+              expectedPlayer = yield* Schema.decodeUnknown(BlockStrugglePlayerId)(
+                suppliedPlayer,
+              ).pipe(Effect.mapError(() => fail(400, "InvalidPlayerIdentity")));
+          }
           const now = yield* Clock.currentTimeMillis;
           const decoded = yield* decryptCookie(cookieValue);
           const liveSession =
@@ -400,7 +413,7 @@ export const makeBlockStruggleBridge = (
             liveSession && liveSession.expiresAt > now + REFRESH_MARGIN_MS
               ? liveSession
               : undefined;
-          if (method === "DELETE" && segments[0] === "session") {
+          if (logout) {
             if (liveSession) {
               const revoked = yield* call(
                 "/api/ninja/session",
@@ -422,7 +435,12 @@ export const makeBlockStruggleBridge = (
             return {
               response: new Response(null, {
                 status: 204,
-                headers: { "Cache-Control": "private, no-store" },
+                headers: {
+                  "Cache-Control": "private, no-store",
+                  ...(liveSession
+                    ? { "X-BlockStruggle-Player-Id": liveSession.playerId }
+                    : {}),
+                },
               }),
               clearCookie: true,
             };
@@ -449,6 +467,33 @@ export const makeBlockStruggleBridge = (
                 },
               } satisfies BridgeResult;
             });
+          const identityChanged = () =>
+            Effect.gen(function* () {
+              const response = Response.json(
+                { error: "IdentityChanged" },
+                {
+                  status: 412,
+                  headers: {
+                    "Cache-Control": "private, no-store",
+                    "X-Content-Type-Options": "nosniff",
+                    "X-BlockStruggle-Identity-Changed": "1",
+                    "X-BlockStruggle-Player-Id": session.playerId,
+                  },
+                },
+              );
+              if (session === existing) return { response };
+              const cookie = yield* encryptCookie(session);
+              return {
+                response,
+                cookie: {
+                  value: cookie,
+                  maxAge: Math.max(1, Math.floor((session.expiresAt - now) / 1000)),
+                },
+              };
+            });
+          // The caller's bootstrapped player stays fixed even when the shared cookie changes.
+          if (expectedPlayer !== undefined && expectedPlayer !== session.playerId)
+            return yield* identityChanged();
           let forwarded = yield* forward(session.token);
           if (Either.isLeft(forwarded))
             return yield* retainIssuedSession(forwarded.left);
@@ -458,6 +503,8 @@ export const makeBlockStruggleBridge = (
               await upstream.body?.cancel().catch(() => {});
             });
             session = yield* exchange(identity);
+            if (expectedPlayer !== undefined && expectedPlayer !== session.playerId)
+              return yield* identityChanged();
             forwarded = yield* forward(session.token);
             if (Either.isLeft(forwarded))
               return yield* retainIssuedSession(forwarded.left);
@@ -468,6 +515,7 @@ export const makeBlockStruggleBridge = (
             "Content-Type": "application/json",
             "X-Content-Type-Options": "nosniff",
           });
+          if (upstream.ok) headers.set("X-BlockStruggle-Player-Id", session.playerId);
           const retryAfter = upstream.headers.get("retry-after");
           if (retryAfter) headers.set("Retry-After", retryAfter);
           const response = new Response(upstream.body, {

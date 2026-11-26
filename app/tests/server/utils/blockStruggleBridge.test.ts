@@ -19,17 +19,213 @@ const identity = (sessionId = "rpg-session"): RpgIdentity => ({
 const request = (path: string, method = "GET", origin = "https://rpg.example") =>
   new Request(`https://rpg.example/api/minigames/blockstruggle/${path}`, {
     method,
-    headers: { Origin: origin, "Content-Type": "application/json" },
+    headers: {
+      Origin: origin,
+      "Content-Type": "application/json",
+      "X-BlockStruggle-Player-Id": "p_player",
+    },
     body: method === "POST" ? JSON.stringify({ opponent: "p_other" }) : undefined,
   });
-const issued = (token: string) =>
+const issued = (token: string, playerId = "p_player", expiresInMs = 60 * 60 * 1000) =>
   Response.json({
     token,
-    playerId: "p_player",
-    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    playerId,
+    expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
   });
 
 describe("TheNinjaRPG same-origin puzzle bridge", () => {
+  it("requires a valid bootstrapped identity before game mutations", async () => {
+    let calls = 0;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async () => {
+        calls++;
+        return issued("a".repeat(43));
+      }),
+    );
+    for (const expected of [undefined, "bad/id", "__proto__"]) {
+      const result = await Effect.runPromise(
+        Effect.either(
+          bridge.handle(
+            new Request("https://rpg.example/api/minigames/blockstruggle/matches", {
+              method: "POST",
+              headers: {
+                Origin: "https://rpg.example",
+                "Content-Type": "application/json",
+                ...(expected === undefined
+                  ? {}
+                  : { "X-BlockStruggle-Player-Id": expected }),
+              },
+              body: "{}",
+            }),
+            ["matches"],
+            identity(),
+          ),
+        ),
+      );
+      expect(Either.isLeft(result) && result.left.status).toBe(400);
+    }
+    expect(calls).toBe(0);
+  });
+
+  it.each([
+    "cleared",
+    "replaced",
+    "refresh-margin",
+    "revoked",
+    "read-refresh",
+  ] as const)(
+    "does not replay an old canonical identity after %s changes the session",
+    async (scenario) => {
+      const forwards: { playerId: string; method: string }[] = [];
+      let current = "p_old";
+      let exchanges = 0;
+      const result = await Effect.runPromise(
+        Effect.gen(function* () {
+          yield* TestClock.setTime(Date.now());
+          const bridge = yield* makeBlockStruggleBridge(config(), async (url, init) => {
+            if (new URL(String(url)).pathname.endsWith("/exchange")) {
+              exchanges++;
+              return issued(
+                current === "p_old" ? "a".repeat(43) : "b".repeat(43),
+                current,
+                exchanges === 1 ? 3_600_000 : 7_200_000,
+              );
+            }
+            const playerId =
+              new Headers(init?.headers).get("authorization") ===
+              `Bearer ${"a".repeat(43)}`
+                ? "p_old"
+                : "p_new";
+            forwards.push({ playerId, method: init?.method ?? "GET" });
+            return playerId !== current
+              ? Response.json({ error: "Unauthorized" }, { status: 401 })
+              : Response.json({ playerId });
+          });
+          const bootstrap = () =>
+            bridge.handle(
+              new Request("https://rpg.example/api/minigames/blockstruggle/session", {
+                headers: { Origin: "https://rpg.example" },
+              }),
+              ["session"],
+              identity(),
+            );
+          const first = yield* bootstrap();
+          expect(first.response.headers.get("X-BlockStruggle-Player-Id")).toBe("p_old");
+          current = "p_new";
+          let cookie = scenario === "cleared" ? undefined : first.cookie?.value;
+          if (scenario === "replaced") cookie = (yield* bootstrap()).cookie?.value;
+          if (scenario === "refresh-margin") yield* TestClock.adjust(3_580_000);
+          forwards.length = 0;
+          const read = scenario === "read-refresh";
+          return yield* bridge.handle(
+            new Request(
+              `https://rpg.example/api/minigames/blockstruggle/${read ? "profile" : "matches"}`,
+              {
+                method: read ? "GET" : "POST",
+                headers: {
+                  Origin: "https://rpg.example",
+                  "Content-Type": "application/json",
+                  "X-BlockStruggle-Player-Id": "p_old",
+                },
+                ...(read ? {} : { body: "{}" }),
+              },
+            ),
+            [read ? "profile" : "matches"],
+            identity(),
+            cookie,
+          );
+        }).pipe(Effect.provide(TestContext.TestContext)),
+      );
+      expect(result.response.status).toBe(412);
+      expect(result.response.headers.get("X-BlockStruggle-Identity-Changed")).toBe("1");
+      expect(result.response.headers.get("X-BlockStruggle-Player-Id")).toBe("p_new");
+      expect(forwards.every((call) => call.playerId === "p_old")).toBe(true);
+      expect(forwards.length).toBe(
+        scenario === "revoked" || scenario === "read-refresh" ? 1 : 0,
+      );
+      expect(exchanges).toBe(2);
+      expect(result.cookie !== undefined).toBe(scenario !== "replaced");
+    },
+  );
+
+  it("allows a refreshed bearer for the same canonical player", async () => {
+    let exchanges = 0;
+    const forwards: string[] = [];
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.now());
+        const bridge = yield* makeBlockStruggleBridge(config(), async (url, init) => {
+          if (new URL(String(url)).pathname.endsWith("/exchange"))
+            return issued(
+              String(++exchanges).repeat(43),
+              "p_player",
+              exchanges === 1 ? 3_600_000 : 7_200_000,
+            );
+          if (init?.method === "POST")
+            forwards.push(new Headers(init.headers).get("authorization") ?? "");
+          return Response.json({ playerId: "p_player" });
+        });
+        const first = yield* bridge.handle(request("session"), ["session"], identity());
+        yield* TestClock.adjust(3_580_000);
+        return yield* bridge.handle(
+          request("matches", "POST"),
+          ["matches"],
+          identity(),
+          first.cookie?.value,
+        );
+      }).pipe(Effect.provide(TestContext.TestContext)),
+    );
+    expect(result.response.status).toBe(200);
+    expect(result.response.headers.get("X-BlockStruggle-Player-Id")).toBe("p_player");
+    expect(forwards).toEqual([`Bearer ${"2".repeat(43)}`]);
+  });
+
+  it("allows cleanup logout without an expected identity or with a stale one", async () => {
+    for (const expected of [undefined, "p_stale"]) {
+      let exchanges = 0;
+      let revoked = 0;
+      const bridge = await Effect.runPromise(
+        makeBlockStruggleBridge(config(), async (url, init) => {
+          if (new URL(String(url)).pathname.endsWith("/exchange")) {
+            exchanges++;
+            return issued("a".repeat(43));
+          }
+          if (init?.method === "DELETE") {
+            revoked++;
+            expect(new Headers(init.headers).get("authorization")).toBe(
+              `Bearer ${"a".repeat(43)}`,
+            );
+            return new Response(null, { status: 204 });
+          }
+          return Response.json({ playerId: "p_player" });
+        }),
+      );
+      const first = await Effect.runPromise(
+        bridge.handle(request("session"), ["session"], identity()),
+      );
+      const logout = await Effect.runPromise(
+        bridge.handle(
+          new Request("https://rpg.example/api/minigames/blockstruggle/session", {
+            method: "DELETE",
+            headers: {
+              Origin: "https://rpg.example",
+              ...(expected === undefined
+                ? {}
+                : { "X-BlockStruggle-Player-Id": expected }),
+            },
+          }),
+          ["session"],
+          identity(),
+          first.cookie?.value,
+        ),
+      );
+      expect(logout.response.status).toBe(204);
+      expect(logout.clearCookie).toBe(true);
+      expect(exchanges).toBe(1);
+      expect(revoked).toBe(1);
+    }
+  });
+
   it("cancels a rejected exchange body while preserving its retry status", async () => {
     let cancelled = false;
     const bridge = await Effect.runPromise(
@@ -71,7 +267,13 @@ describe("TheNinjaRPG same-origin puzzle bridge", () => {
                   });
                 },
               }),
-              { status: 200, headers: { "Content-Type": "application/json" } },
+              {
+                status: 200,
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-BlockStruggle-Player-Id": "p_player",
+                },
+              },
             ),
         );
         const fiber = yield* Effect.fork(
@@ -164,6 +366,7 @@ describe("TheNinjaRPG same-origin puzzle bridge", () => {
             headers: {
               Origin: "https://rpg.example",
               "Content-Type": "application/json",
+              "X-BlockStruggle-Player-Id": "p_player",
             },
             body,
           }),
@@ -229,7 +432,11 @@ describe("TheNinjaRPG same-origin puzzle bridge", () => {
           bridge.handle(
             new Request(`https://rpg.example/api/minigames/blockstruggle/${path}`, {
               method,
-              headers: { Origin: origin, "Content-Type": "application/json" },
+              headers: {
+                Origin: origin,
+                "Content-Type": "application/json",
+                "X-BlockStruggle-Player-Id": "p_player",
+              },
               body,
             }),
             path.split("?")[0]!.split("/"),
@@ -296,6 +503,7 @@ describe("TheNinjaRPG same-origin puzzle bridge", () => {
             headers: {
               Origin: "https://rpg.example",
               "Content-Type": "application/json",
+              "X-BlockStruggle-Player-Id": "p_player",
             },
             body: JSON.stringify({ code: "c".repeat(43) }),
           },
