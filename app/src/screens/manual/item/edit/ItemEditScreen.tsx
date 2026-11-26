@@ -51,6 +51,7 @@ import {
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { LpcEquipmentFields } from "@/layout/LpcEquipmentFields";
+import { QueryError } from "@/layout/QueryError";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { isKessenPackId } from "@/libs/kessen/packs";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
@@ -372,7 +373,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
  * The card section: the stats editor and preview from `children`, given the live balance
  * summary for the preview column, then the full balance panel below them.
  */
-function CardSection({
+export function CardSection({
   saved,
   draft,
   children,
@@ -381,29 +382,41 @@ function CardSection({
   draft: CardBalanceInput;
   children: (summary: React.ReactNode) => React.ReactNode;
 }) {
-  const { data: catalog } = useKessenCatalog();
-  const balance = useCardBalanceDraft(saved, draft, catalog?.cards);
+  const catalog = useKessenCatalog();
+  const balance = useCardBalanceDraft(saved, draft, catalog.data?.cards);
   const { test, run } = useCardMatchTest();
   const { savedCatalog, savedCard, draftCard, savedFingerprint, analysis } = balance;
   return (
     <div className="@container col-span-full">
-      {children(<CardBalanceSummary draft={balance} />)}
-      <CardBalancePanel
-        draft={balance}
-        test={test}
-        canTest={!!savedCatalog && !!draftCard && !!analysis}
-        onTest={() => {
-          if (!savedCatalog || !draftCard || !savedFingerprint || !analysis) return;
-          void run({
-            savedCatalog,
-            draftCatalog: analysis.draftCatalog,
-            savedCard,
-            draftCard,
-            savedFingerprint,
-            draftFingerprint: analysis.draftFingerprint,
-          });
-        }}
-      />
+      {children(catalog.data ? <CardBalanceSummary draft={balance} /> : null)}
+      {catalog.isError ? (
+        <QueryError
+          layout="panel"
+          message={`The card catalog could not be loaded: ${catalog.error?.message ?? "unknown error"}`}
+          isRetrying={catalog.isFetching}
+          onRetry={() => void catalog.refetch()}
+        />
+      ) : !catalog.data ? (
+        <Loader explanation="Loading the card catalog" />
+      ) : null}
+      {catalog.data ? (
+        <CardBalancePanel
+          draft={balance}
+          test={test}
+          canTest={!!savedCatalog && !!draftCard && !!analysis}
+          onTest={() => {
+            if (!savedCatalog || !draftCard || !savedFingerprint || !analysis) return;
+            void run({
+              savedCatalog,
+              draftCatalog: analysis.draftCatalog,
+              savedCard,
+              draftCard,
+              savedFingerprint,
+              draftFingerprint: analysis.draftFingerprint,
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

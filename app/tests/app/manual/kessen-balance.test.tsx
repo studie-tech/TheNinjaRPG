@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import * as Balance from "@/hooks/kessen/useKessenBalance";
 import * as Hub from "@/hooks/kessen/useKessenHub";
 import * as ContentBox from "@/layout/ContentBox";
@@ -114,9 +121,10 @@ it("reveals and scrolls to a flagged card after filters hide it, including repea
   );
   const view = render(<ManualKessenBalanceScreen />);
   const targetId = `card-${card.id}`;
-  const issue = within(
-    view.getByRole("heading", { name: "Flagged" }).parentElement!,
-  ).getByRole("link", { name: card.name });
+  const disclosure = view.getByText(/Flagged ·/).parentElement!;
+  disclosure.setAttribute("open", "");
+  const issue = within(disclosure).getByRole("link", { name: card.name });
+  fireEvent.click(view.getByRole("button", { name: "Cards" }));
   const faction = view.getByRole("button", { name: "Shirohana" });
   const search = view.getByRole("searchbox", { name: "Search cards" });
   const sort = view.getByRole("combobox", { name: "Sort" });
@@ -147,7 +155,7 @@ it("reveals and scrolls to a flagged card after filters hide it, including repea
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
-it.each(["cards", "factions"])(
+it.each(["cards", "factions", "guidelines", "leaders", "sets", "health"])(
   "preserves the balance report's #%s destination",
   (section) => {
     mockReport(KESSEN_SEED_CATALOG);
@@ -161,12 +169,13 @@ it.each(["cards", "factions"])(
 
 it("labels Forbidden curve exclusions with their parity check", () => {
   mockReport(KESSEN_SEED_CATALOG);
-  render(<ManualKessenBalanceScreen />);
   const forbidden = KESSEN_SEED_CATALOG.find(
     (card) =>
       card.variant === "FORBIDDEN" &&
       !card.abilities.some((ability) => ability.k === "infiltrator"),
   )!;
+  window.history.replaceState({}, "", `/manual/kessen/balance#card-${forbidden.id}`);
+  render(<ManualKessenBalanceScreen />);
   const row = document.getElementById(`card-${forbidden.id}`)!;
   expect(row.textContent).toContain("Not priced (Forbidden parity)");
   expect(row.textContent).toContain("Parity check only");
@@ -183,6 +192,7 @@ it("reports zero-game factions as unavailable instead of in band", async () => {
   expect(summary.textContent).toContain("0/6 · 6 unavailable");
   expect(within(summary).queryByText("In guidelines")).toBeNull();
   expect(view.getAllByText("Gauntlet win rate unavailable")).toHaveLength(6);
+  fireEvent.click(view.getByRole("button", { name: "Match health" }));
   const health = within(document.getElementById("kessen-balance-health")!);
   expect(gauntlet.health).toMatchObject({ games: 0, skipped: 960, unfinished: 0 });
   expect(health.getAllByText("Unavailable")).toHaveLength(6);
@@ -208,7 +218,8 @@ it("keeps observed health metrics when all games are unfinished and leaves the o
   const gauntlet = summarizeGauntlet(decks, jobs, new Map([[job.id, outcome]]));
   expect(gauntlet.health).toMatchObject({ games: 1, unfinished: 1 });
   mockReport(KESSEN_SEED_CATALOG, { ...IDLE, status: "done", gauntlet, trials: {} });
-  render(<ManualKessenBalanceScreen />);
+  const view = render(<ManualKessenBalanceScreen />);
+  fireEvent.click(view.getByRole("button", { name: "Match health" }));
   const health = within(document.getElementById("kessen-balance-health")!);
   expect(health.getAllByText("Unavailable")).toHaveLength(1);
   const opener = within(health.getByText("Round 1 opener scores").parentElement!);
@@ -217,6 +228,116 @@ it("keeps observed health metrics when all games are unfinished and leaves the o
   expect(opener.queryByText("Breaks a guideline")).toBeNull();
   expect(health.getAllByText("In guidelines")).toHaveLength(4);
   expect(health.getAllByText("Breaks a guideline")).toHaveLength(1);
+});
+
+it("shows one section and follows browser history and issue hashes", async () => {
+  mockReport(KESSEN_SEED_CATALOG);
+  const view = render(<ManualKessenBalanceScreen />);
+  expect(view.getByText(/Flagged ·/).parentElement!.hasAttribute("open")).toBe(false);
+  expect(document.getElementById("kessen-balance-factions")).toBeTruthy();
+  expect(document.getElementById("kessen-balance-cards")).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "Leaders" }));
+  expect(document.getElementById("kessen-balance-leaders")).toBeTruthy();
+  expect(document.getElementById("kessen-balance-factions")).toBeNull();
+  fireEvent.click(view.getByRole("link", { name: "Read the guidelines" }));
+  expect(document.getElementById("kessen-balance-guidelines")).toBeTruthy();
+  await act(async () => {
+    window.history.back();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+  expect(window.location.hash).toBe("#kessen-balance-leaders");
+  expect(document.getElementById("kessen-balance-leaders")).toBeTruthy();
+  await act(async () => {
+    window.history.back();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+  expect(window.location.hash).toBe("");
+  expect(document.getElementById("kessen-balance-factions")).toBeTruthy();
+  await act(async () => {
+    window.history.forward();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+  expect(document.getElementById("kessen-balance-leaders")).toBeTruthy();
+  await act(async () => {
+    window.history.forward();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+  expect(document.getElementById("kessen-balance-guidelines")).toBeTruthy();
+  const leader = KESSEN_SEED_CATALOG.find((card) => card.kind === "LEADER")!;
+  for (const anchor of [`card-${leader.id}`, `faction-${leader.faction}`]) {
+    await act(async () => {
+      window.location.hash = anchor;
+    });
+    await waitFor(() => expect(document.getElementById(anchor)).toBeTruthy());
+    expect(scrollTargets.at(-1)).toBe(anchor);
+  }
+});
+
+it("bounds card rows, resets pages for filters/sort, and reveals a later-page issue", () => {
+  const card = seedCardByName("Yuki Onna");
+  mockReport(
+    KESSEN_SEED_CATALOG.map((entry) =>
+      entry.id === card.id ? { ...entry, power: 30 } : entry,
+    ),
+  );
+  const view = render(<ManualKessenBalanceScreen />);
+  fireEvent.click(view.getByRole("button", { name: "Cards" }));
+  expect(document.querySelectorAll("li[id^='card-']")).toHaveLength(10);
+  expect(view.getByText(/Showing 1–10 of/)).toBeTruthy();
+  for (const change of [
+    () => fireEvent.change(view.getByRole("searchbox"), { target: { value: "a" } }),
+    () => fireEvent.click(view.getByRole("button", { name: "Shirohana" })),
+    () =>
+      fireEvent.change(view.getByRole("combobox", { name: "Sort" }), {
+        target: { value: "name" },
+      }),
+  ]) {
+    fireEvent.click(view.getByRole("button", { name: "All" }));
+    fireEvent.change(view.getByRole("searchbox"), { target: { value: "" } });
+    fireEvent.click(view.getByRole("button", { name: "Next" }));
+    change();
+    expect(view.getByText(/Showing 1–/)).toBeTruthy();
+  }
+  fireEvent.click(view.getByRole("button", { name: "Next" }));
+  fireEvent.click(view.getByRole("switch", { name: "Flagged only" }));
+  expect(view.getByText(/Showing 1–/)).toBeTruthy();
+  const disclosure = view.getByText(/Flagged ·/).parentElement!;
+  disclosure.setAttribute("open", "");
+  const issue = within(disclosure).getByRole("link", { name: card.name });
+  fireEvent.click(issue);
+  expect(document.getElementById(`card-${card.id}`)).toBeTruthy();
+  expect(scrollTargets.at(-1)).toBe(`card-${card.id}`);
+  expect(view.queryByText(/Showing 1–10 of/)).toBeNull();
+  expect(document.querySelectorAll("li[id^='card-']").length).toBeLessThanOrEqual(10);
+  fireEvent.click(view.getByRole("button", { name: "Page 1" }));
+  expect(document.getElementById(`card-${card.id}`)).toBeNull();
+  const scrollCount = scrollTargets.length;
+  fireEvent.click(issue);
+  expect(document.getElementById(`card-${card.id}`)).toBeTruthy();
+  expect(scrollTargets.length).toBe(scrollCount + 1);
+});
+
+it("reveals an incoming later-page card hash after the catalog loads", () => {
+  const card = seedCardByName("Yuki Onna");
+  const catalog = vi
+    .spyOn(Hub, "useKessenCatalog")
+    .mockReturnValue({ isFetching: true } as never);
+  const balance = vi
+    .spyOn(Balance, "useKessenBalance")
+    .mockReturnValue({ engine: null, report: null, sims: IDLE });
+  window.history.replaceState({}, "", `/manual/kessen/balance#card-${card.id}`);
+  const view = render(<ManualKessenBalanceScreen />);
+  expect(document.getElementById(`card-${card.id}`)).toBeNull();
+  catalog.mockReturnValue({ data: { cards: KESSEN_SEED_CATALOG } } as never);
+  balance.mockReturnValue({
+    engine: KESSEN_SEED_CATALOG,
+    report: catalogBalance(KESSEN_SEED_CATALOG),
+    sims: IDLE,
+  });
+  view.rerender(<ManualKessenBalanceScreen />);
+  expect(document.getElementById(`card-${card.id}`)).toBeTruthy();
+  expect(scrollTargets.at(-1)).toBe(`card-${card.id}`);
+  expect(view.queryByText(/Showing 1–10 of/)).toBeNull();
 });
 
 /** Provide computed catalog data while leaving the report's filters and navigation active. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -22,6 +22,8 @@ import {
 import { FactionSigil } from "@/layout/kessen/FactionSigil";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import NavTabs from "@/layout/NavTabs";
+import Pagination from "@/layout/Pagination";
 import { QueryError } from "@/layout/QueryError";
 import { KESSEN_AI_VERSION } from "@/libs/kessen/ai";
 import {
@@ -41,7 +43,7 @@ import {
   percent,
   trialReference,
 } from "@/libs/kessen/balanceSim";
-import { KESSEN_DECK_RULES } from "@/libs/kessen/deck";
+import { KESSEN_DECK_FACTIONS, KESSEN_DECK_RULES } from "@/libs/kessen/deck";
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
 import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import { cn } from "@/libs/shadui";
@@ -60,22 +62,67 @@ export function ManualKessenBalanceScreen() {
   const catalog = useKessenCatalog();
   const { report, sims } = useKessenBalance(catalog.data?.cards);
   const issues = useMemo(() => (report ? issuesOf(report, sims) : []), [report, sims]);
+  const [section, setSection] = useState<BalanceSection>("Factions");
   const [filters, setFilters] = useState<CardFilters>(ALL_CARDS);
+  const [sort, setSort] = useState<CardSort>("flagged");
+  const [page, setPage] = useState(0);
+  const rows = useMemo(
+    () => cardRows(report?.cards ?? [], sims.trials, sort),
+    [report, sims.trials, sort],
+  );
   const [navigation, setNavigation] = useState<{ anchor: string } | null>(null);
+  const hasReadInitialHash = useRef(false);
+  const navigateToAnchor = useCallback(
+    (anchor: string) => {
+      const cardIndex = rows.findIndex(
+        ({ entry }) => anchor === `card-${entry.card.id}`,
+      );
+      const leader = report?.cards.some(
+        ({ card }) => card.kind === "LEADER" && anchor === `card-${card.id}`,
+      );
+      const destination =
+        BALANCE_SECTIONS.find((name) => SECTION_ANCHORS[name] === anchor) ??
+        (anchor === ""
+          ? "Factions"
+          : cardIndex >= 0
+            ? "Cards"
+            : leader
+              ? "Leaders"
+              : anchor.startsWith("faction-")
+                ? "Factions"
+                : undefined);
+      if (destination) setSection(destination);
+      if (cardIndex >= 0) {
+        setFilters(ALL_CARDS);
+        setPage(Math.floor(cardIndex / CARD_PAGE_SIZE));
+      }
+      // Every request is distinct so selecting an issue again also reveals and scrolls it.
+      setNavigation({ anchor: anchor || SECTION_ANCHORS.Factions });
+    },
+    [report, rows],
+  );
   useEffect(() => {
-    const anchor = navigation?.anchor ?? window.location.hash.slice(1);
-    document.getElementById(anchor)?.scrollIntoView({ block: "start" });
-  }, [navigation, report]);
-  const navigateToIssue = (anchor: string) => {
-    if (
-      report?.cards.some(
-        ({ card }) => card.kind !== "LEADER" && anchor === `card-${card.id}`,
-      )
-    ) {
-      setFilters(ALL_CARDS);
+    const followHash = () => navigateToAnchor(window.location.hash.slice(1));
+    if (!hasReadInitialHash.current) {
+      if (window.location.hash) followHash();
+      // Card destinations need the catalog before their page can be selected.
+      hasReadInitialHash.current = !!report;
     }
-    // A new request also scrolls when the same issue is selected again.
-    setNavigation({ anchor });
+    window.addEventListener("hashchange", followHash);
+    window.addEventListener("popstate", followHash);
+    return () => {
+      window.removeEventListener("hashchange", followHash);
+      window.removeEventListener("popstate", followHash);
+    };
+  }, [navigateToAnchor, report]);
+  useEffect(() => {
+    if (navigation)
+      document.getElementById(navigation.anchor)?.scrollIntoView({ block: "start" });
+  }, [navigation]);
+  const navigateToIssue = (anchor: string) => {
+    if (window.location.hash !== `#${anchor}`)
+      window.history.pushState(null, "", `#${anchor}`);
+    navigateToAnchor(anchor);
   };
 
   return (
@@ -85,12 +132,28 @@ export function ManualKessenBalanceScreen() {
         subtitle="Every card and faction against the balance guidelines"
         defaultBackHref="/manual/kessen"
       >
+        <NavTabs
+          current={section}
+          options={BALANCE_SECTIONS}
+          remember={false}
+          label="Balance sections"
+          onChange={(value) =>
+            navigateToIssue(SECTION_ANCHORS[value as BalanceSection])
+          }
+        />
         <p>
           Each card is priced by the value curve, and every faction is measured in
           matches between the AI on fixed seeds. The same catalog always yields the same
           numbers on every device, so any change that leaves the guidelines shows up
           here.{" "}
-          <a href="#kessen-balance-guidelines" className="font-semibold underline">
+          <a
+            href={`#${SECTION_ANCHORS.Guidelines}`}
+            className="font-semibold underline"
+            onClick={(event) => {
+              event.preventDefault();
+              navigateToIssue("kessen-balance-guidelines");
+            }}
+          >
             Read the guidelines
           </a>
           .
@@ -115,62 +178,83 @@ export function ManualKessenBalanceScreen() {
       </ContentBox>
       {report ? (
         <>
-          <ContentBox
-            id="kessen-balance-factions"
-            title="Factions"
-            subtitle="Gauntlet win rate, curve bias, pool and reference decks"
-            initialBreak
-          >
-            <FactionGrid report={report} gauntlet={sims.gauntlet} />
-          </ContentBox>
-          <ContentBox
-            id="kessen-balance-health"
-            title="Match health"
-            subtitle={`Across ${sims.gauntlet?.health.games ?? "the"} gauntlet games`}
-            initialBreak
-          >
-            <HealthGrid gauntlet={sims.gauntlet} />
-          </ContentBox>
-          <ContentBox
-            id="kessen-balance-cards"
-            title="Cards"
-            subtitle="Value curve, variant parity and match trials of collectible deck cards"
-            initialBreak
-          >
-            <CardList
-              report={report}
-              trials={sims.trials}
-              canEdit={canEdit}
-              filters={filters}
-              onFiltersChange={setFilters}
-            />
-          </ContentBox>
-          <ContentBox
-            id="kessen-balance-leaders"
-            title="Leaders"
-            subtitle="Leader bonus and what the ability adds with the same faction passive"
-            initialBreak
-          >
-            <LeaderList report={report} trials={sims.trials} canEdit={canEdit} />
-          </ContentBox>
-          <ContentBox
-            id="kessen-balance-sets"
-            title="Sets"
-            subtitle="What Bonds count and Summons pull"
-            initialBreak
-          >
-            <SetList report={report} />
-          </ContentBox>
+          {section === "Factions" ? (
+            <ContentBox
+              id="kessen-balance-factions"
+              title="Factions"
+              subtitle="Gauntlet win rate, curve bias, pool and reference decks"
+              initialBreak
+            >
+              <FactionGrid report={report} gauntlet={sims.gauntlet} />
+            </ContentBox>
+          ) : null}
+          {section === "Match health" ? (
+            <ContentBox
+              id="kessen-balance-health"
+              title="Match health"
+              subtitle={`Across ${sims.gauntlet?.health.games ?? "the"} gauntlet games`}
+              initialBreak
+            >
+              <HealthGrid gauntlet={sims.gauntlet} />
+            </ContentBox>
+          ) : null}
+          {section === "Cards" ? (
+            <ContentBox
+              id="kessen-balance-cards"
+              title="Cards"
+              subtitle="Value curve, variant parity and match trials of collectible deck cards"
+              initialBreak
+            >
+              <CardList
+                rows={rows}
+                canEdit={canEdit}
+                filters={filters}
+                onFiltersChange={(value) => {
+                  setFilters(value);
+                  setPage(0);
+                }}
+                sort={sort}
+                onSortChange={(value) => {
+                  setSort(value);
+                  setPage(0);
+                }}
+                page={page}
+                onPageChange={setPage}
+              />
+            </ContentBox>
+          ) : null}
+          {section === "Leaders" ? (
+            <ContentBox
+              id="kessen-balance-leaders"
+              title="Leaders"
+              subtitle="Leader bonus and what the ability adds with the same faction passive"
+              initialBreak
+            >
+              <LeaderList report={report} trials={sims.trials} canEdit={canEdit} />
+            </ContentBox>
+          ) : null}
+          {section === "Sets" ? (
+            <ContentBox
+              id="kessen-balance-sets"
+              title="Sets"
+              subtitle="What Bonds count and Summons pull"
+              initialBreak
+            >
+              <SetList report={report} />
+            </ContentBox>
+          ) : null}
         </>
       ) : null}
-      <ContentBox
-        id="kessen-balance-guidelines"
-        title="Guidelines"
-        subtitle="What each check measures and where its limit sits"
-        initialBreak
-      >
-        <Guidelines />
-      </ContentBox>
+      {section === "Guidelines" ? (
+        <ContentBox
+          id="kessen-balance-guidelines"
+          title="Guidelines"
+          subtitle="What each check measures and where its limit sits"
+          initialBreak
+        >
+          <Guidelines />
+        </ContentBox>
+      ) : null}
     </div>
   );
 }
@@ -220,12 +304,12 @@ function Summary({
           value={
             factionsInBand === null
               ? "…"
-              : `${factionsInBand}/6${unavailableFactions > 0 ? ` · ${unavailableFactions} unavailable` : ""}`
+              : `${factionsInBand}/${KESSEN_DECK_FACTIONS.length}${unavailableFactions > 0 ? ` · ${unavailableFactions} unavailable` : ""}`
           }
           status={
             factionsInBand === null
               ? undefined
-              : factionsInBand + unavailableFactions < 6
+              : factionsInBand + unavailableFactions < KESSEN_DECK_FACTIONS.length
                 ? "break"
                 : unavailableFactions > 0
                   ? undefined
@@ -235,10 +319,10 @@ function Summary({
       </dl>
       <SimProgress sims={sims} />
       {issues.length > 0 ? (
-        <section aria-labelledby="kessen-balance-issues">
-          <h3 id="kessen-balance-issues" className="font-bold">
-            Flagged
-          </h3>
+        <details>
+          <summary className="min-h-11 cursor-pointer content-center font-bold">
+            Flagged · {groupIssues(issues).length} subjects
+          </summary>
           <ul className="mt-1 grid gap-1">
             {groupIssues(issues).map((group) => (
               <li
@@ -250,7 +334,10 @@ function Summary({
                   <a
                     href={`#${group.anchor}`}
                     className="font-semibold underline"
-                    onClick={() => onNavigate(group.anchor)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onNavigate(group.anchor);
+                    }}
                   >
                     {group.subject}
                   </a>
@@ -259,7 +346,7 @@ function Summary({
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       ) : (
         <p>
           <StatusMark status="ok" label="Nothing is flagged." />
@@ -521,6 +608,25 @@ type CardFilters = {
   query: string;
 };
 
+const BALANCE_SECTIONS = [
+  "Factions",
+  "Match health",
+  "Cards",
+  "Leaders",
+  "Sets",
+  "Guidelines",
+] as const;
+type BalanceSection = (typeof BALANCE_SECTIONS)[number];
+const SECTION_ANCHORS: Record<BalanceSection, string> = {
+  Factions: "kessen-balance-factions",
+  "Match health": "kessen-balance-health",
+  Cards: "kessen-balance-cards",
+  Leaders: "kessen-balance-leaders",
+  Sets: "kessen-balance-sets",
+  Guidelines: "kessen-balance-guidelines",
+};
+const CARD_PAGE_SIZE = 10;
+
 const ALL_CARDS: CardFilters = { faction: "ALL", flaggedOnly: false, query: "" };
 
 const SORTS: { value: CardSort; label: string }[] = [
@@ -532,48 +638,33 @@ const SORTS: { value: CardSort; label: string }[] = [
 
 /** Deck cards with filters: faction, flagged only, search and sort. */
 function CardList({
-  report,
-  trials,
+  rows: allRows,
   canEdit,
   filters,
   onFiltersChange,
+  sort,
+  onSortChange,
+  page,
+  onPageChange,
 }: {
-  report: KessenCatalogBalance;
-  trials: Record<string, KessenTrialSummary> | null;
+  rows: ReturnType<typeof cardRows>;
   canEdit: boolean;
   filters: CardFilters;
   onFiltersChange: (filters: CardFilters) => void;
+  sort: CardSort;
+  onSortChange: (sort: CardSort) => void;
+  page: number;
+  onPageChange: (page: number) => void;
 }) {
   const { faction, flaggedOnly, query } = filters;
-  const [sort, setSort] = useState<CardSort>("flagged");
-  const rows = report.cards
-    .filter((entry) => entry.card.kind !== "LEADER")
-    .map((entry) => {
-      const trial = trials?.[entry.card.id] ?? null;
-      const flags = [...entry.flags, ...(trial?.flags ?? [])];
-      return { entry, trial, flags, status: statusOf(flags) };
-    })
-    .filter(
-      (row) =>
-        (faction === "ALL" || row.entry.card.faction === faction) &&
-        (!flaggedOnly || row.flags.length > 0) &&
-        row.entry.card.name.toLowerCase().includes(query.trim().toLowerCase()),
-    )
-    .sort((a, b) => {
-      const byName = a.entry.card.name.localeCompare(b.entry.card.name);
-      if (sort === "name") return byName;
-      if (sort === "gap") {
-        const aGap = a.entry.gap ?? -1e9;
-        const bGap = b.entry.gap ?? -1e9;
-        return bGap - aGap || byName;
-      }
-      if (sort === "trial") {
-        const aEdge = a.trial?.edge ?? -1e9;
-        const bEdge = b.trial?.edge ?? -1e9;
-        return bEdge - aEdge || byName;
-      }
-      return RANK[a.status] - RANK[b.status] || byName;
-    });
+  const rows = allRows.filter(
+    (row) =>
+      (faction === "ALL" || row.entry.card.faction === faction) &&
+      (!flaggedOnly || row.flags.length > 0) &&
+      row.entry.card.name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+  const pages = Math.max(1, Math.ceil(rows.length / CARD_PAGE_SIZE));
+  const currentPage = Math.min(page, pages - 1);
   return (
     <div className="@container grid gap-2">
       <div className="grid gap-2 @3xl:grid-cols-[1fr_auto] @3xl:items-end">
@@ -608,7 +699,7 @@ function CardList({
             <span className="text-muted-foreground">Sort</span>
             <select
               value={sort}
-              onChange={(event) => setSort(event.target.value as CardSort)}
+              onChange={(event) => onSortChange(event.target.value as CardSort)}
               className="bg-background h-9 rounded-md border px-2 pointer-coarse:h-[44px]"
             >
               {SORTS.map((option) => (
@@ -628,6 +719,16 @@ function CardList({
         onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })}
         className="h-9 pointer-coarse:h-[44px]"
       />
+      {rows.length > 0 ? (
+        <p className="text-muted-foreground text-sm" aria-live="polite">
+          Showing {currentPage * CARD_PAGE_SIZE + 1}–
+          {Math.min((currentPage + 1) * CARD_PAGE_SIZE, rows.length)} of {rows.length}{" "}
+          cards
+        </p>
+      ) : null}
+      {pages > 1 ? (
+        <Pagination current={currentPage} total={pages} setPage={onPageChange} />
+      ) : null}
       <div
         aria-hidden
         className="text-muted-foreground hidden gap-3 border-b pb-1 text-sm @3xl:grid @3xl:grid-cols-[minmax(0,1fr)_9rem_9rem]"
@@ -640,13 +741,45 @@ function CardList({
         <p className="text-muted-foreground">No cards match.</p>
       ) : (
         <ul className="grid">
-          {rows.map((row) => (
-            <CardRow key={row.entry.card.id} {...row} canEdit={canEdit} />
-          ))}
+          {rows
+            .slice(currentPage * CARD_PAGE_SIZE, (currentPage + 1) * CARD_PAGE_SIZE)
+            .map((row) => (
+              <CardRow key={row.entry.card.id} {...row} canEdit={canEdit} />
+            ))}
         </ul>
       )}
     </div>
   );
+}
+
+/** Shared sorted rows keep card issue destinations aligned with the paginated list. */
+function cardRows(
+  entries: readonly KessenCardBalance[],
+  trials: Record<string, KessenTrialSummary> | null,
+  sort: CardSort,
+) {
+  return entries
+    .filter((entry) => entry.card.kind !== "LEADER")
+    .map((entry) => {
+      const trial = trials?.[entry.card.id] ?? null;
+      const flags = [...entry.flags, ...(trial?.flags ?? [])];
+      return { entry, trial, flags, status: statusOf(flags) };
+    })
+    .sort((a, b) => {
+      const byName = a.entry.card.name.localeCompare(b.entry.card.name);
+      if (sort === "name") return byName;
+      if (sort === "gap") {
+        const aGap = a.entry.gap ?? -1e9;
+        const bGap = b.entry.gap ?? -1e9;
+        return bGap - aGap || byName;
+      }
+      if (sort === "trial") {
+        const aEdge = a.trial?.edge ?? -1e9;
+        const bEdge = b.trial?.edge ?? -1e9;
+        return bEdge - aEdge || byName;
+      }
+      return RANK[a.status] - RANK[b.status] || byName;
+    });
 }
 
 const RANK: Record<KessenBalanceStatus, number> = { break: 0, warn: 1, ok: 2 };
