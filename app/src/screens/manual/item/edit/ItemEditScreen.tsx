@@ -384,7 +384,7 @@ function CardSection({
   const { data: catalog } = useKessenCatalog();
   const balance = useCardBalanceDraft(saved, draft, catalog?.cards);
   const { test, run } = useCardMatchTest();
-  const { savedCatalog, savedCard, draftCard, analysis } = balance;
+  const { savedCatalog, savedCard, draftCard, savedFingerprint, analysis } = balance;
   return (
     <div className="@container col-span-full">
       {children(<CardBalanceSummary draft={balance} />)}
@@ -393,12 +393,14 @@ function CardSection({
         test={test}
         canTest={!!savedCatalog && !!draftCard && !!analysis}
         onTest={() => {
-          if (!savedCatalog || !draftCard || !analysis) return;
+          if (!savedCatalog || !draftCard || !savedFingerprint || !analysis) return;
           void run({
             savedCatalog,
             draftCatalog: analysis.draftCatalog,
             savedCard,
             draftCard,
+            savedFingerprint,
+            draftFingerprint: analysis.draftFingerprint,
           });
         }}
       />

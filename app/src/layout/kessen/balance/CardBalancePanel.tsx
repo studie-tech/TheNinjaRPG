@@ -111,8 +111,10 @@ export function CardBalancePanel({
   canTest: boolean;
 }) {
   const analysis = draft.analysis;
-  const draftKey = draft.draftCard ? JSON.stringify(draft.draftCard) : null;
-  const isStale = test.status === "done" && test.draftKey !== draftKey;
+  const isStale =
+    test.status === "done" &&
+    (test.savedFingerprint !== draft.savedFingerprint ||
+      test.draftFingerprint !== analysis?.draftFingerprint);
   return (
     <section
       id={CARD_BALANCE_PANEL_ID}
@@ -305,7 +307,7 @@ function MatchTest({
         <div className="grid gap-2">
           {isStale ? (
             <p className="text-amber-600 dark:text-amber-400">
-              The card changed since this test; test again for the current numbers.
+              The catalog changed since this test; test again for the current numbers.
             </p>
           ) : null}
           {test.trial ? <TrialResult trial={test.trial} /> : null}

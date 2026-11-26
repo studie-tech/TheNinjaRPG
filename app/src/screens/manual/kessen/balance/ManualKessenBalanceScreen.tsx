@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -22,6 +22,7 @@ import {
 import { FactionSigil } from "@/layout/kessen/FactionSigil";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { QueryError } from "@/layout/QueryError";
 import { KESSEN_AI_VERSION } from "@/libs/kessen/ai";
 import {
   KESSEN_BALANCE,
@@ -59,6 +60,23 @@ export function ManualKessenBalanceScreen() {
   const catalog = useKessenCatalog();
   const { report, sims } = useKessenBalance(catalog.data?.cards);
   const issues = useMemo(() => (report ? issuesOf(report, sims) : []), [report, sims]);
+  const [filters, setFilters] = useState<CardFilters>(ALL_CARDS);
+  const [navigation, setNavigation] = useState<{ anchor: string } | null>(null);
+  useEffect(() => {
+    const anchor = navigation?.anchor ?? window.location.hash.slice(1);
+    document.getElementById(anchor)?.scrollIntoView({ block: "start" });
+  }, [navigation, report]);
+  const navigateToIssue = (anchor: string) => {
+    if (
+      report?.cards.some(
+        ({ card }) => card.kind !== "LEADER" && anchor === `card-${card.id}`,
+      )
+    ) {
+      setFilters(ALL_CARDS);
+    }
+    // A new request also scrolls when the same issue is selected again.
+    setNavigation({ anchor });
+  };
 
   return (
     <div className="text-base">
@@ -78,10 +96,22 @@ export function ManualKessenBalanceScreen() {
           .
         </p>
         {report ? (
-          <Summary report={report} sims={sims} issues={issues} />
-        ) : (
+          <Summary
+            report={report}
+            sims={sims}
+            issues={issues}
+            onNavigate={navigateToIssue}
+          />
+        ) : catalog.isError ? (
+          <QueryError
+            layout="panel"
+            message={`The card catalog could not be loaded: ${catalog.error?.message ?? "unknown error"}`}
+            isRetrying={catalog.isFetching}
+            onRetry={() => void catalog.refetch()}
+          />
+        ) : catalog.isFetching ? (
           <Loader explanation="Loading the card catalog" />
-        )}
+        ) : null}
       </ContentBox>
       {report ? (
         <>
@@ -107,7 +137,13 @@ export function ManualKessenBalanceScreen() {
             subtitle="Value curve, variant parity and match trials of collectible deck cards"
             initialBreak
           >
-            <CardList report={report} trials={sims.trials} canEdit={canEdit} />
+            <CardList
+              report={report}
+              trials={sims.trials}
+              canEdit={canEdit}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
           </ContentBox>
           <ContentBox
             id="kessen-balance-leaders"
@@ -144,10 +180,12 @@ function Summary({
   report,
   sims,
   issues,
+  onNavigate,
 }: {
   report: KessenCatalogBalance;
   sims: KessenSimState;
   issues: Issue[];
+  onNavigate: (anchor: string) => void;
 }) {
   const breaks = issues.filter((issue) => issue.flag.severity === "break").length;
   const warnings = issues.length - breaks;
@@ -157,8 +195,12 @@ function Summary({
       (sims.trials?.[entry.card.id]?.flags.length ?? 0) === 0,
   ).length;
   const factionsInBand = sims.gauntlet
-    ? sims.gauntlet.factions.filter((faction) => faction.flags.length === 0).length
+    ? sims.gauntlet.factions.filter(
+        (faction) => faction.rate.games > 0 && faction.flags.length === 0,
+      ).length
     : null;
+  const unavailableFactions =
+    sims.gauntlet?.factions.filter((faction) => faction.rate.games === 0).length ?? 0;
   return (
     <div className="@container mt-3 grid gap-3">
       <dl className="grid grid-cols-2 gap-2 @xl:grid-cols-4">
@@ -175,9 +217,19 @@ function Summary({
         />
         <Tile
           label="Factions in band"
-          value={factionsInBand === null ? "…" : `${factionsInBand}/6`}
+          value={
+            factionsInBand === null
+              ? "…"
+              : `${factionsInBand}/6${unavailableFactions > 0 ? ` · ${unavailableFactions} unavailable` : ""}`
+          }
           status={
-            factionsInBand === null ? undefined : factionsInBand === 6 ? "ok" : "break"
+            factionsInBand === null
+              ? undefined
+              : factionsInBand + unavailableFactions < 6
+                ? "break"
+                : unavailableFactions > 0
+                  ? undefined
+                  : "ok"
           }
         />
       </dl>
@@ -195,7 +247,11 @@ function Summary({
               >
                 <StatusMark status={statusOf(group.flags)} className="mt-0.5" />
                 <span>
-                  <a href={`#${group.anchor}`} className="font-semibold underline">
+                  <a
+                    href={`#${group.anchor}`}
+                    className="font-semibold underline"
+                    onClick={() => onNavigate(group.anchor)}
+                  >
                     {group.subject}
                   </a>
                   : {group.flags.map((flag) => flag.message).join("; ")}
@@ -303,7 +359,11 @@ function FactionGrid({
               <header className="flex items-center gap-2">
                 <FactionSigil faction={faction} className="h-7 w-7" decorative />
                 <h3 className="text-lg font-bold">{KESSEN_FACTION_NAMES[faction]}</h3>
-                <StatusMark status={status} className="ml-auto" />
+                {flags.length > 0 ||
+                faction === "NEUTRAL" ||
+                (rate?.rate.games ?? 0) > 0 ? (
+                  <StatusMark status={status} className="ml-auto" />
+                ) : null}
               </header>
               {faction === "NEUTRAL" ? (
                 <p className="text-muted-foreground text-sm">
@@ -449,6 +509,13 @@ function HealthGrid({ gauntlet }: { gauntlet: KessenGauntletSummary | null }) {
 }
 
 type CardSort = "flagged" | "gap" | "trial" | "name";
+type CardFilters = {
+  faction: KessenFaction | "ALL";
+  flaggedOnly: boolean;
+  query: string;
+};
+
+const ALL_CARDS: CardFilters = { faction: "ALL", flaggedOnly: false, query: "" };
 
 const SORTS: { value: CardSort; label: string }[] = [
   { value: "flagged", label: "Flagged first" },
@@ -462,14 +529,16 @@ function CardList({
   report,
   trials,
   canEdit,
+  filters,
+  onFiltersChange,
 }: {
   report: KessenCatalogBalance;
   trials: Record<string, KessenTrialSummary> | null;
   canEdit: boolean;
+  filters: CardFilters;
+  onFiltersChange: (filters: CardFilters) => void;
 }) {
-  const [faction, setFaction] = useState<KessenFaction | "ALL">("ALL");
-  const [flaggedOnly, setFlaggedOnly] = useState(false);
-  const [query, setQuery] = useState("");
+  const { faction, flaggedOnly, query } = filters;
   const [sort, setSort] = useState<CardSort>("flagged");
   const rows = report.cards
     .filter((entry) => entry.card.kind !== "LEADER")
@@ -512,7 +581,7 @@ function CardList({
               variant={faction === option ? "default" : "outline"}
               aria-pressed={faction === option}
               className="min-h-[36px] pointer-coarse:min-h-[44px]"
-              onClick={() => setFaction(option)}
+              onClick={() => onFiltersChange({ ...filters, faction: option })}
             >
               {option === "ALL" ? "All" : KESSEN_FACTION_NAMES[option]}
             </Button>
@@ -523,7 +592,9 @@ function CardList({
             <Switch
               id="kessen-balance-flagged"
               checked={flaggedOnly}
-              onCheckedChange={setFlaggedOnly}
+              onCheckedChange={(flaggedOnly) =>
+                onFiltersChange({ ...filters, flaggedOnly })
+              }
             />
             <label htmlFor="kessen-balance-flagged">Flagged only</label>
           </div>
@@ -548,7 +619,7 @@ function CardList({
         placeholder="Search cards"
         aria-label="Search cards"
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })}
         className="h-9 pointer-coarse:h-[44px]"
       />
       <div
@@ -631,7 +702,9 @@ function GapCell({ entry }: { entry: KessenCardBalance }) {
     return (
       <div className="text-sm">
         <span className="text-muted-foreground @3xl:sr-only">Value curve: </span>
-        Not priced (Infiltrator)
+        {entry.card.variant === "FORBIDDEN"
+          ? "Not priced (Forbidden parity)"
+          : "Not priced (Infiltrator)"}
       </div>
     );
   }

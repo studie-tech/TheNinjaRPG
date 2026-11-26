@@ -74,12 +74,19 @@ export const useCardBalanceDraft = (
     const draftReport = catalogBalance(draftCatalog);
     return {
       draftCatalog,
+      draftFingerprint: draftReport.fingerprint,
       entry: cardBalance(draftCard, draftCatalog),
       changes: cardBalanceChanges(savedCard, draftCard),
       elsewhere: catalogBalanceDiff(savedReport, draftReport, draft.id),
     };
   }, [draftCard, savedCard, savedCatalog, savedReport, draft.id]);
-  return { savedCard, draftCard, savedCatalog, analysis };
+  return {
+    savedCard,
+    draftCard,
+    savedCatalog,
+    savedFingerprint: savedReport?.fingerprint ?? null,
+    analysis,
+  };
 };
 
 /** Saved and draft numbers of one "Test in matches" run. */
@@ -87,8 +94,9 @@ export interface CardMatchTest {
   status: "idle" | "running" | "done" | "error";
   done: number;
   total: number;
-  /** The draft it ran for; a later edit makes the result stale. */
-  draftKey: string | null;
+  /** Both simulated catalogs; a change on either side makes the result stale. */
+  savedFingerprint: string | null;
+  draftFingerprint: string | null;
   trial: { saved: KessenTrialSummary | null; draft: KessenTrialSummary | null } | null;
   gauntlet: { saved: KessenGauntletSummary; draft: KessenGauntletSummary } | null;
   error: string | null;
@@ -101,7 +109,8 @@ const IDLE_TEST: CardMatchTest = {
   status: "idle",
   done: 0,
   total: 0,
-  draftKey: null,
+  savedFingerprint: null,
+  draftFingerprint: null,
   trial: null,
   gauntlet: null,
   error: null,
@@ -120,6 +129,8 @@ export const useCardMatchTest = () => {
     draftCatalog: KessenCard[];
     savedCard: KessenCard | null;
     draftCard: KessenCard;
+    savedFingerprint: string;
+    draftFingerprint: string;
   }) => {
     controller.current?.abort();
     const current = new AbortController();
@@ -152,7 +163,8 @@ export const useCardMatchTest = () => {
       ...IDLE_TEST,
       status: "running",
       total: totalPhases * 1000,
-      draftKey: JSON.stringify(draftCard),
+      savedFingerprint: input.savedFingerprint,
+      draftFingerprint: input.draftFingerprint,
     });
     try {
       let draftTrial: KessenTrialSummary | null = null;
