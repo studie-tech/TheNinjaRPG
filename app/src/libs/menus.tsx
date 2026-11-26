@@ -58,7 +58,7 @@ export const getMainNavbarLinks = (notifications?: NavBarDropdownLink[]) => {
     {
       id: "tutorial-minigames",
       href: "/minigames",
-      name: "Minigames",
+      name: "Arcade",
       icon: <Gamepad2 className="h-6 w-6" />,
     },
   ];
