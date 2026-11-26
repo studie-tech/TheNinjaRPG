@@ -6,6 +6,7 @@ import {
   boardTotals,
   createMatch,
   legalActionsForView,
+  matchInputProblem,
   previewAction,
   previewPartial,
   redactEvents,
@@ -16,7 +17,12 @@ import {
   viewToState,
 } from "@/libs/kessen/engine";
 import { DEFAULT_KNOBS, TOKEN_CARD_ID } from "@/libs/kessen/rules";
-import type { KessenCard, MatchState, Seat } from "@/libs/kessen/types";
+import type {
+  CreateMatchInput,
+  KessenCard,
+  MatchState,
+  Seat,
+} from "@/libs/kessen/types";
 import {
   act,
   CATALOG,
@@ -93,6 +99,41 @@ const passBoth = (s: MatchState) => {
 const power = (s: MatchState, id: string) => unitPower(s, id);
 
 describe("match setup", () => {
+  it("preserves setup rejection messages with a shared catalog lookup", () => {
+    const leader = leaderId(LEADER.hisame);
+    const unit = cid(MUSASHI);
+    const cards = [
+      ...KESSEN_RULES_CATALOG,
+      { ...KESSEN_RULES_CATALOG[0]!, id: "__proto__", kind: "UNIT" as const },
+    ];
+    const library = new Map(cards.map((card) => [card.id, card]));
+    for (const [leaderId, deck, expected] of [
+      [leader, FILLER, null],
+      [null, ["__proto__"], null],
+      ["missing", ["missing"], "Unknown leader missing"],
+      [unit, FILLER, `Unknown leader ${unit}`],
+      [null, ["missing"], "Unknown deck card missing"],
+      [null, [leader], `Unknown deck card ${leader}`],
+      [null, [TOKEN_CARD_ID], `Unknown deck card ${TOKEN_CARD_ID}`],
+      [null, ["constructor"], "Unknown deck card constructor"],
+      [null, ["toString"], "Unknown deck card toString"],
+    ] as const) {
+      for (const seat of [0, 1] as const) {
+        const input: CreateMatchInput = {
+          seed: "shared-lookup",
+          cards,
+          seats: [
+            { leaderId: leader, deck: FILLER },
+            { leaderId: leader, deck: FILLER },
+          ],
+        };
+        input.seats[seat] = { leaderId, deck: [...deck] };
+        expect(matchInputProblem(input)).toBe(expected);
+        expect(matchInputProblem(input, library)).toBe(expected);
+      }
+    }
+  });
+
   it("shuffles, tosses the coin and deals ten cards into the Round 1 mulligan", () => {
     const s = newMatch();
     expect(s.phase).toBe("mulligan");

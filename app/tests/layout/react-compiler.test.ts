@@ -76,6 +76,7 @@ const targets = [
     ["KessenGuestHall", "GuestAcademy", "GuestPractice"],
   ],
   ["hooks/kessen/useGuestKessenMatch.ts", ["useGuestKessenMatch"]],
+  ["hooks/kessen/useCardBalanceDraft.ts", ["useCardBalanceDraft", "useCardMatchTest"]],
   ["components/layout/shared/GameLayoutController.tsx", ["GameLayoutController"]],
   [
     "components/layout/shared/LayoutSidebars.tsx",

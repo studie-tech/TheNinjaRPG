@@ -136,11 +136,13 @@ export const useCardMatchTest = () => {
     const current = new AbortController();
     controller.current = current;
     const { savedCatalog, draftCatalog, savedCard, draftCard } = input;
+    // Equal full catalogs also have the same eligible leader cohort and AI estimates.
+    const sameCatalog = input.savedFingerprint === input.draftFingerprint;
     const phases = [
       isTrialSubject(draftCard),
-      !!savedCard && isTrialSubject(savedCard),
+      !sameCatalog && !!savedCard && isTrialSubject(savedCard),
       true,
-      true,
+      !sameCatalog,
     ];
     const totalPhases = phases.filter(Boolean).length;
     let finishedPhases = 0;
@@ -177,12 +179,15 @@ export const useCardMatchTest = () => {
           editorTrialSubjects(draftCatalog, draftCard),
           TRIAL_GAMES,
         );
+        if (current.signal.aborted) return;
         const trial = trials[draftCard.id];
         if (trial) draftTrial = trial;
         next(null);
       }
       let savedTrial: KessenTrialSummary | null = null;
-      if (savedCard) {
+      if (sameCatalog) {
+        savedTrial = draftTrial;
+      } else if (savedCard) {
         if (isTrialSubject(savedCard)) {
           const trials = await runTrials(
             savedCatalog,
@@ -190,22 +195,25 @@ export const useCardMatchTest = () => {
             editorTrialSubjects(savedCatalog, savedCard),
             TRIAL_GAMES,
           );
+          if (current.signal.aborted) return;
           const trial = trials[savedCard.id];
           if (trial) savedTrial = trial;
           next(null);
         }
       }
-      const gauntlet = {
-        saved: next(await runGauntlet(savedCatalog, options)),
-        draft: next(await runGauntlet(draftCatalog, options)),
-      };
+      const savedGauntlet = next(await runGauntlet(savedCatalog, options));
+      if (current.signal.aborted) return;
+      let draftGauntlet = savedGauntlet;
+      if (!sameCatalog) {
+        draftGauntlet = next(await runGauntlet(draftCatalog, options));
+      }
       if (current.signal.aborted) return;
       setTest((previous) => ({
         ...previous,
         status: "done",
         done: previous.total,
         trial: { saved: savedTrial, draft: draftTrial },
-        gauntlet,
+        gauntlet: { saved: savedGauntlet, draft: draftGauntlet },
       }));
     } catch (error) {
       if (current.signal.aborted) return;

@@ -172,10 +172,11 @@ export const runGauntlet = async (
   const decks = kessenReferenceDecks();
   const jobs = gauntletJobs(decks);
   const cards = [...catalog];
+  const library = new Map(cards.map((card) => [card.id, card]));
   const outcomes = await runKessenSims(
     {
       cards,
-      jobs: jobs.filter((job) => !matchInputProblem({ ...job, cards })),
+      jobs: jobs.filter((job) => !matchInputProblem({ ...job, cards }, library)),
       onProgress: options.onProgress,
       signal: options.signal,
     },
@@ -198,6 +199,7 @@ export const runTrials = async (
 ): Promise<Record<string, KessenTrialSummary>> => {
   const pairs = subjects.map((card) => ({ card, pairs: trialPairs(card, games) }));
   const cards = trialCatalog(catalog);
+  const library = new Map(cards.map((card) => [card.id, card]));
   const outcomes = await runKessenSims(
     {
       cards,
@@ -206,8 +208,8 @@ export const runTrials = async (
         entry.pairs
           .filter(
             (pair) =>
-              !matchInputProblem({ ...pair.subject, cards }) &&
-              !matchInputProblem({ ...pair.reference, cards }),
+              !matchInputProblem({ ...pair.subject, cards }, library) &&
+              !matchInputProblem({ ...pair.reference, cards }, library),
           )
           .flatMap((pair) => [pair.subject, pair.reference]),
       ),

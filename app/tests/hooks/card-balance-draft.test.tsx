@@ -24,6 +24,107 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it.each(["Cryverin", "Colossus", "Ravena Bloodsilk", "Divine Shishi"])(
+  "shares identical catalog simulations for %s",
+  async (name) => {
+    const card = seedCardByName(name);
+    const catalog = KESSEN_SEED_CATALOG.map((entry) => ({ ...entry }));
+    const trial: KessenTrialSummary = Object.freeze({
+      cardId: card.id,
+      edge: 0,
+      se: 0,
+      games: KESSEN_BALANCE_SIM.editorTrialGames,
+      discarded: 0,
+      flags: [],
+    });
+    const trials = vi
+      .spyOn(runner, "runTrials")
+      .mockResolvedValue({ [card.id]: trial });
+    const summary = Object.freeze(
+      summarizeGauntlet(kessenReferenceDecks(), [], new Map()),
+    );
+    const gauntlet = vi.spyOn(runner, "runGauntlet").mockResolvedValue(summary);
+    const fingerprint = catalogFingerprint(catalog);
+    const { result } = renderHook(useCardMatchTest);
+    await act(async () => {
+      await result.current.run({
+        savedCatalog: KESSEN_SEED_CATALOG,
+        draftCatalog: catalog,
+        savedCard: card,
+        draftCard: { ...card },
+        savedFingerprint: fingerprint,
+        draftFingerprint: fingerprint,
+      });
+    });
+    const hasTrial = isTrialSubject(card);
+    expect(trials).toHaveBeenCalledTimes(hasTrial ? 1 : 0);
+    if (hasTrial) {
+      expect(trials.mock.calls[0]?.[0]).toBe(catalog);
+      expect(trials.mock.calls[0]?.slice(2)).toEqual([
+        card.kind === "LEADER"
+          ? catalog.filter((entry) => entry.kind === "LEADER" && isTrialSubject(entry))
+          : [card],
+        KESSEN_BALANCE_SIM.editorTrialGames,
+      ]);
+    }
+    expect(gauntlet).toHaveBeenCalledTimes(1);
+    expect(result.current.test).toMatchObject({
+      status: "done",
+      done: hasTrial ? 2000 : 1000,
+      total: hasTrial ? 2000 : 1000,
+      trial: { saved: hasTrial ? trial : null, draft: hasTrial ? trial : null },
+      gauntlet: { saved: summary, draft: summary },
+      error: null,
+    });
+    expect(result.current.test.gauntlet?.saved).toBe(summary);
+    expect(result.current.test.gauntlet?.draft).toBe(summary);
+    expect(result.current.test.trial?.saved).toBe(hasTrial ? trial : null);
+    expect(result.current.test.trial?.draft).toBe(hasTrial ? trial : null);
+  },
+);
+
+it("stops a superseded comparison before starting its next phase", async () => {
+  let finishTrial!: (value: Record<string, KessenTrialSummary>) => void;
+  const pending = new Promise<Record<string, KessenTrialSummary>>((resolve) => {
+    finishTrial = resolve;
+  });
+  const trials = vi
+    .spyOn(runner, "runTrials")
+    .mockReturnValueOnce(pending)
+    .mockResolvedValue({});
+  const gauntlet = vi
+    .spyOn(runner, "runGauntlet")
+    .mockResolvedValue(summarizeGauntlet(kessenReferenceDecks(), [], new Map()));
+  const card = seedCardByName("Colossus");
+  const input = {
+    savedCatalog: KESSEN_SEED_CATALOG,
+    draftCatalog: KESSEN_SEED_CATALOG,
+    savedCard: card,
+    draftCard: card,
+    savedFingerprint: catalogFingerprint(KESSEN_SEED_CATALOG),
+    draftFingerprint: catalogFingerprint(KESSEN_SEED_CATALOG),
+  };
+  const { result } = renderHook(useCardMatchTest);
+  let first!: Promise<void>;
+  act(() => {
+    first = result.current.run(input);
+  });
+  expect(result.current.test).toMatchObject({ status: "running", total: 2000 });
+  await act(async () => {
+    await result.current.run(input);
+  });
+  const completed = result.current.test;
+  await act(async () => {
+    trials.mock.calls[0]?.[1].onProgress?.(1, 1);
+    finishTrial({});
+    await first;
+  });
+  expect(trials.mock.calls[0]?.[1].signal?.aborted).toBe(true);
+  expect(gauntlet).toHaveBeenCalledTimes(1);
+  expect(result.current.test).toBe(completed);
+  expect(completed.status).toBe("done");
+});
+
 it("compares both gauntlets for a card outside every reference deck", async () => {
   const savedCard = seedCardByName("Colossus");
   const draftCard = { ...savedCard, power: 20 };
