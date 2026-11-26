@@ -27,6 +27,7 @@ import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
+  recordQueries,
   resetTables,
 } from "../../setup/testDatabase";
 
@@ -161,28 +162,45 @@ describeWithDatabase("Bloodright battle snapshots", () => {
     ).toMatchObject({ power: 25 });
   });
 
-  it("does not include Bloodright changes in ranked battle state", async () => {
-    const db = await getTestDatabase();
-    await db.update(userData).set({ status: "QUEUED" });
-    await db.insert(rankedPvpQueue).values(
-      ["owner", "opponent"].map((userId) => ({
-        id: userId,
-        userId,
-        rankedLp: 1000,
-        hasClaimed: true,
-      })),
-    );
-    expect(
-      await initiateBattle(
-        { client: db, userIds: ["owner"], targetIds: ["opponent"] },
-        "RANKED_PVP",
-      ),
-    ).toMatchObject({ success: true });
-    const row = await db.query.battle.findFirst();
-    if (!row) throw new Error("Missing ranked battle");
-    const stored = await fetchBattle(db, row.id);
-    expect(stored?.extraState.bloodrightChanges).toBeUndefined();
-  });
+  it.each(["RANKED_PVP", "RANKED_SPARRING"] as const)(
+    "skips Bloodright catalog reads and changes in %s",
+    async (battleType) => {
+      const db = await getTestDatabase();
+      if (battleType === "RANKED_PVP") {
+        await db.update(userData).set({ status: "QUEUED" });
+        await db.insert(rankedPvpQueue).values(
+          ["owner", "opponent"].map((userId) => ({
+            id: userId,
+            userId,
+            rankedLp: 1000,
+            hasClaimed: true,
+          })),
+        );
+      }
+      const captured = await recordQueries(() =>
+        initiateBattle(
+          { client: db, userIds: ["owner"], targetIds: ["opponent"] },
+          battleType,
+        ),
+      );
+      expect(captured.result).toMatchObject({ success: true });
+      expect(
+        captured.statements.filter(
+          (statement) =>
+            /^select `id`, `parentJutsuId`, `reskinParentJutsuId` from `Jutsu`/i.test(
+              statement,
+            ) ||
+            /^select `id`, `effects` from `Jutsu`.*`bloodlineId` in \(select/i.test(
+              statement,
+            ),
+        ),
+      ).toHaveLength(0);
+      const row = await db.query.battle.findFirst();
+      if (!row) throw new Error("Missing ranked battle");
+      const stored = await fetchBattle(db, row.id);
+      expect(stored?.extraState.bloodrightChanges).toBeUndefined();
+    },
+  );
   for (const battleType of ["KAGE_AI", "CLAN_CHALLENGE"] as const) {
     it(`applies owned changes to the automatic player actor in ${battleType}`, async () => {
       const db = await getTestDatabase();

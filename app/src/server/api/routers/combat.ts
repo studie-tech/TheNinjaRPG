@@ -2282,12 +2282,16 @@ export const initiateBattle = async (
       ? fetchVillageDutyHome(client, sector)
       : undefined,
     // Bloodright inheritance is resolved during initiation, including injected and lobby jutsu.
-    listBloodrightJutsuIdentities(client),
-    listBattleBloodrightJutsus(client, [
-      ...userIds,
-      ...targetIds,
-      ...(info.villageDuty ? [info.villageDuty.userId] : []),
-    ]),
+    !RankedBattleTypes.includes(battleType)
+      ? listBloodrightJutsuIdentities(client)
+      : [],
+    !RankedBattleTypes.includes(battleType)
+      ? listBattleBloodrightJutsus(client, [
+          ...userIds,
+          ...targetIds,
+          ...(info.villageDuty ? [info.villageDuty.userId] : []),
+        ])
+      : [],
   ]);
 
   // All map PvP paths share this barrier, including failed robbery battles and scripted callers.
