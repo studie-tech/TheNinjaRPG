@@ -138,6 +138,13 @@ export interface TutorialStepConfig {
   sidebarDescription?: string;
   onCombatWin?: string;
   onCombatLoss?: string;
+  /**
+   * What Lemu says as a coached fight opens: its first round's lesson leads with these
+   * words, on phones too, before describing the turn.
+   */
+  fightOpening?: { title: string; lead: string };
+  /** The fight's opening words stay on screen beside a phone's battlefield. */
+  keepsLeadInFight?: boolean;
   /** A full-screen moment shown in place of the dock, with one Continue button. */
   screen?: TutorialScreenKind;
 }
@@ -305,7 +312,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "arrival",
     title: "Only smoke",
     wayLead:
-      "Only smoke... and the hunter is long gone, after the pup. Still, you held your ground on your very first day. That earns a reward: it waits in the logbook on your <b>profile</b>.",
+      "Only smoke... and the masked one is long gone, after the pup. Still, you held your ground on your very first day. That earns a reward: it waits in the logbook on your <b>profile</b>.",
     description:
       "Your <b>logbook</b> keeps your quests, and their rewards until you claim them.",
     action: "Tap Claim to collect your reward.",
@@ -365,7 +372,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "academy",
     title: "To the academy",
     wayLead:
-      "That hunter will be back, and we'll make sure you're ready. Your training begins at the academy, here in Horizon. The <b>location menu</b> always opens the place you stand in.",
+      "The masked one will be back, and we'll make sure you're ready. Your training begins at the academy, here in Horizon. The <b>location menu</b> always opens the place you stand in.",
     description:
       "Every building in Horizon has its use. Yours today is the <b>academy</b>.",
     action: "Tap Academy.",
@@ -626,7 +633,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     id: "mission-brief",
     chapter: "mission",
     title: "A real mission",
-    wayLead: "A hunter just ran into the <b>academy</b>. Someone has seen the pup!",
+    wayLead: "A scout just ran into the <b>academy</b>. Someone has seen the pup!",
     description: "You heard him. Take the mission, and we're off.",
     action: "Accept the mission in the Academy Trials.",
     elementIds: ["tutorial-dialog-options", starterLogbookEntry],
@@ -680,6 +687,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/travel",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.pup,
+    fightOpening: {
+      title: "The masked one",
+      lead: "That's the masked one from the ridge, and the pup is cornered behind them. Whoever sent this courier, they won't get it. Drive them off!",
+    },
     onCombatWin: "mission-claim-pup",
     onCombatLoss: "mission-travel-to-pup",
   },

@@ -161,7 +161,8 @@ export const useTutorialStep = () => {
         selectedActionId: selectedId,
         options,
       });
-      if (coaching.kind === "coach") return coaching;
+      if (coaching.kind === "coach")
+        return { ...coaching, isOpening: battle.round === 1 };
     }
     return {
       ...getTutorialCombatGuidance({
@@ -280,7 +281,7 @@ export const useTutorialStep = () => {
     if (coachingKey) {
       return getCoachedCombatStep(
         staticStep,
-        JSON.parse(coachingKey) as Extract<TutorialCombatCoaching, { kind: "coach" }>,
+        JSON.parse(coachingKey) as FightCoaching,
         isTouch,
       );
     }
@@ -542,9 +543,28 @@ const getGuidedCombatStep = (
  */
 const getCoachedCombatStep = (
   step: TutorialStepConfig,
-  coaching: Extract<TutorialCombatCoaching, { kind: "coach" }>,
+  coaching: FightCoaching,
   isTouch: boolean,
 ): TutorialStepConfig => {
+  const coached = describeCoachedTurn(step, coaching, isTouch);
+  // A fight with opening words leads its first round with them, until the player picks
+  // something to do.
+  if (!coaching.isOpening || !step.fightOpening || coaching.situation !== "choose")
+    return coached;
+  return {
+    ...coached,
+    title: step.fightOpening.title,
+    description: `${step.fightOpening.lead} ${coached.description}`,
+    keepsLeadInFight: true,
+  };
+};
+
+/** The coaching for one situation of the player's turn. */
+const describeCoachedTurn = (
+  step: TutorialStepConfig,
+  coaching: FightCoaching,
+  isTouch: boolean,
+): TutorialStepConfig & { description: string } => {
   const { distanceToEnemy: distance, actionPoints, inReach } = coaching;
   const name = coaching.actionName ?? "";
   const base = {
@@ -627,4 +647,9 @@ const getCoachedCombatStep = (
             : `${actionPoints} AP · nothing reaches yet: move closer`,
       };
   }
+};
+
+/** The coaching for the player's turn, and whether the fight is in its first round. */
+type FightCoaching = Extract<TutorialCombatCoaching, { kind: "coach" }> & {
+  isOpening?: boolean;
 };

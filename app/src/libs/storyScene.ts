@@ -52,7 +52,7 @@ export type StoryScene = {
   endsAt: number;
 };
 
-/** Milliseconds a fleeing pup, its hunter and Lemu take for one tile. */
+/** Milliseconds a fleeing pup, the masked figure and Lemu take for one tile. */
 const PUP_STEP_MS = 220;
 const COURIER_STEP_MS = 230;
 const FLIGHT_STEP_MS = 180;
@@ -62,10 +62,10 @@ const WARNING_AT = 400;
 /** The pup yelps while it crosses in front of the player. */
 const YELP_FROM = 1200;
 const YELP_UNTIL = 3600;
-/** The flash comes first; then the pup, and its hunter close behind. */
+/** The flash comes first; then the pup, and the masked figure close behind. */
 const PUP_STARTS_AT = 700;
 const COURIER_STARTS_AT = 1900;
-/** The hunter stops for one breath to raise the double. */
+/** The masked figure stops for one breath to raise the double. */
 const COURIER_PAUSE_MS = 1400;
 const SMOKE_DELAY_MS = 350;
 const DOUBLE_DELAY_MS = 600;

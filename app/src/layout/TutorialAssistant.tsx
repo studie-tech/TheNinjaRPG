@@ -1246,6 +1246,7 @@ const PlayerTutorialAssistant: React.FC<
     pathname === "/combat" &&
     !!currentTutorialStep.action &&
     !currentTutorialStep.elementIds?.length &&
+    !currentTutorialStep.keepsLeadInFight &&
     currentTutorialStep.title !== TUTORIAL_REMATCH_TITLE;
   const leadClassName = cn(
     "text-base leading-relaxed",
