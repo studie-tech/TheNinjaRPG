@@ -2305,6 +2305,14 @@ const useHighlightPlacement = <Step extends { id: string }>({
             ? Math.min(panel.top, view.bottom)
             : view.bottom;
         const isLitInView = !!lit && lit.height + 32 <= litFloor - view.top;
+        // Room under the target for the pointer.
+        const pointerRoom = 72;
+        // A panel taller than the room above the lesson shows from its top down, as far
+        // as the target allows, so the scene leading to the control stays readable.
+        const isLitTall =
+          !!lit &&
+          !isLitInView &&
+          before.height + pointerRoom + 32 <= litFloor - view.top;
         const aim = isLitInView ? lit : before;
         const preferredCentre = isLitInView
           ? (view.top + litFloor) / 2
@@ -2314,9 +2322,18 @@ const useHighlightPlacement = <Step extends { id: string }>({
         if (isLitInView && !isOffscreen) {
           // A panel partly in view moves no further than it needs, with room below it for
           // the pointer where there is any.
-          const room = Math.min(72, litFloor - view.top - lit.height - 16);
+          const room = Math.min(pointerRoom, litFloor - view.top - lit.height - 16);
           const below = lit.top + lit.height - (litFloor - room);
           aimOffset = below > 0 ? below : Math.min(0, lit.top - view.top - 16);
+          isAimMisplaced = Math.abs(aimOffset) > 1;
+        } else if (isLitTall && lit) {
+          aimOffset = Math.min(
+            Math.max(
+              lit.top - view.top - 16,
+              before.top + before.height + pointerRoom - litFloor,
+            ),
+            before.top - view.top - 16,
+          );
           isAimMisplaced = Math.abs(aimOffset) > 1;
         }
         const isCovered = !!panel && rectsOverlap(clear, panel);
