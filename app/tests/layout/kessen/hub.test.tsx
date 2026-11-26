@@ -935,6 +935,9 @@ describe("DeckBuilder card column", () => {
       (term) => term.textContent,
     );
     expect(marked).toEqual(["Substitution"]);
+    // A card in a set names it, so its Bond and Summon partners can be found.
+    fireEvent.click(screen.getByRole("button", { name: /^Show Beta Sandworm\./ }));
+    expect(within(detail).getByText("Sandworm")).toBeTruthy();
     // Keyboard focus on another tile previews it in the column.
     const fireball = seedCardByName("Fireball");
     fireEvent.focus(screen.getByRole("button", { name: /^Show Fireball\./ }));

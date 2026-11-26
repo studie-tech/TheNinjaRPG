@@ -18,8 +18,8 @@ import { KeywordText } from "../KeywordText";
 
 /**
  * One card of the deck builder in full: the face at reading size, its copies in the deck
- * with a stepper, what the player holds and why a copy cannot be added. Wide enough
- * (a bottom sheet) it sets the face beside the written-out rules text and the glossary
+ * with a stepper, the sets Bonds and Summons count it in, what the player holds and why
+ * a copy cannot be added. Wide enough (a bottom sheet) it sets the face beside the written-out rules text and the glossary
  * lines of the card's keywords; narrow (the builder's detail column) the face prints the
  * text itself and the keyword key under it explains the terms.
  */
@@ -105,6 +105,14 @@ export const BuilderCardDetail = ({
               <Plus aria-hidden />
             </Button>
           </div>
+          {card.sets.length > 0 ? (
+            <p className="kh-detail-facts">
+              <span className="text-muted-foreground">
+                {card.sets.length === 1 ? "Set: " : "Sets: "}
+              </span>
+              {card.sets.join(", ")}
+            </p>
+          ) : null}
           {facts ? (
             <p className="kh-detail-facts text-muted-foreground">{facts}</p>
           ) : null}
