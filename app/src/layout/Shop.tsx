@@ -1223,6 +1223,7 @@ function StallPurchaseDetails({
             </summary>
             <KessenPackRules
               packItemId={item.id}
+              effects={item.effects}
               inStall
               className="px-2 pb-2 text-base"
             />

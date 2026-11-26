@@ -248,7 +248,7 @@ const cacheOdds = (
   return odds;
 };
 
-/** "fifth" for 5; "12th" past the ninth. */
+/** "fifth" for 5; "12th", "21st" or "22nd" past the ninth. */
 export function ordinalWord(position: number) {
   const words = [
     "first",
@@ -261,7 +261,9 @@ export function ordinalWord(position: number) {
     "eighth",
     "ninth",
   ];
-  return words[position - 1] ?? `${position}th`;
+  const teen = position % 100 >= 11 && position % 100 <= 13;
+  const suffix = teen ? "th" : (["th", "st", "nd", "rd"][position % 10] ?? "th");
+  return words[position - 1] ?? `${position}${suffix}`;
 }
 
 /** What a pack's caches are built from: its pool, slot layout and tier weights. */

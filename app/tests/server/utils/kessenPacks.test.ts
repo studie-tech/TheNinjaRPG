@@ -16,6 +16,7 @@ import {
   kessenPackPool,
   kessenPackPoolProblem,
   kessenPackSlots,
+  ordinalWord,
 } from "@/libs/kessen/packContents";
 import {
   isKessenPackId,
@@ -105,6 +106,20 @@ const plan = (overrides: Partial<Parameters<typeof planKessenPackOpening>[0]> = 
     random: zero,
     ...overrides,
   });
+
+describe("Kessen pack card positions", () => {
+  it("names a card position in words, then with its English ordinal suffix", () => {
+    expect([1, 5, 9].map(ordinalWord)).toEqual(["first", "fifth", "ninth"]);
+    expect([11, 12, 13, 21, 22, 23].map(ordinalWord)).toEqual([
+      "11th",
+      "12th",
+      "13th",
+      "21st",
+      "22nd",
+      "23rd",
+    ]);
+  });
+});
 
 describe("Kessen pack catalog", () => {
   it("builds two caches per pack from collectible non-leader cards with the design odds", () => {

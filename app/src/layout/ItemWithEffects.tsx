@@ -34,6 +34,7 @@ import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFarmPlantExperience } from "@/libs/farming";
 import { type Fortification, getFortifyProgress } from "@/libs/fortify";
+import { kessenPackSlots, ordinalWord } from "@/libs/kessen/packContents";
 import { isKessenPackId, KESSEN_PACK_IDS } from "@/libs/kessen/packs";
 import { cardTextPlain, type KESSEN_TERMS, ROW_LABELS } from "@/libs/kessen/text";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
@@ -591,7 +592,9 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               showHidden={!!role && canChangeContent(role)}
             />
           )}
-          {!hideData && isCardPack && <KessenPackRules packItemId={item.id} />}
+          {!hideData && isCardPack && (
+            <KessenPackRules packItemId={item.id} effects={item.effects} />
+          )}
           {!hideData && isCard && (
             <CardDetails
               item={item as Item}
@@ -1645,20 +1648,26 @@ const CardDetails = ({ item, showHidden }: { item: Item; showHidden: boolean }) 
 };
 
 /**
- * The guarantees shared by every Kessen card pack; what the pack holds is its description.
- * Packs whose fifth card is already Epic or better skip the Epic pity. Inside the Card
- * Master stall the odds sit on the same Packs tab, so no link is needed.
+ * The guarantees of a Kessen card pack; what the pack holds is its description. Pity
+ * raises the rare slot, the first card after the normal slots, so a pack without one has
+ * no pity, and packs whose rare slot is already Epic or better skip the Epic pity.
+ * Inside the Card Master stall the odds sit on the same Packs tab, so no link is needed.
  */
 export const KessenPackRules = ({
   packItemId,
+  effects,
   inStall = false,
   className,
 }: {
   packItemId: string;
+  /** The pack's stored tags, which hold its slot layout. */
+  effects: readonly ZodAllTags[];
   inStall?: boolean;
   className?: string;
 }) => {
   const hasEpicFloor = EPIC_FLOOR_PACK_IDS.has(packItemId);
+  const slots = kessenPackSlots(effects);
+  const rareCard = `${ordinalWord(slots.normal + 1)} card`;
   return (
     <div
       className={cn(
@@ -1670,9 +1679,11 @@ export const KessenPackRules = ({
     >
       <p>
         <b>Pity</b>:{" "}
-        {hasEpicFloor
-          ? `the ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings one you do not own.`
-          : `after ${KESSEN_EPIC_PITY_PACKS} packs without an Epic, the next fifth card is Epic. The ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings one you do not own.`}
+        {slots.rareSlot === 0
+          ? "this pack has no rare slot, so no pity applies."
+          : hasEpicFloor
+            ? `the ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings one you do not own.`
+            : `after ${KESSEN_EPIC_PITY_PACKS} packs without an Epic, the next ${rareCard} is Epic. The ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings one you do not own.`}
       </p>
       <p>
         <b>Duplicates</b>: copies beyond a card&apos;s copy limit are swapped for cards
