@@ -4,6 +4,7 @@ import "../kessen.css";
 import "./hub.css";
 import "./builder.css";
 import {
+  BookOpen,
   Check,
   ChevronDown,
   Minus,
@@ -22,6 +23,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +39,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KESSEN_DECK_NAME_MAX_LENGTH, KESSEN_MAX_DECKS } from "@/drizzle/constants";
 import type { KessenDeckCard } from "@/drizzle/schema";
@@ -59,7 +67,12 @@ import {
   validateDeck,
 } from "@/libs/kessen/deck";
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
-import { cardKeywords, KESSEN_KEYWORDS, ROW_LABELS } from "@/libs/kessen/text";
+import {
+  cardKeywords,
+  KESSEN_KEYWORDS,
+  ROW_LABELS,
+  terrainReach,
+} from "@/libs/kessen/text";
 import { cn } from "@/libs/shadui";
 import {
   safeSessionStorageGetItem,
@@ -79,6 +92,7 @@ import {
 } from "../kessenArt";
 import { LeaderPlate } from "../LeaderPlate";
 import { RarityGem } from "../RarityGem";
+import { BuilderCardDetail, KeywordKey, uniqueKeywords } from "./BuilderDetail";
 import {
   catalogLookup,
   copyLimitOf,
@@ -87,18 +101,24 @@ import {
 } from "./hubData";
 
 /**
- * Deck builder: leader plate, provision meter, counters and row split on top of the deck
- * list; the owned collection as a filterable card grid with copy counts, unowned cards
- * greyed with where to get them. Auto-build assembles a deck from owned cards; Fill with
- * borrowed completes a short deck with loaner copies (shown with a LOAN stamp). A saved
- * deck holds owned cards only: one that is merely short is saved as is and every match
- * fills it with borrowed copies again. Inline validation explains every broken rule; a
- * tap that cannot add a card says why over the card. Copies listed at the auction house
- * keep a card in the owned pool with a "listed" mark, but only free copies join a deck.
- * Narrow containers and short landscape screens switch to Collection | Deck tabs with a
- * deck bar pinned to the bottom of the screen. Unsaved edits are marked, survive leaving
- * the tab (session storage) and are confirmed before another deck replaces them; a leader
- * switch that drops cards and a deletion are confirmed in the game's dialogs.
+ * Deck builder: the player's saved decks on a shelf with New deck above everything, so
+ * switching and starting decks is one tap at every width; the owned collection as a
+ * filterable card grid with copy steppers, unowned cards greyed with where to get them;
+ * the card in view (hovered, focused or tapped, else the first of the grid) in full with
+ * its copies, and the keyword key with that card's keywords marked; the deck panel with
+ * leader plate, deck name, provision meter, counters and row split over the deck list.
+ * Auto-build assembles a deck from owned cards; Fill with borrowed completes a short deck
+ * with loaner copies (shown with a LOAN stamp). A saved deck holds owned cards only: one
+ * that is merely short is saved as is and every match fills it with borrowed copies
+ * again. Inline validation explains every broken rule; a stepper tap that cannot add a
+ * card says why over the card. Copies listed at the auction house keep a card in the
+ * owned pool with a "listed" mark, but only free copies join a deck. Wide builders show
+ * collection, card and deck side by side; from 620 px Collection | Deck tabs put the card
+ * column beside the collection; narrower builders and short landscape screens open the
+ * card and the key in a bottom sheet. Tabs pin a deck bar to the bottom of the screen.
+ * Unsaved edits are marked, survive leaving the tab (session storage) and are confirmed
+ * before another deck replaces them; a leader switch that drops cards and a deletion are
+ * confirmed in the game's dialogs.
  */
 export const DeckBuilder = ({
   cards,
@@ -164,6 +184,13 @@ export const DeckBuilder = ({
   } | null>(null);
   /** Whether short side-by-side panels write the leader ability out. */
   const [abilityOpen, setAbilityOpen] = useState(false);
+  /** The pool card last tapped; the card column shows it unless another is hovered. */
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** The bottom sheet of narrow builders: the tapped card, or the keyword key. */
+  const [sheet, setSheet] = useState<"card" | "key" | null>(null);
+  /** The card under the pointer or keyboard focus; only the card column follows it. */
+  const [preview] = useState(createPreviewStore);
+  const detailRef = useRef<HTMLElement>(null);
   const saveHintId = useId();
   const builderRef = useRef<HTMLElement>(null);
   const deckPanelRef = useRef<HTMLElement>(null);
@@ -277,9 +304,45 @@ export const DeckBuilder = ({
           : "Not owned yet.";
     if (inDeck(card.id) >= limit) return `Copy limit reached (${limit}/${limit}).`;
     if (ownedFree(card) <= 0)
-      return `All ${ownedCount} of your ${ownedCount === 1 ? "copy is" : "copies are"} in the deck.`;
+      return ownedCount === 1
+        ? "Your only copy is in the deck."
+        : `All ${ownedCount} of your copies are in the deck.`;
     if (deckFull) return `The deck is full at ${KESSEN_DECK_RULES.maxCards} cards.`;
     return null;
+  };
+
+  /** A pool card's copies, why it cannot be added and where an unowned one comes from. */
+  const tileOf = (card: KessenCatalogEntry) => {
+    const ownedCount = owned[card.id] ?? 0;
+    const listedCount = auctionListed[card.id] ?? 0;
+    const borrowable =
+      faction !== null &&
+      (card.faction === faction || card.faction === "NEUTRAL") &&
+      card.variant === "STANDARD";
+    const source =
+      ownedCount > 0 || listedCount > 0
+        ? null
+        : borrowable
+          ? "Not owned · may appear in borrowed fills"
+          : findContext
+            ? (whereToFind(card, findContext)[0] ?? "Not owned")
+            : "Not owned";
+    return {
+      ownedCount,
+      listedCount,
+      count: inDeck(card.id),
+      loan: draft.borrowed[card.id] ?? 0,
+      limit: copyLimitOf(card),
+      reason: addBlockReason(card, borrowable),
+      source,
+    };
+  };
+
+  /** Shows a pool card in the card column, or in the sheet where that column is hidden. */
+  const selectCard = (id: string) => {
+    setSelectedId(id);
+    setBlocked(null);
+    if (!isDisplayed(detailRef.current)) setSheet("card");
   };
 
   const addCard = (card: KessenCatalogEntry) => {
@@ -500,6 +563,51 @@ export const DeckBuilder = ({
 
   const pendingLeaderCard = pendingLeader ? lookup[pendingLeader.leaderId] : undefined;
 
+  // Terrain lines follow the deck's faction (Hyorin's Permafrost afflicts one side).
+  const reach = terrainReach(faction);
+  /** A card the grid can show in full: a non-leader of the catalog. */
+  const poolCard = (id: string) => {
+    const card = lookup[id];
+    return card && card.kind !== "LEADER" ? card : null;
+  };
+  // The card column never stands empty: the tapped card, else the first of the grid.
+  const detailId =
+    (selectedId && poolCard(selectedId) ? selectedId : null) ?? pool[0]?.id ?? null;
+  const sheetCard = selectedId ? poolCard(selectedId) : null;
+  const cardDetail = (card: KessenCatalogEntry, className?: string) => {
+    const { ownedCount, listedCount, count, loan, limit, reason, source } =
+      tileOf(card);
+    const held = [
+      ownedCount > 0 ? `${ownedCount} owned` : null,
+      listedCount > 0 ? `${listedCount} listed at the auction house` : null,
+      loan > 0 ? `${loan} on loan` : null,
+    ].filter(Boolean);
+    // An unowned card says where it comes from; the add rule already says it is unowned
+    // when borrowed fills could lend it.
+    const facts =
+      held.length > 0
+        ? held.join(" · ")
+        : source && !source.startsWith("Not owned")
+          ? `Not owned · ${source}`
+          : null;
+    return (
+      <BuilderCardDetail
+        key={card.id}
+        card={card}
+        inDeck={count}
+        limit={limit}
+        facts={facts}
+        reason={reason}
+        reach={reach}
+        onAdd={() => {
+          if (!reason) addCard(card);
+        }}
+        onRemove={() => removeCard(card.id)}
+        className={className}
+      />
+    );
+  };
+
   return (
     <section
       ref={builderRef}
@@ -508,6 +616,17 @@ export const DeckBuilder = ({
       data-host={inDialog ? "dialog" : undefined}
       aria-label="Deck builder"
     >
+      <DeckShelf
+        decks={decks}
+        lookup={lookup}
+        openId={draft.id}
+        draftName={draft.name}
+        draftSize={stats.cards}
+        draftFaction={leader?.faction ?? "NEUTRAL"}
+        dirty={dirty}
+        atDeckCap={atDeckCap}
+        onOpen={requestDeck}
+      />
       <Tabs
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
@@ -539,7 +658,12 @@ export const DeckBuilder = ({
           >
             Skip to the deck
           </Button>
-          <FilterBar filters={filters} onChange={setFilters} faction={faction} />
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            faction={faction}
+            onOpenKey={() => setSheet("key")}
+          />
           {pool.length === 0 ? (
             <EmptyState
               title="No cards match these filters."
@@ -558,41 +682,37 @@ export const DeckBuilder = ({
           ) : (
             <ul className="kh-bgrid">
               {pool.map((card) => {
-                const ownedCount = owned[card.id] ?? 0;
-                const count = inDeck(card.id);
-                const loan = draft.borrowed[card.id] ?? 0;
-                const limit = copyLimitOf(card);
-                const borrowable =
-                  faction !== null &&
-                  (card.faction === faction || card.faction === "NEUTRAL") &&
-                  card.variant === "STANDARD";
-                const reason = addBlockReason(card, borrowable);
+                const { ownedCount, listedCount, count, loan, limit, reason, source } =
+                  tileOf(card);
                 const explained = blocked?.id === card.id ? blocked.text : null;
                 const tryAdd = () =>
                   reason ? setBlocked({ id: card.id, text: reason }) : addCard(card);
-                const listedCount = auctionListed[card.id] ?? 0;
                 const caption: ReactNode =
-                  ownedCount > 0 ? null : listedCount > 0 ? (
+                  listedCount > 0 && ownedCount === 0 ? (
                     <Link href="/auctionhouse">Listed at the auction house</Link>
-                  ) : borrowable ? (
-                    "Not owned · may appear in borrowed fills"
-                  ) : findContext ? (
-                    (whereToFind(card, findContext)[0] ?? "Not owned")
                   ) : (
-                    "Not owned"
+                    source
                   );
                 return (
                   <li
                     key={card.id}
                     className="kh-bcard"
                     data-in-deck={count > 0 ? "" : undefined}
+                    data-selected={selectedId === card.id ? "" : undefined}
                   >
+                    {/* The tile shows the card in the card column (or the sheet); the
+                        stepper under it changes the copies in the deck. */}
                     <button
                       type="button"
                       className="kh-bcard-add"
-                      aria-disabled={reason ? true : undefined}
-                      onClick={tryAdd}
-                      aria-label={`Add ${card.name}. ${count} of ${limit} in deck, ${ownedCount} owned${listedCount > 0 ? `, ${listedCount} listed` : ""}${reason ? `. ${reason}` : ""}`}
+                      onClick={() => selectCard(card.id)}
+                      onPointerEnter={(event) => {
+                        if (event.pointerType === "mouse") preview.set(card.id);
+                      }}
+                      onPointerLeave={() => preview.set(null)}
+                      onFocus={() => preview.set(card.id)}
+                      onBlur={() => preview.set(null)}
+                      aria-label={`Show ${card.name}. ${count} of ${limit} in deck, ${ownedCount} owned${listedCount > 0 ? `, ${listedCount} listed` : ""}`}
                       data-button-sfx="off"
                     >
                       {/* The tile prints its own counts, so the face shows no copy pips. */}
@@ -671,55 +791,34 @@ export const DeckBuilder = ({
           <span className="kh-scroll-fade" aria-hidden />
         </div>
 
+        {/* The card in view and the keyword key; narrow builders hide the column and
+            show both in the sheet instead. */}
+        <aside
+          ref={detailRef}
+          className="kh-builder-detail kh-panel-chrome"
+          aria-label="Card details"
+        >
+          <PreviewedCard
+            preview={preview}
+            fallbackId={detailId}
+            render={(id) => {
+              const card = id ? poolCard(id) : null;
+              return (
+                <>
+                  {card ? cardDetail(card) : null}
+                  <KeywordKey active={card ? uniqueKeywords(card) : []} reach={reach} />
+                </>
+              );
+            }}
+          />
+          <span className="kh-scroll-fade" aria-hidden />
+        </aside>
+
         <aside
           ref={deckPanelRef}
           className="kh-builder-deck kh-panel-chrome"
           aria-label="Deck"
         >
-          <fieldset className="kh-decktabs">
-            <legend className="sr-only">Saved decks</legend>
-            {decks.map((deck) => (
-              <Button
-                key={deck.id}
-                type="button"
-                size="sm"
-                variant="outline"
-                className="kh-decktab"
-                aria-pressed={draft.id === deck.id}
-                title={deck.name}
-                onClick={() => requestDeck(deck)}
-              >
-                {lookup[deck.leaderItemId] ? (
-                  <FactionSigil
-                    faction={lookup[deck.leaderItemId]?.faction ?? "NEUTRAL"}
-                    renderSize={16}
-                    className="w-[16px] shrink-0"
-                    decorative
-                  />
-                ) : null}
-                <span className="min-w-0 truncate">{deck.name}</span>
-                {draft.id === deck.id && dirty ? (
-                  <DirtyDot label="unsaved changes" />
-                ) : null}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="kh-decktab"
-              data-new
-              aria-pressed={draft.id === null}
-              disabled={atDeckCap && draft.id !== null}
-              title={atDeckCap ? `Up to ${KESSEN_MAX_DECKS} decks` : undefined}
-              onClick={() => requestDeck(null)}
-            >
-              <Plus className="h-[13px] w-[13px]" aria-hidden />
-              New
-              {draft.id === null && dirty ? <DirtyDot label="unsaved changes" /> : null}
-            </Button>
-          </fieldset>
-
           {leader ? (
             // Short side-by-side panels fold the ability to its name; the toggle (hidden
             // elsewhere) writes it out, so the deck's cards keep the first screen.
@@ -786,7 +885,7 @@ export const DeckBuilder = ({
             </div>
             <div className="kh-field">
               <Label htmlFor={`${saveHintId}-name`} className="kh-field-label">
-                Name
+                Deck name
               </Label>
               <Input
                 id={`${saveHintId}-name`}
@@ -1055,6 +1154,28 @@ export const DeckBuilder = ({
         </button>
       </div>
 
+      <Sheet open={sheet !== null} onOpenChange={(open) => !open && setSheet(null)}>
+        <SheetContent
+          side="bottom"
+          className="kessen-ui kh-builder-sheet bg-card"
+          // Strict containment would ignore the content's height; keep it content-sized.
+          style={{ contain: "layout paint" }}
+        >
+          <SheetTitle className="kh-builder-sheet-title">
+            {sheet === "card" && sheetCard ? sheetCard.name : "Keyword key"}
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            {sheet === "card" && sheetCard
+              ? "What the card does and its copies in the deck."
+              : "What every keyword on a card does."}
+          </SheetDescription>
+          {sheet === "card" && sheetCard ? (
+            cardDetail(sheetCard, "kh-detail-sheet")
+          ) : (
+            <KeywordKey reach={reach} heading={false} />
+          )}
+        </SheetContent>
+      </Sheet>
       <Modal
         title="Discard unsaved changes?"
         className="kessen-ui kh-builder-dialog"
@@ -1123,6 +1244,119 @@ export const DeckBuilder = ({
   );
 };
 
+/**
+ * The saved decks, each with its faction, full name and size, and a new deck being built
+ * after them; the open deck is pressed and shows its name as edited. New deck sits in the
+ * shelf's head; at the deck cap it rests and the head says how to make room.
+ */
+const DeckShelf = ({
+  decks,
+  lookup,
+  openId,
+  draftName,
+  draftSize,
+  draftFaction,
+  dirty,
+  atDeckCap,
+  onOpen,
+}: {
+  decks: readonly KessenDeckRow[];
+  lookup: Readonly<Record<string, KessenCatalogEntry>>;
+  /** The open deck; null for a new deck. */
+  openId: string | null;
+  draftName: string;
+  /** Cards in the open deck, for a new deck's entry. */
+  draftSize: number;
+  draftFaction: KessenFaction;
+  dirty: boolean;
+  atDeckCap: boolean;
+  onOpen: (deck: KessenDeckRow | null) => void;
+}) => {
+  const headId = useId();
+  const entries = [
+    ...decks.map((deck) => ({ deck, key: deck.id })),
+    ...(openId === null ? [{ deck: null, key: "new" }] : []),
+  ];
+  return (
+    <section className="kh-decks" aria-labelledby={headId}>
+      <div className="kh-decks-head">
+        <span id={headId} className="kh-field-label">
+          Your decks
+        </span>
+        <span className="kh-decks-count text-muted-foreground">
+          {decks.length} of {KESSEN_MAX_DECKS} saved
+          {atDeckCap ? " · delete one to start another" : ""}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="kh-decks-new"
+          disabled={atDeckCap && openId !== null}
+          onClick={() => onOpen(null)}
+        >
+          <Plus className="mr-1 h-[14px] w-[14px]" aria-hidden />
+          New deck
+        </Button>
+      </div>
+      <div className="kh-decks-list">
+        {entries.map(({ deck, key }) => {
+          const isOpen = openId === (deck?.id ?? null);
+          const name = isOpen
+            ? draftName.trim() || deck?.name || "New deck"
+            : (deck?.name ?? "");
+          const size = deck && !isOpen ? deckSize(deck.cards) : draftSize;
+          return (
+            <Button
+              key={key}
+              type="button"
+              variant="outline"
+              className="kh-decks-item"
+              data-new={deck ? undefined : ""}
+              aria-pressed={isOpen}
+              onClick={() => (deck ? onOpen(deck) : undefined)}
+            >
+              <FactionSigil
+                faction={
+                  isOpen
+                    ? draftFaction
+                    : (lookup[deck?.leaderItemId ?? ""]?.faction ?? "NEUTRAL")
+                }
+                renderSize={24}
+                className="w-[22px] shrink-0"
+                decorative
+              />
+              <span className="kh-decks-text">
+                <span className="kh-decks-name">{name}</span>
+                <span className="kh-decks-meta">
+                  {size} {size === 1 ? "card" : "cards"}
+                  {deck ? "" : " · not saved yet"}
+                  {isOpen && dirty && deck ? " · unsaved changes" : ""}
+                </span>
+              </span>
+              {isOpen && dirty ? <DirtyDot /> : null}
+            </Button>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
+/** Renders the previewed card, else `fallbackId`; only this part follows a hover. */
+const PreviewedCard = ({
+  preview,
+  fallbackId,
+  render,
+}: {
+  preview: PreviewStore;
+  fallbackId: string | null;
+  render: (id: string | null) => ReactNode;
+}) => {
+  const previewId = useSyncExternalStore(preview.subscribe, preview.get, noPreview);
+  return render(previewId ?? fallbackId);
+};
+
 /** Provision used against the budget; vermilion, with the excess named, when over. */
 export const ProvisionMeter = ({
   provision,
@@ -1159,10 +1393,13 @@ const FilterBar = ({
   filters,
   onChange,
   faction,
+  onOpenKey,
 }: {
   filters: Filters;
   onChange: (filters: Filters) => void;
   faction: DeckFaction | null;
+  /** Opens the keyword key where the card column (which holds it) is hidden. */
+  onOpenKey: () => void;
 }) => {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreId = useId();
@@ -1227,6 +1464,16 @@ const FilterBar = ({
         >
           <SlidersHorizontal className="mr-1 h-[14px] w-[14px]" aria-hidden />
           Filters{foldedActive > 0 ? ` · ${foldedActive}` : ""}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="kh-key-open"
+          onClick={onOpenKey}
+        >
+          <BookOpen className="mr-1 h-[14px] w-[14px]" aria-hidden />
+          Keyword key
         </Button>
         <div
           id={moreId}
@@ -1476,6 +1723,35 @@ const NO_LISTINGS: Readonly<Record<string, number>> = {};
 
 const FOCUSABLE =
   "button:not([disabled]), select:not([disabled]), input:not([disabled])";
+
+/**
+ * The card under the pointer or keyboard focus, held outside React state so a hover
+ * renders the card column alone, not the whole grid.
+ */
+const createPreviewStore = () => {
+  let current: string | null = null;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => current,
+    set: (id: string | null) => {
+      if (id === current) return;
+      current = id;
+      for (const listener of listeners) listener();
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+};
+
+const noPreview = () => null;
+
+/** Whether the layout shows `element` (the card column is hidden on narrow builders). */
+const isDisplayed = (element: HTMLElement | null) =>
+  element !== null && window.getComputedStyle(element).display !== "none";
 
 const draftOf = (deck: KessenDeckRow): Draft => ({
   id: deck.id,
@@ -1790,6 +2066,8 @@ const DEFAULT_FILTERS: Filters = {
   provision: "ALL",
   ownedOnly: false,
 };
+
+type PreviewStore = ReturnType<typeof createPreviewStore>;
 
 type Draft = {
   /** Saved deck id; null for a new deck. */

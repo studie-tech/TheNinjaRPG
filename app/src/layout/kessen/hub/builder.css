@@ -37,6 +37,10 @@
 .kh-builder[data-tab="deck"] .kh-deckbar-dock {
   display: none;
 }
+/* The card column: hidden where the builder is narrow (the sheet shows the card). */
+.kh-builder-detail {
+  display: none;
+}
 /* The pool and the deck: the game's bordered sections on the content box surface. */
 .kh-panel-chrome {
   min-width: 0;
@@ -247,35 +251,225 @@
   font-weight: 700;
 }
 
-/* Saved decks: outline pills, the open one filled. */
-.kh-decktabs {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 10px;
-  padding: 0;
-  border: 0;
+/* Saved decks: a shelf of named buttons over the builder, the open one filled and a new
+   deck being built dashed; New deck at the end of the shelf's head. Names wrap rather
+   than clip; the buttons share the shelf's width. */
+.kh-decks {
+  margin-bottom: 10px;
 }
-.kh-decktab {
-  max-width: min(100%, 220px);
+.kh-decks-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0 0 6px;
+}
+.kh-decks-count {
+  font-size: 12px;
+}
+.kh-decks-new {
   height: auto;
   min-height: 32px;
-  gap: 6px;
-  padding: 0 12px 0 8px;
-  border-radius: 9999px;
-  font-size: 12px;
+  margin-left: auto;
+  font-size: 13px;
   font-weight: 700;
+}
+.kh-decks-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+}
+.kh-decks-item {
+  height: auto;
+  min-height: 44px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  white-space: normal;
   box-shadow: none;
 }
-.kh-decktab[aria-pressed="true"] {
+.kh-decks-item[aria-pressed="true"] {
   border-color: hsl(var(--primary));
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
 }
-.kh-decktab[data-new]:not([aria-pressed="true"]) {
+.kh-decks-item[data-new]:not([aria-pressed="true"]) {
   border-style: dashed;
-  padding-left: 10px;
+}
+.kh-decks-text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+}
+.kh-decks-name {
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+.kh-decks-meta {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+.kh-decks-item .kh-dirty-dot {
+  margin-left: 0;
+}
+/* The tapped card's tile keeps a ring, so the card column's card is found again. */
+.kh-bcard[data-selected] .kh-bcard-add {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+/* One card in full: the face, the copies stepper, what is held and why a copy cannot be
+   added. Wide (the sheet) it sets the face beside the written-out text and glossary
+   lines; narrow (the card column) the face prints the text and the key explains it. */
+.kh-detail {
+  container: kh-detail / inline-size;
+}
+.kh-detail-body {
+  display: grid;
+  gap: 10px;
+}
+.kh-detail-face {
+  width: 100%;
+  max-width: 320px;
+  justify-self: center;
+}
+.kh-detail-info {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.kh-detail-rules {
+  display: none;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.kh-detail-kws {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 12px;
+  list-style: none;
+}
+.kh-detail-copies {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.kh-detail-copies .kh-step {
+  width: 34px;
+  height: 34px;
+}
+.kh-detail-count {
+  font-family: var(--kessen-font-num);
+  font-size: 18px;
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+.kh-detail-count-label {
+  font-family: inherit;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+.kh-detail-facts,
+.kh-detail-reason {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+.kh-detail-reason {
+  color: hsl(var(--warning));
+}
+@container kh-detail (min-width: 340px) {
+  .kh-detail-body {
+    grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+    align-items: start;
+  }
+  .kh-detail-face {
+    max-width: none;
+  }
+  .kh-detail-rules {
+    display: block;
+  }
+  .kh-detail-copies {
+    justify-content: flex-start;
+  }
+  .kh-detail-facts,
+  .kh-detail-reason {
+    text-align: left;
+  }
+}
+.kh-builder-sheet {
+  max-height: 88dvh;
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0;
+}
+.kh-builder-sheet-title {
+  margin: 0 0 10px;
+  padding-right: 40px;
+  font-family: var(--kessen-font-display);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+.kh-key {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid hsl(var(--border));
+}
+.kh-builder-sheet .kh-key {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.kh-key-title {
+  margin: 0 0 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.kh-key-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.kh-key-entry {
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.kh-key-entry dt {
+  display: inline;
+  font-weight: 700;
+}
+.kh-key-entry dt::after {
+  content: ": ";
+}
+.kh-key-entry dd {
+  display: inline;
+  margin: 0;
+}
+.kh-key-entry[data-term] dt {
+  color: hsl(var(--card-foreground));
+}
+/* The keywords of the card in view. */
+.kh-key-entry[data-active] {
+  background: hsl(var(--primary) / 0.14);
+  box-shadow: inset 2px 0 0 hsl(var(--primary));
 }
 .kh-builder-leader {
   margin-bottom: 10px;
@@ -809,9 +1003,9 @@
     max-height: none;
   }
 }
-/* Narrow builders and short screens fold the filters behind their toggle, so the cards
-   start high. */
-@container kh-builder (max-width: 559px) {
+/* Narrow collection columns and short screens fold the filters behind their toggle, so the
+   cards start high. */
+@container kh-pool (max-width: 519px) {
   .kh-filters-toggle {
     display: inline-flex;
   }
@@ -848,38 +1042,111 @@
     gap: 6px 8px;
   }
 }
-/* Side by side from 620 px on screens tall enough for a card row under the controls: the
-   pool, and the deck panel with its own scroll. */
+/* From 620 px on screens tall enough for a card row under the controls, the collection tab
+   sets the card column beside the pool, each scrolling within the screen left under the
+   shelf, the tabs and the deck bar; the deck tab lays the deck's summary beside its card
+   list. The content box's centre column (about 630 px) lands here: three tiles a row and
+   a card column wide enough (220 px) for the face to print its full text. */
 @media (min-height: 521px) {
   @container kh-builder (min-width: 620px) {
+    .kh-builder[data-tab="collection"] .kh-builder-grid {
+      grid-template-columns: minmax(0, 1fr) 248px;
+      align-items: start;
+    }
+    .kh-builder[data-tab="collection"] .kh-builder-detail {
+      display: block;
+    }
+    .kh-builder-detail {
+      padding: 12px 10px;
+    }
+    /* The column holds the key, so the sheet's button rests. */
+    .kh-key-open {
+      display: none;
+    }
+    .kh-builder-pool,
+    .kh-builder-detail {
+      position: relative;
+      max-height: max(
+        420px,
+        calc(100dvh - var(--game-bottom-nav-h, 0px) - 250px)
+      );
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-color: hsl(var(--border)) transparent;
+      scrollbar-width: thin;
+    }
+    /* A fade stuck to the lower edge of each scrolling column: a card or row passing
+       under it fades out instead of being cut mid-label. */
+    .kh-scroll-fade {
+      position: sticky;
+      bottom: -12px;
+      z-index: 1;
+      display: block;
+      height: 24px;
+      margin: 0 -12px -24px;
+      background: linear-gradient(180deg, transparent 10px, hsl(var(--card)) 90%);
+    }
+    .kh-builder-detail > .kh-scroll-fade {
+      margin: 0 -10px -24px;
+    }
+    /* The deck tab's list flows with the page. */
+    .kh-decklist > .kh-scroll-fade {
+      display: none;
+    }
+    .kh-builder[data-tab="deck"] .kh-builder-deck {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-auto-rows: min-content;
+      column-gap: 16px;
+      align-items: start;
+    }
+    .kh-builder[data-tab="deck"] .kh-builder-deck > * {
+      grid-column: 1;
+    }
+    .kh-builder[data-tab="deck"] .kh-builder-deck > .kh-decklist {
+      grid-row: 1 / span 12;
+      grid-column: 2;
+    }
+    .kh-builder[data-tab="deck"] .kh-field-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+/* Wide builders (1060 px and up) set collection, card column and deck side by side, each
+   scrolling within the screen left under the shelf and the content box's header. */
+@media (min-height: 521px) {
+  @container kh-builder (min-width: 1060px) {
     .kh-builder-tabs,
     .kh-deckbar-dock,
     .kh-bar-backdrop {
       display: none;
     }
-    .kh-builder-grid {
-      grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    .kh-builder-grid,
+    .kh-builder[data-tab="collection"] .kh-builder-grid {
+      grid-template-columns: minmax(0, 1fr) 260px minmax(300px, 340px);
       align-items: start;
     }
     .kh-builder[data-tab] .kh-builder-grid {
       padding-bottom: 0;
     }
     .kh-builder[data-tab] .kh-builder-pool,
+    .kh-builder[data-tab] .kh-builder-detail,
     .kh-builder[data-tab] .kh-builder-deck {
       display: block;
     }
     /* Each column scrolls within the screen left under the content box's header (its
-       title and the hall's section tabs), so with the box at the top of the screen the deck panel and its
-       Save stay in view beside the pool however far the pool is browsed. A layout
-       ancestor is a scroll container that never scrolls, so a sticky panel would not
-       hold. Each column is the containing block of its own visually hidden labels, so
-       they never stretch the page. */
+       title and the hall's section tabs) and the shelf, so with the box at the top of
+       the screen the deck panel and its Save stay in view beside the pool however far
+       the pool is browsed. A layout ancestor is a scroll container that never scrolls,
+       so a sticky panel would not hold. Each column is the containing block of its own
+       visually hidden labels, so they never stretch the page. */
     .kh-builder-pool,
+    .kh-builder-detail,
     .kh-builder-deck {
       position: relative;
       max-height: max(
         420px,
-        calc(100dvh - var(--game-bottom-nav-h, 0px) - 110px)
+        calc(100dvh - var(--game-bottom-nav-h, 0px) - 180px)
       );
       overflow-y: auto;
       scrollbar-color: hsl(var(--border)) transparent;
@@ -889,6 +1156,7 @@
        show on the first screen. */
     .kh-builder[data-tab] .kh-builder-deck {
       display: flex;
+      column-gap: 0;
       flex-direction: column;
       padding-bottom: 12px;
       overscroll-behavior: contain;
@@ -906,18 +1174,8 @@
       scrollbar-color: hsl(var(--border)) transparent;
       scrollbar-width: thin;
     }
-    /* A fade stuck to the lower edge of each scrolling column: a card or row passing
-       under it fades out instead of being cut mid-label. */
-    .kh-scroll-fade {
-      position: sticky;
-      bottom: -12px;
-      z-index: 1;
-      display: block;
-      height: 24px;
-      margin: 0 -12px -24px;
-      background: linear-gradient(180deg, transparent 10px, hsl(var(--card)) 90%);
-    }
     .kh-decklist > .kh-scroll-fade {
+      display: block;
       bottom: 0;
       height: 20px;
       margin: -3px 0 0;
@@ -1003,21 +1261,17 @@
       white-space: nowrap;
     }
   }
-  @container kh-builder (min-width: 1000px) {
-    .kh-builder-grid {
-      grid-template-columns: minmax(0, 1fr) 360px;
-    }
-  }
   @container kh-builder (min-width: 1500px) {
-    .kh-builder-grid {
-      grid-template-columns: minmax(0, 1fr) 400px;
+    .kh-builder-grid,
+    .kh-builder[data-tab="collection"] .kh-builder-grid {
+      grid-template-columns: minmax(0, 1fr) 300px 400px;
     }
   }
 }
 /* Short side-by-side panels (laptop and tablet landscape): the leader ability folds to
    its name under the leader, so the deck's cards show on the first screen. */
 @media (min-height: 521px) and (max-height: 860px) {
-  @container kh-builder (min-width: 620px) {
+  @container kh-builder (min-width: 1060px) {
     .kh-builder-leaderbox {
       position: relative;
       margin-bottom: 6px;
@@ -1048,7 +1302,7 @@
   }
 }
 @media (pointer: coarse) and (min-height: 521px) and (max-height: 860px) {
-  @container kh-builder (min-width: 620px) {
+  @container kh-builder (min-width: 1060px) {
     .kh-builder-leaderbox > .kh-builder-leader {
       padding-bottom: 54px;
     }
@@ -1779,7 +2033,8 @@ div.kh-book-inspect {
     min-height: 44px;
   }
   .kh-skip,
-  .kh-decktab,
+  .kh-key-open,
+  .kh-decks-new,
   .kh-filter-select,
   .kh-filters-toggle,
   .kh-filter-summary button,
@@ -1805,7 +2060,8 @@ div.kh-book-inspect {
     grid-template-columns: 26px 16px minmax(0, 1fr) auto auto 44px 44px;
     gap: 4px;
   }
-  .kh-dl-row .kh-step {
+  .kh-dl-row .kh-step,
+  .kh-detail-copies .kh-step {
     width: 44px;
     height: 44px;
   }

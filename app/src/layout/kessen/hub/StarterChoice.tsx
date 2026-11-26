@@ -4,23 +4,33 @@ import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
 import "../kessen.css";
 import "./hub.css";
 import "./packs.css";
-import { useState } from "react";
+import "./builder.css";
+import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FeedbackAlert } from "@/layout/FeedbackAlert";
 import {
   type DeckFaction,
+  deckSize,
   KESSEN_DECK_FACTIONS,
   KESSEN_STARTER_LEADERS,
+  starterDeck,
 } from "@/libs/kessen/deck";
+import { ROW_LABELS } from "@/libs/kessen/text";
 import { cn } from "@/libs/shadui";
 import type { KessenCatalogEntry } from "@/validators/kessen";
 import { FactionSigil } from "../FactionSigil";
-import { KESSEN_FACTION_INFO } from "./hubData";
+import { RowGlyph, TacticGlyph } from "../glyphs";
+import { KeywordText } from "../KeywordText";
+import { kessenRarityTier } from "../kessenArt";
+import { LeaderPlate } from "../LeaderPlate";
+import { RarityGem } from "../RarityGem";
+import { catalogLookup, KESSEN_FACTION_INFO } from "./hubData";
 
 /**
  * The one-time starter choice after Lemu's lesson: six faction tiles, each with its
- * region, perk and starter leader, and the confirm button below them. The player's village
- * faction leads the grid and is preselected.
+ * region, perk and starter leader, the chosen faction's starter deck in full (leader and
+ * every card with its copies and rules text) and the confirm button below them. The
+ * player's village faction leads the grid and is preselected.
  */
 export const StarterChoice = ({
   homeFaction,
@@ -57,6 +67,7 @@ export const StarterChoice = ({
         <p className="kh-starter-lede">
           Your starter deck and its leader are yours to keep, and your First Bundle
           opens at once. Other factions stay open through packs and borrowed decks.
+          Choose a faction to see its starter deck card by card.
         </p>
       </div>
       <fieldset className="kh-starter-grid">
@@ -106,6 +117,7 @@ export const StarterChoice = ({
           );
         })}
       </fieldset>
+      {faction ? <StarterDeckList faction={faction} cards={cards} /> : null}
       <div className="kh-starter-confirm">
         {error ? (
           <FeedbackAlert feedback={{ success: false, message: error }} foreground />
@@ -135,6 +147,93 @@ export const StarterChoice = ({
           </Button>
         </div>
       </div>
+    </section>
+  );
+};
+
+/**
+ * A faction's starter deck card by card: its leader plate, then every card with its
+ * copies, provision, rarity, row and power and its rules text, the most expensive first.
+ */
+const StarterDeckList = ({
+  faction,
+  cards,
+}: {
+  faction: DeckFaction;
+  cards: readonly KessenCatalogEntry[];
+}) => {
+  const titleId = useId();
+  const lookup = catalogLookup(cards);
+  const deck = starterDeck(faction);
+  const leader = lookup[deck.leaderId];
+  const rows = deck.cards
+    .flatMap((entry) => {
+      const card = lookup[entry.itemId];
+      return card ? [{ count: entry.count, card }] : [];
+    })
+    .sort(
+      (a, b) =>
+        b.card.provision - a.card.provision || a.card.name.localeCompare(b.card.name),
+    );
+  if (rows.length === 0) return null;
+  return (
+    <section className="kh-starter-deck" aria-labelledby={titleId}>
+      <div className="kh-starter-deck-head">
+        <h3 id={titleId} className="kh-starter-deck-title">
+          {KESSEN_FACTION_NAMES[faction]} starter deck
+        </h3>
+        <p className="kh-starter-deck-size">
+          {deckSize(deck.cards)} cards
+          {leader ? ` · led by ${leader.name}` : ""}
+        </p>
+      </div>
+      {leader ? (
+        <LeaderPlate leader={leader} className="kh-starter-deck-leader" />
+      ) : null}
+      <ul className="kh-starter-deck-list" aria-label="Cards">
+        {rows.map(({ count, card }) => (
+          <li key={card.id} className="kh-starter-card">
+            <span className="kh-dl-prov" title={`Provision ${card.provision}`}>
+              <span className="sr-only">Provision </span>
+              {card.provision}
+            </span>
+            <span className="kh-starter-card-main">
+              <span className="kh-starter-card-name">
+                {card.name}
+                <RarityGem tier={kessenRarityTier(card)} className="text-[12px]" />
+              </span>
+              <span className="kh-starter-card-kind">
+                {card.kind === "TACTIC" ? (
+                  <>
+                    <TacticGlyph />
+                    Tactic
+                  </>
+                ) : (
+                  <>
+                    {card.row ? <RowGlyph row={card.row} decorative /> : null}
+                    {card.row && card.row !== "ANY" ? ROW_LABELS[card.row] : "Any row"}{" "}
+                    · {card.power} power
+                  </>
+                )}
+              </span>
+              {card.abilities.length > 0 ? (
+                <KeywordText
+                  abilities={card.abilities}
+                  interactive
+                  className="kh-starter-card-text"
+                />
+              ) : (
+                <span className="kh-starter-card-flavor">
+                  {card.flavor || "No ability."}
+                </span>
+              )}
+            </span>
+            <span className="kh-starter-card-count">
+              <span className="sr-only">Copies: </span>×{count}
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 };

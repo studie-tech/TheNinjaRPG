@@ -8,7 +8,11 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { IMG_KESSEN_NPC_PORTRAITS, KESSEN_COPY_LIMITS } from "@/drizzle/constants";
+import {
+  IMG_KESSEN_NPC_PORTRAITS,
+  KESSEN_COPY_LIMITS,
+  KESSEN_MAX_DECKS,
+} from "@/drizzle/constants";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import { CircuitMap } from "@/layout/kessen/hub/CircuitMap";
 import { CollectionBook } from "@/layout/kessen/hub/CollectionBook";
@@ -33,6 +37,7 @@ import { formatOdds, PacksPanel } from "@/layout/kessen/hub/PacksPanel";
 import { StarterChoice } from "@/layout/kessen/hub/StarterChoice";
 import { starterDeck } from "@/libs/kessen/deck";
 import { KESSEN_NPCS } from "@/libs/kessen/npcs";
+import { KESSEN_KEYWORDS } from "@/libs/kessen/text";
 import { KessenFactions } from "@/validators/itemCard";
 import type {
   KessenCatalogEntry,
@@ -407,6 +412,22 @@ describe("StarterChoice", () => {
     expect(onChoose).toHaveBeenLastCalledWith("AKIKAZE");
   });
 
+  it("lists the chosen faction's starter deck card by card", () => {
+    render(<StarterChoice homeFaction="HYORIN" cards={CARDS} onChoose={vi.fn()} />);
+    const list = () => screen.getByRole("region", { name: "Hyorin starter deck" });
+    const hyorin = starterDeck("HYORIN");
+    const rows = within(list()).getAllByRole("listitem");
+    expect(rows).toHaveLength(hyorin.cards.length);
+    const first = hyorin.cards[0]!;
+    const firstCard = CARDS.find((card) => card.id === first.itemId)!;
+    expect(within(list()).getByText(firstCard.name)).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: /Akikaze/ }));
+    const akikaze = screen.getByRole("region", { name: "Akikaze starter deck" });
+    expect(within(akikaze).getAllByRole("listitem")).toHaveLength(
+      starterDeck("AKIKAZE").cards.length,
+    );
+  });
+
   it("leads the grid with the village faction", () => {
     render(<StarterChoice homeFaction="TSUKIMORI" cards={CARDS} onChoose={vi.fn()} />);
     const radios = screen.getAllByRole("radio") as HTMLInputElement[];
@@ -694,14 +715,14 @@ describe("DeckBuilder", () => {
     expect(shortCards.reduce((sum, entry) => sum + entry.count, 0)).toBe(
       STARTER.cards.reduce((sum, entry) => sum + entry.count, 0) - 1,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Add Kawarimi\./ }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Add one Kawarimi" })[0]!);
     expect(screen.queryByText(/as borrowed copies/)).toBeNull();
     // Back to the saved list: nothing to save until something changes.
     expect(
       (screen.getByRole("button", { name: "Save deck" }) as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(screen.getByText("No unsaved changes.")).toBeTruthy();
-    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Deck name" }), {
       target: { value: "Dune Riders" },
     });
     expect(screen.getByText("Unsaved")).toBeTruthy();
@@ -760,13 +781,13 @@ describe("DeckBuilder", () => {
       onDelete: () => Promise.resolve(true),
     };
     const { unmount } = render(<DeckBuilder {...props} />);
-    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Deck name" }), {
       target: { value: "Kept Draft" },
     });
     unmount();
     render(<DeckBuilder {...props} />);
     expect(
-      (screen.getByRole("textbox", { name: "Name" }) as HTMLInputElement).value,
+      (screen.getByRole("textbox", { name: "Deck name" }) as HTMLInputElement).value,
     ).toBe("Kept Draft");
     expect(screen.getByText("Unsaved")).toBeTruthy();
   });
@@ -827,7 +848,7 @@ describe("DeckBuilder", () => {
     expect(
       screen.getByText(/matches lend the other \d+ as borrowed copies/),
     ).toBeTruthy();
-    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Deck name" }), {
       target: { value: "Short Deck" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save deck" }));
@@ -840,6 +861,86 @@ describe("DeckBuilder", () => {
           []),
       ].sort(byId),
     ).toEqual([...kept].sort(byId));
+  });
+});
+
+describe("DeckBuilder decks shelf", () => {
+  const props = {
+    cards: CARDS,
+    owned: OWNED,
+    userId: "user-1",
+    dayKey: "2026-11-16",
+    defaultFaction: "SHIROHANA" as const,
+    onSave: () => Promise.resolve({ ok: true }),
+    onDelete: () => Promise.resolve(true),
+  };
+
+  it("lists every saved deck by name and starts a new one from the shelf", () => {
+    const other: KessenDeckRow = { ...DECK, id: "deck-2", name: "Second" };
+    render(<DeckBuilder {...props} decks={[DECK, other]} />);
+    const shelf = screen.getByRole("region", { name: "Your decks" });
+    expect(within(shelf).getByText(`2 of ${KESSEN_MAX_DECKS} saved`)).toBeTruthy();
+    expect(
+      within(shelf).getByRole("button", { name: new RegExp(DECK.name) }),
+    ).toBeTruthy();
+    fireEvent.click(within(shelf).getByRole("button", { name: "New deck" }));
+    // The new deck joins the shelf as the open entry until it is saved.
+    const draft = within(shelf).getByRole("button", { name: /not saved yet/ });
+    expect(draft.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Save new deck" })).toBeTruthy();
+  });
+
+  it("rests New deck at the deck cap and says how to make room", () => {
+    const decks = Array.from({ length: KESSEN_MAX_DECKS }, (_, index) => ({
+      ...DECK,
+      id: `deck-${index}`,
+      name: `Deck ${index}`,
+    }));
+    render(<DeckBuilder {...props} decks={decks} />);
+    const shelf = screen.getByRole("region", { name: "Your decks" });
+    expect(
+      (within(shelf).getByRole("button", { name: "New deck" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(within(shelf).getByText(/delete one to start another/)).toBeTruthy();
+  });
+});
+
+describe("DeckBuilder card column", () => {
+  it("shows the tapped card in full with its copies and marks its keywords", () => {
+    render(
+      <DeckBuilder
+        cards={CARDS}
+        owned={OWNED}
+        decks={[DECK]}
+        userId="user-1"
+        dayKey="2026-11-16"
+        defaultFaction="SHIROHANA"
+        onSave={() => Promise.resolve({ ok: true })}
+        onDelete={() => Promise.resolve(true)}
+      />,
+    );
+    const detail = screen.getByRole("complementary", { name: "Card details" });
+    const key = within(detail).getByRole("region", { name: "Keyword key" });
+    // Every keyword is explained in the key.
+    for (const keyword of KESSEN_KEYWORDS)
+      expect(within(key).getByText(keyword)).toBeTruthy();
+    const kawarimi = seedCardByName("Kawarimi");
+    fireEvent.click(screen.getByRole("button", { name: /^Show Kawarimi\./ }));
+    expect(
+      within(detail).getByRole("article", { name: new RegExp(kawarimi.name) }),
+    ).toBeTruthy();
+    expect(within(detail).getByText(/in deck/)).toBeTruthy();
+    const marked = [...key.querySelectorAll("[data-active] dt")].map(
+      (term) => term.textContent,
+    );
+    expect(marked).toEqual(["Substitution"]);
+    // Keyboard focus on another tile previews it in the column.
+    const fireball = seedCardByName("Fireball");
+    fireEvent.focus(screen.getByRole("button", { name: /^Show Fireball\./ }));
+    expect(
+      within(detail).getByRole("article", { name: new RegExp(fireball.name) }),
+    ).toBeTruthy();
   });
 });
 
@@ -1282,12 +1383,14 @@ describe("DeckBuilder listings", () => {
     const link = screen.getByRole("link", { name: "Listed at the auction house" });
     expect(link.getAttribute("href")).toBe("/auctionhouse");
     fireEvent.click(
-      screen.getByRole("button", { name: new RegExp(`^Add ${listedCard.name}\\.`) }),
+      screen.getByRole("button", { name: new RegExp(`^Show ${listedCard.name}\\.`) }),
     );
-    expect(screen.getByRole("status").textContent).toBe(
-      "Your copies are listed at the auction house.",
-    );
-    // The reason overlays the tile; the caption under it stays.
+    // The card column names the listing and why the card cannot join the deck.
+    const detail = screen.getByRole("complementary", { name: "Card details" });
+    expect(within(detail).getByText("1 listed at the auction house")).toBeTruthy();
+    expect(
+      within(detail).getByText("Your copies are listed at the auction house."),
+    ).toBeTruthy();
     expect(link.isConnected).toBe(true);
   });
 });
