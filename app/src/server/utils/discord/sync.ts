@@ -167,7 +167,8 @@ const managedRoles = (config: DiscordConfig) =>
     ].filter((role): role is string => !!role),
   );
 
-export const desiredRoles = (config: DiscordConfig, character: SyncCharacter) => [
+/** Verified, village and rank roles to apply for the primary character. */
+const desiredRoles = (config: DiscordConfig, character: SyncCharacter) => [
   ...new Set(
     [
       config.verifiedRoleId,

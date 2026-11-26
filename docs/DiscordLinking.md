@@ -160,7 +160,7 @@ change lack them until their next Discord sign-in; those players get the consent
 
 1. Create **Verified Ninja**. Under *Links*, add the TNR application requirement
    "Linked ninja". Optionally require a minimum character level.
-2. Place the bot's role above Verified Ninja and the village roles, or it cannot assign
+2. Place the bot's role above Verified Ninja and the village and rank roles, or it cannot assign
    them, change nicknames below it or ban.
 3. `@everyone`: remove *View Channels* everywhere except a `#verify` channel that explains
    the steps and links to `https://www.theninja-rpg.com/discord/link`. Grant *View Channels*
@@ -175,7 +175,8 @@ The primary character's rank gives one rank role, swapped by the sync when the r
 up by the hourly cron) and removed with the other managed roles on unlink. Keys of
 `DISCORD_RANK_ROLE_IDS` are the game's ranks, optionally prefixed with `OUTLAW ` for outlaws
 (case-insensitive); unmapped keys give no role, and an unmapped outlaw key falls back to the
-plain rank's role, so outlaw Students and Genin share the village roles.
+plain rank's role, so outlaw Students and Genin have the same rank roles as village characters
+unless explicitly mapped.
 
 | Key | Suggested Discord role name |
 | --- | --- |
@@ -191,12 +192,11 @@ plain rank's role, so outlaw Students and Genin share the village roles.
 | `OUTLAW ELITE JONIN` | Warlord |
 
 The names match the in-game rank titles (`showUserRank`); the role names themselves are free,
-only the ids matter. The applied rank key is stored in `DiscordLink.syncedRank`, and a link
-whose character's rank or outlaw status no longer matches it is re-synced by the hourly cron.
-Links synced before the column existed start out mismatched, so set the variable before the
-first deploy that has it to give every linked member a rank role within a cron run or two.
-After changing the mapping later, existing members pick it up on the weekly full refresh, or
-right away through a staff resync.
+only the ids matter. The applied rank key is stored in `DiscordLink.syncedRank`. A link with a
+null value or a value that no longer matches its character's rank or outlaw status is re-synced
+by the hourly cron. Configure `DISCORD_RANK_ROLE_IDS` to apply the corresponding roles.
+Changes to the mapping reach existing members on the weekly full refresh, or right away
+through a staff resync.
 
 ## Rollout
 
