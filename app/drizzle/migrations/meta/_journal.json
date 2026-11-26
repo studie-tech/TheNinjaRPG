@@ -1352,6 +1352,13 @@
       "when": 1795433289907,
       "tag": "0193_low_warstar",
       "breakpoints": false
+    },
+    {
+      "idx": 194,
+      "version": "5",
+      "when": 1795674879051,
+      "tag": "0194_cooing_namorita",
+      "breakpoints": false
     }
   ]
 }

@@ -8081,7 +8081,7 @@ export type SanctionTombstone = InferSelectModel<typeof sanctionTombstone>;
  * `userId` allows one link per character; the unique key on (`discordId`, `slot`) caps a
  * Discord account at DISCORD_MAX_CHARACTERS_PER_ACCOUNT characters, since each link takes one
  * of the numbered slots. The `isPrimary` link of a Discord account decides its server
- * nickname, village role and Linked Roles metadata. OAuth tokens are AES-256-GCM encrypted at rest and only used to push
+ * nickname, village and rank roles and Linked Roles metadata. OAuth tokens are AES-256-GCM encrypted at rest and only used to push
  * Linked Roles metadata and to add the member to the server. Links made from the player's
  * Clerk Discord sign-in (`tokenSource` CLERK) store no token and fetch Clerk's on each use.
  *
@@ -8120,6 +8120,8 @@ export const discordLink = mysqlTable(
     syncedUsername: varchar("syncedUsername", { length: 191 }),
     syncedVillageId: varchar("syncedVillageId", { length: 191 }),
     syncedLevel: int("syncedLevel"),
+    /** Rank role key (`discordRankRoleKey`) last applied; null for a rank without one. */
+    syncedRank: varchar("syncedRank", { length: 32 }),
     syncedBanned: boolean("syncedBanned").default(false).notNull(),
     syncError: varchar("syncError", { length: 500 }),
   },

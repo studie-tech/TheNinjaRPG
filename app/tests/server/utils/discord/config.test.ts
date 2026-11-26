@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   getDiscordConfig,
   isDiscordLinkingEnabled,
+  parseRankRoleIds,
   parseTokenKey,
   parseVillageRoleIds,
 } from "@/server/utils/discord/config";
@@ -15,6 +16,7 @@ const KEYS = [
   "DISCORD_GUILD_ID",
   "DISCORD_VERIFIED_ROLE_ID",
   "DISCORD_VILLAGE_ROLE_IDS",
+  "DISCORD_RANK_ROLE_IDS",
   "DISCORD_TOKEN_ENCRYPTION_KEY",
   "NEXT_PUBLIC_BASE_URL",
 ] as const;
@@ -63,6 +65,7 @@ describe("getDiscordConfig", () => {
     configure({
       DISCORD_VERIFIED_ROLE_ID: "3333333333333333333",
       DISCORD_VILLAGE_ROLE_IDS: JSON.stringify({ village1: "4444444444444444444" }),
+      DISCORD_RANK_ROLE_IDS: JSON.stringify({ GENIN: "5555555555555555555" }),
     });
     const config = getDiscordConfig();
     expect(config?.redirectUri).toBe(
@@ -70,6 +73,7 @@ describe("getDiscordConfig", () => {
     );
     expect(config?.verifiedRoleId).toBe("3333333333333333333");
     expect(config?.villageRoleIds).toEqual({ village1: "4444444444444444444" });
+    expect(config?.rankRoleIds).toEqual({ GENIN: "5555555555555555555" });
   });
 });
 
@@ -83,6 +87,27 @@ describe("parsers", () => {
         JSON.stringify({ a: "4444444444444444444", b: 5, c: "role" }),
       ),
     ).toEqual({ a: "4444444444444444444" });
+  });
+
+  it("keeps only known rank keys, matched case-insensitively", () => {
+    expect(parseRankRoleIds(undefined)).toEqual({});
+    expect(parseRankRoleIds("not json")).toEqual({});
+    expect(
+      parseRankRoleIds(
+        JSON.stringify({
+          genin: "4444444444444444444",
+          "Outlaw  Chunin": "5555555555555555555",
+          "ELITE JONIN": "6666666666666666666",
+          NONE: "7777777777777777777",
+          KAGE: "8888888888888888888",
+          JONIN: "role",
+        }),
+      ),
+    ).toEqual({
+      GENIN: "4444444444444444444",
+      "OUTLAW CHUNIN": "5555555555555555555",
+      "ELITE JONIN": "6666666666666666666",
+    });
   });
 
   it("accepts 32-byte keys as hex or base64", () => {

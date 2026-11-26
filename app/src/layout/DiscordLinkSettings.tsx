@@ -36,7 +36,8 @@ export const DiscordLinkSettings: React.FC = () => {
       <div className="space-y-3 p-4">
         <p className="text-sm">
           Link your Discord account to unlock the TheNinja-RPG Discord server. Your
-          server nickname follows your character name and you receive your village role.
+          server nickname follows your character name and you receive your village and
+          rank roles.
         </p>
         <DiscordLinkRules />
         <DiscordAuthorizeButton label="Link Discord account" />
@@ -61,8 +62,8 @@ export const DiscordLinkSettings: React.FC = () => {
         <div className="flex flex-row flex-wrap items-center gap-2">
           <p className="text-muted-foreground text-sm">
             {data.link.isPrimary
-              ? "Primary: your server nickname and village role follow this character."
-              : `Your server nickname and village role follow ${data.link.sibling}.`}
+              ? "Primary: your server nickname, village and rank roles follow this character."
+              : `Your server nickname, village and rank roles follow ${data.link.sibling}.`}
           </p>
           {!data.link.isPrimary && (
             <Button

@@ -1,0 +1,1 @@
+ALTER TABLE `DiscordLink` ADD `syncedRank` varchar(32);

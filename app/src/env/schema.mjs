@@ -56,6 +56,9 @@ export const serverSchema = z.object({
   DISCORD_VERIFIED_ROLE_ID: z.string().optional(),
   // JSON object of TNR village id to Discord role id, e.g. {"<villageId>":"<roleId>"}
   DISCORD_VILLAGE_ROLE_IDS: z.string().optional(),
+  // JSON object of rank (STUDENT, GENIN, CHUNIN, JONIN, ELDER, ELITE JONIN, or OUTLAW <rank>)
+  // to Discord role id, e.g. {"GENIN":"<roleId>","OUTLAW CHUNIN":"<roleId>"}
+  DISCORD_RANK_ROLE_IDS: z.string().optional(),
   // Key for the stored OAuth tokens: 32 bytes as base64 or 64 hex characters
   DISCORD_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   FACEBOOK_PAGE_ID: z.string().optional(),
@@ -188,6 +191,7 @@ export const serverEnv = {
   DISCORD_GUILD_ID: process.env.DISCORD_GUILD_ID,
   DISCORD_VERIFIED_ROLE_ID: process.env.DISCORD_VERIFIED_ROLE_ID,
   DISCORD_VILLAGE_ROLE_IDS: process.env.DISCORD_VILLAGE_ROLE_IDS,
+  DISCORD_RANK_ROLE_IDS: process.env.DISCORD_RANK_ROLE_IDS,
   DISCORD_TOKEN_ENCRYPTION_KEY: process.env.DISCORD_TOKEN_ENCRYPTION_KEY,
   FACEBOOK_PAGE_ID: process.env.FACEBOOK_PAGE_ID,
   META_CAPI_ENABLED: /** @type {"true" | "false" | undefined} */ (process.env.META_CAPI_ENABLED),

@@ -3,6 +3,8 @@ import {
   DISCORD_MIN_ACCOUNT_AGE_DAYS,
   DISCORD_NICKNAME_MAX_LENGTH,
   DISCORD_UNLINK_COOLDOWN_DAYS,
+  type UserRank,
+  UserRanks,
 } from "@/drizzle/constants";
 import { addDays } from "@/utils/time";
 
@@ -81,7 +83,7 @@ export const describeDiscordLinkResult = (
       return {
         success: true,
         title: "Second character linked",
-        description: `${details.automatic ? `${DISCORD_AUTOMATIC_LINK_TEXT} ` : ""}This Discord account is now linked to two characters. Your other character stays primary for your server nickname and village role; you can switch that in profile settings.`,
+        description: `${details.automatic ? `${DISCORD_AUTOMATIC_LINK_TEXT} ` : ""}This Discord account is now linked to two characters. Your other character stays primary for your server nickname, village and rank roles; you can switch that in profile settings.`,
       };
     case "relinked":
       return {
@@ -195,3 +197,40 @@ export const maskName = (name: string) => {
 /** Guild nickname for a character; Discord limits nicknames to 32 characters. */
 export const discordNicknameFor = (username: string) =>
   [...username].slice(0, DISCORD_NICKNAME_MAX_LENGTH).join("");
+
+/** Ranks that carry a Discord rank role; `NONE` (no rank yet) carries none. */
+const DISCORD_RANKS = UserRanks.filter((rank) => rank !== "NONE");
+const OUTLAW_PREFIX = "OUTLAW ";
+
+/**
+ * Keys of `DISCORD_RANK_ROLE_IDS`: each rank, and each rank as an outlaw (`OUTLAW CHUNIN` is
+ * the Lower Outlaw, `OUTLAW JONIN` the Higher Outlaw). An outlaw key that is not mapped falls
+ * back to the plain rank's role.
+ */
+export const DiscordRankRoleKeys = [
+  ...DISCORD_RANKS,
+  ...DISCORD_RANKS.map((rank) => `${OUTLAW_PREFIX}${rank}`),
+] as readonly string[];
+
+/** The rank role key of a character, or null when its rank has no role. */
+export const discordRankRoleKey = (character: {
+  rank: UserRank;
+  isOutlaw: boolean;
+}): string | null => {
+  if (character.rank === "NONE") return null;
+  return character.isOutlaw ? `${OUTLAW_PREFIX}${character.rank}` : character.rank;
+};
+
+/** The role id for a rank role key: the outlaw role when mapped, else the plain rank's. */
+export const discordRankRoleId = (
+  rankRoleIds: Record<string, string>,
+  key: string | null,
+): string | undefined => {
+  if (!key) return undefined;
+  return (
+    rankRoleIds[key] ??
+    (key.startsWith(OUTLAW_PREFIX)
+      ? rankRoleIds[key.slice(OUTLAW_PREFIX.length)]
+      : undefined)
+  );
+};

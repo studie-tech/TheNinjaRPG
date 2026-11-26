@@ -4,7 +4,7 @@ import { absoluteUrl, noindexMetadata, SITE_NAME } from "@/libs/seo";
 
 const TITLE = "Link your Discord account";
 const FULL_TITLE = `${TITLE} | ${SITE_NAME}`;
-const DESCRIPTION = `Link your TheNinja-RPG character to Discord to unlock the server: Verified Ninja role, village role and your character name as nickname. Up to ${DISCORD_MAX_CHARACTERS_PER_ACCOUNT} accounts per Discord.`;
+const DESCRIPTION = `Link your TheNinja-RPG character to Discord to unlock the server: Verified Ninja role, village and rank roles, and your character name as nickname. Up to ${DISCORD_MAX_CHARACTERS_PER_ACCOUNT} accounts per Discord.`;
 
 /** Static 1200x630 card shown when /discord/link is shared (e.g. in Discord itself). */
 const DISCORD_LINK_OG_IMAGE = {

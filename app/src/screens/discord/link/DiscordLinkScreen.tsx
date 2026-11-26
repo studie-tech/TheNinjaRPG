@@ -126,7 +126,7 @@ const DiscordLinkStart: React.FC = () => {
           Link the Discord account you use for the TheNinja-RPG server to your character{" "}
           <span className="font-bold">{userData.username}</span>. Linking grants the
           Verified Ninja role, sets your server nickname to your character name and adds
-          your village role.
+          your village and rank roles (Academy Student, Genin, Chunin, Jonin and up).
         </p>
       )}
       <DiscordLinkRules />
