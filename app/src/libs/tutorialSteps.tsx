@@ -627,8 +627,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "A real mission",
     wayLead: "A hunter just ran into the <b>academy</b>. Someone has seen the pup!",
-    description:
-      "The pup is cornered on the eastern ridge, and the masked figure is closing in. Your final trial: get there first, and bring it back safely.",
+    description: "You heard him. Take the mission, and we're off.",
     action: "Accept the mission in the Academy Trials.",
     elementIds: ["tutorial-dialog-options", starterLogbookEntry],
     teachOnPage: true,
@@ -822,7 +821,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "genin",
     title: "Graduation",
     description:
-      "You did well out there, better than most graduates. That metal the courier left behind... show it to no one; I'll take it to the academy archives myself. Now, you have earned your graduation.",
+      "Better than most graduates, and on your first day out. That metal... tell no one. I'll take it to the archives myself. You've earned this.",
     action: "Answer me to complete the Academy Trials.",
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
