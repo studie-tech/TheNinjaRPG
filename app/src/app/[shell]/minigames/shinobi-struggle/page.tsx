@@ -1,14 +1,7 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
-import { noindexMetadata } from "@/libs/seo";
-import { ShinobiStruggleRoute } from "./ShinobiStruggleClient";
+import { ShinobiStruggleScreen } from "@/screens/minigames/shinobi-struggle/ShinobiStruggleScreen";
 
-export const metadata: Metadata = noindexMetadata("Shinobi Struggle");
+export { metadata } from "@/screens/minigames/shinobi-struggle/ShinobiStruggleScreen.metadata";
 
 export default function ShinobiStrugglePage() {
-  return (
-    <Suspense fallback={<p role="status">Loading Shinobi Struggle…</p>}>
-      <ShinobiStruggleRoute />
-    </Suspense>
-  );
+  return <ShinobiStruggleScreen />;
 }

@@ -26,7 +26,7 @@ const {
   fetchAuthenticatedGame,
   ninjaSignInUrl,
   ShinobiStruggleRoute,
-} = await import("@/app/[shell]/minigames/shinobi-struggle/ShinobiStruggleClient");
+} = await import("@/screens/minigames/shinobi-struggle/ShinobiStruggleClient");
 game.mockRestore();
 
 beforeEach(() => {
