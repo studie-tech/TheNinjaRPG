@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
-import { CombatRewards } from "@/layout/CombatRewards";
+import { CombatNotices, CombatRewards } from "@/layout/CombatRewards";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import Link from "@/layout/Link";
 import { isPvpEnergyRewardBattle, sendsToHospital } from "@/libs/combat/settlement";
@@ -96,6 +96,7 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
               onStarted={() => setBattleAtom(undefined)}
             />
           )}
+          <CombatNotices notices={result.notifications} />
           <CombatRewards
             result={result}
             isOutlaw={!!userData?.isOutlaw}

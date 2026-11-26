@@ -1,10 +1,46 @@
 import { afterEach, expect, it } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
-import { CombatRewards, HuntingRewards } from "@/layout/CombatRewards";
+import { CombatNotices, CombatRewards, HuntingRewards } from "@/layout/CombatRewards";
 import type { CombatResult } from "@/libs/combat/types";
 import type { HuntingReceipt } from "@/validators/hunting";
 
 afterEach(cleanup);
+
+it("reads battle notices in sections: quest progress, war, then equipment", () => {
+  const view = render(
+    <CombatNotices
+      notices={[
+        "Kunai has broken and cannot be used until repaired!",
+        "Hidden Leaf's shrine captured! Hidden Leaf lost 5 war HP!",
+        "The courier <b>staggers</b> and vanishes.",
+        "Kunai durability is now 40%. Consider repairing it soon!",
+      ]}
+    />,
+  );
+  const sections = view
+    .getAllByRole("region")
+    .map((section) => [
+      section.getAttribute("aria-label"),
+      [...section.querySelectorAll("p")].map((line) => line.textContent),
+    ]);
+  expect(sections).toEqual([
+    ["Quest update", ["The courier staggers and vanishes."]],
+    ["War update", ["Hidden Leaf's shrine captured! Hidden Leaf lost 5 war HP!"]],
+    [
+      "Equipment",
+      [
+        "Kunai has broken and cannot be used until repaired!",
+        "Kunai durability is now 40%. Consider repairing it soon!",
+      ],
+    ],
+  ]);
+  expect(view.getByText("staggers").tagName).toBe("B");
+});
+
+it("shows no notice sections for a battle without notices", () => {
+  const view = render(<CombatNotices notices={[]} />);
+  expect(view.queryAllByRole("region")).toEqual([]);
+});
 
 it("preserves ordinary rewards, mastery names, signed territory changes, bounties and loot", () => {
   const result = combatResult({

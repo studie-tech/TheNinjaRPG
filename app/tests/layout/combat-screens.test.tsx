@@ -707,7 +707,7 @@ describe("combat result screen", () => {
 });
 
 describe("combat action notifications", () => {
-  it("titles each settlement notice by its kind and advances the tutorial on a win", async () => {
+  it("leaves settlement notices to the result screen and advances the tutorial on a win", async () => {
     state.currentStep = {
       id: "combat-fight",
       chapter: "academy",
@@ -743,15 +743,9 @@ describe("combat action notifications", () => {
         {},
       ),
     );
+    // Settlement notices wait for the result screen; only the action's own notice toasts.
     expect(toasts.mock.calls.map(([call]) => call)).toEqual([
       { success: false, message: "Turn passed" },
-      { success: false, title: "Item Broken", message: notifications[0] },
-      { success: false, title: "Low Durability Warning", message: notifications[1] },
-      { success: false, title: "Low Durability Warning", message: notifications[2] },
-      { success: true, title: "War Update", message: notifications[3] },
-      { success: true, title: "War Update", message: notifications[4] },
-      { success: true, title: "Quest Update", message: notifications[5] },
-      { success: true, title: "Quest Update", message: notifications[6] },
     ]);
     expect(state.setBattleState).toHaveBeenLastCalledWith({
       battle: settled,

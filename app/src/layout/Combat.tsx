@@ -35,15 +35,7 @@ import {
 } from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
-import {
-  COMBAT_LOBBY_SECONDS,
-  COMBAT_SECONDS,
-  ITEM_BROKEN_NOTICE,
-  ITEM_DURABILITY_CRITICAL_NOTICE,
-  ITEM_DURABILITY_NOTICE,
-  SHRINE_CAPTURED_NOTICE,
-  SHRINE_RECAPTURED_NOTICE,
-} from "@/libs/combat/constants";
+import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { stillInBattle } from "@/libs/combat/inBattle";
 import { inspectsBattlefieldTap } from "@/libs/combat/inspection";
@@ -523,31 +515,8 @@ const Combat: React.FC<CombatProps> = (props) => {
           logEntries: data.logEntries,
         });
       }
-      if (data?.result?.notifications.length !== 0) {
-        data?.result?.notifications.forEach((notification) => {
-          // Check if this is a durability warning
-          const isDurabilityWarning =
-            notification.includes(ITEM_DURABILITY_NOTICE) ||
-            notification.includes(ITEM_DURABILITY_CRITICAL_NOTICE) ||
-            notification.includes(ITEM_BROKEN_NOTICE);
-          const isBrokenItem = notification.includes(ITEM_BROKEN_NOTICE);
-          // Check if this is a war notification
-          const isWarNotification =
-            notification.includes(SHRINE_CAPTURED_NOTICE) ||
-            notification.includes(SHRINE_RECAPTURED_NOTICE);
-          showMutationToast({
-            success: !isDurabilityWarning, // Durability warnings are not "success" (they're warnings)
-            title: isDurabilityWarning
-              ? isBrokenItem
-                ? "Item Broken"
-                : "Low Durability Warning"
-              : isWarNotification
-                ? "War Update"
-                : "Quest Update",
-            message: notification,
-          });
-        });
-      }
+      // Battle-end notices (quest progress, equipment, shrines) are read on the result
+      // screen, after the fight has played out.
       // Check for quest updates
       // The tutorial claims its own quest rewards from the assistant panel
       if (data.updatedQuestIds?.length && !isTutorialActive(userData)) {

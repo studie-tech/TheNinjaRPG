@@ -1,6 +1,15 @@
 import type { ReactNode } from "react";
+import {
+  ITEM_BROKEN_NOTICE,
+  ITEM_DURABILITY_CRITICAL_NOTICE,
+  ITEM_DURABILITY_NOTICE,
+  SHRINE_CAPTURED_NOTICE,
+  SHRINE_RECAPTURED_NOTICE,
+} from "@/libs/combat/constants";
 import type { CombatResult } from "@/libs/combat/types";
 import { getHuntingRank } from "@/libs/hunting";
+import { cn } from "@/libs/shadui";
+import { parseHtml } from "@/utils/parse";
 import { capitalizeFirstLetter, formatAmount } from "@/utils/string";
 import type { HuntingReceipt } from "@/validators/hunting";
 
@@ -141,6 +150,41 @@ export function CombatRewards({
   );
 }
 
+/**
+ * What the battle's end changed beyond its rewards (quest progress, worn equipment,
+ * shrines changing hands), read on the result screen once the fight has played out.
+ */
+export function CombatNotices({ notices }: { notices: string[] }) {
+  const groups = NOTICE_GROUPS.map((group) => ({
+    ...group,
+    notices: notices.filter((notice) => getNoticeKind(notice) === group.kind),
+  })).filter((group) => group.notices.length > 0);
+  return groups.map((group) => (
+    <section
+      key={group.kind}
+      className="min-w-0 space-y-2 rounded border bg-muted/30 p-3 text-left"
+      aria-label={group.title}
+    >
+      <h3 className="break-words font-semibold">{group.title}</h3>
+      {group.notices.map((notice) => (
+        <p
+          key={notice}
+          data-reading-text
+          className={cn(
+            "break-words",
+            notice.includes(ITEM_BROKEN_NOTICE) && "text-red-700 dark:text-red-400",
+            (notice.includes(ITEM_DURABILITY_NOTICE) ||
+              notice.includes(ITEM_DURABILITY_CRITICAL_NOTICE)) &&
+              "text-amber-700 dark:text-amber-400",
+          )}
+        >
+          {parseHtml(notice)}
+        </p>
+      ))}
+    </section>
+  ));
+}
+
 /** Reuse the combat summary for persisted hunting receipts, including failed encounters. */
 export function HuntingRewards({ receipt }: { receipt: HuntingReceipt }) {
   return (
@@ -213,3 +257,22 @@ const formatGain = (value: number) =>
     : Math.abs(value) < 0.05
       ? String(Number(value.toPrecision(1)))
       : value.toFixed(1);
+
+/** The result screen's notice sections, in the order they are read. */
+const NOTICE_GROUPS = [
+  { kind: "quest", title: "Quest update" },
+  { kind: "war", title: "War update" },
+  { kind: "equipment", title: "Equipment" },
+] as const;
+
+/** Which section a battle notice belongs to; anything not about gear or shrines is quest progress. */
+const getNoticeKind = (notice: string): (typeof NOTICE_GROUPS)[number]["kind"] =>
+  [ITEM_BROKEN_NOTICE, ITEM_DURABILITY_CRITICAL_NOTICE, ITEM_DURABILITY_NOTICE].some(
+    (marker) => notice.includes(marker),
+  )
+    ? "equipment"
+    : [SHRINE_CAPTURED_NOTICE, SHRINE_RECAPTURED_NOTICE].some((marker) =>
+          notice.includes(marker),
+        )
+      ? "war"
+      : "quest";
