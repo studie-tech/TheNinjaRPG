@@ -183,4 +183,38 @@ describeWithDatabase("Bloodright battle snapshots", () => {
     const stored = await fetchBattle(db, row.id);
     expect(stored?.extraState.bloodrightChanges).toBeUndefined();
   });
+  for (const battleType of ["KAGE_AI", "CLAN_CHALLENGE"] as const) {
+    it(`applies owned changes to the automatic player actor in ${battleType}`, async () => {
+      const db = await getTestDatabase();
+      await db
+        .update(userJutsu)
+        .set({ equipped: true })
+        .where(eq(userJutsu.id, "owned-target"));
+      await db
+        .update(userData)
+        .set({ isAi: true, bloodright: [{ optionId: "upgrade", cost: 100 }] })
+        .where(eq(userData.userId, "opponent"));
+      expect(
+        await initiateBattle(
+          { client: db, userIds: ["owner"], targetIds: ["opponent"] },
+          battleType,
+        ),
+      ).toMatchObject({ success: true });
+      const row = await db.query.battle.findFirst();
+      if (!row) throw new Error("Missing automatic battle");
+      const stored = await fetchBattle(db, row.id);
+      if (!stored) throw new Error("Missing hydrated automatic battle");
+      const actor = stored.usersState.find(
+        (user) => user.controllerId === "owner" && !user.isSummon,
+      );
+      if (!actor) throw new Error("Missing owner actor");
+      expect(actor).toMatchObject({ isAi: true, isOriginal: false });
+      expect(
+        availableUserActions(stored, actor.userId).find(
+          (action) => action.id === "target",
+        )?.effects[0],
+      ).toMatchObject({ power: 25 });
+      expect(stored.extraState.bloodrightChanges?.opponent).toBeUndefined();
+    });
+  }
 });

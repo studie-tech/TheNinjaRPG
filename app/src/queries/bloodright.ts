@@ -111,23 +111,27 @@ export const updateUserDataForPurchase = (
 
 /** Save content against the option and source jutsu snapshots. */
 export const saveBloodrightOption = (
-  client: Pick<DrizzleClient, "insert" | "update">,
+  client: Pick<DrizzleClient, "execute" | "update">,
   id: string,
   data: BloodrightOptionData,
-  previous?: { updatedAt: Date },
-  source?: { updatedAt: Date },
+  source: { updatedAt: Date },
+  expectedUpdatedAt?: Date,
 ) => {
-  if (!previous) return client.insert(bloodrightOption).values({ id, ...data });
+  // INSERT ... SELECT locks the source while creating its dependent option, so a
+  // concurrent jutsu deletion cannot leave an option pointing at a missing row.
+  if (!expectedUpdatedAt)
+    return client.execute(sql`INSERT INTO ${bloodrightOption}
+      (id, bloodlineId, jutsuId, name, description, seichiSilverCost, hidden, changes)
+      SELECT ${id}, ${data.bloodlineId}, ${data.jutsuId}, ${data.name}, ${data.description}, ${data.seichiSilverCost}, ${data.hidden}, CAST(${JSON.stringify(data.changes)} AS JSON)
+      FROM ${jutsu} WHERE ${jutsu.id} = ${data.jutsuId} AND ${jutsu.updatedAt} = ${source.updatedAt}`);
   return client
     .update(bloodrightOption)
-    .set({ ...data, updatedAt: getNextUserSnapshotAt(previous.updatedAt) })
+    .set({ ...data, updatedAt: getNextUserSnapshotAt(expectedUpdatedAt) })
     .where(
       and(
         eq(bloodrightOption.id, id),
-        eq(bloodrightOption.updatedAt, previous.updatedAt),
-        source
-          ? sql`EXISTS (SELECT 1 FROM ${jutsu} WHERE ${jutsu.id} = ${data.jutsuId} AND ${jutsu.updatedAt} = ${source.updatedAt})`
-          : undefined,
+        eq(bloodrightOption.updatedAt, expectedUpdatedAt),
+        sql`EXISTS (SELECT 1 FROM ${jutsu} WHERE ${jutsu.id} = ${data.jutsuId} AND ${jutsu.updatedAt} = ${source.updatedAt})`,
         sql`(NOT EXISTS (SELECT 1 FROM ${userData} WHERE JSON_SEARCH(${userData.bloodright}, 'one', ${id}, NULL, '$[*].optionId') IS NOT NULL) OR (${bloodrightOption.bloodlineId} = ${data.bloodlineId} AND ${bloodrightOption.jutsuId} = ${data.jutsuId} AND ${bloodrightOption.changes} = CAST(${JSON.stringify(data.changes)} AS JSON)))`,
       ),
     );

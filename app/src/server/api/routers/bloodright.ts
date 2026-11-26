@@ -69,7 +69,13 @@ export const bloodrightRouter = createTRPCRouter({
       };
     }),
   save: protectedProcedure
-    .input(z.object({ id: z.string().optional(), data: bloodrightOptionSchema }))
+    .input(
+      z.object({
+        id: z.string().optional(),
+        updatedAt: z.date().optional(),
+        data: bloodrightOptionSchema,
+      }),
+    )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, previous, jutsus] = await Promise.all([
@@ -86,6 +92,11 @@ export const bloodrightRouter = createTRPCRouter({
         (input.id && !previous)
       )
         return errorResponse("Bloodright option not found");
+      if (
+        previous &&
+        (!input.updatedAt || input.updatedAt.getTime() !== previous.updatedAt.getTime())
+      )
+        return errorResponse("This option changed. Refresh before saving your edits");
       const source = jutsus.find(
         (entry) => entry.id === input.data.jutsuId && (canSeeHidden || !entry.hidden),
       );
@@ -102,8 +113,8 @@ export const bloodrightRouter = createTRPCRouter({
         ctx.drizzle,
         id,
         input.data,
-        previous ?? undefined,
         source,
+        input.id ? input.updatedAt : undefined,
       );
       if (result.rowsAffected !== 1)
         return errorResponse(

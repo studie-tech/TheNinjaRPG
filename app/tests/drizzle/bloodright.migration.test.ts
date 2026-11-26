@@ -22,6 +22,9 @@ describeWithDatabase("jutsu Bloodright migration", () => {
           "INSERT INTO SkillTree (id, name, image, description, effects, pathType) VALUES ('passive', 'Passive', '', '', JSON_ARRAY(), 'BLOODRIGHT'), ('ordinary', 'Ordinary', '', '', JSON_ARRAY(), 'SKILL')",
         );
         await query(
+          "INSERT INTO SkillTree (id, name, image, description, effects, pathType, requiredSkillIds) VALUES ('mixed', 'Mixed', '', '', JSON_ARRAY(), 'SKILL', JSON_ARRAY('ordinary', 'passive')), ('retired-only', 'Retired only', '', '', JSON_ARRAY(), 'SKILL', JSON_ARRAY('passive'))",
+        );
+        await query(
           "INSERT INTO UserSkill (id, userId, skillId) VALUES ('passive-owned', 'owner', 'passive'), ('skill-owned', 'owner', 'ordinary')",
         );
         await query(await readMigration("0195_familiar_greymalkin.sql"));
@@ -32,8 +35,14 @@ describeWithDatabase("jutsu Bloodright migration", () => {
           { userId: "empty", seichiSilver: 75, bloodrightSpent: 0, count: 0 },
           { userId: "owner", seichiSilver: 175, bloodrightSpent: 0, count: 0 },
         ]);
-        const [skills] = await query<RowDataPacket[]>("SELECT id FROM SkillTree");
-        expect(skills.map((row) => row.id)).toEqual(["ordinary"]);
+        const [skills] = await query<RowDataPacket[]>(
+          "SELECT id, requiredSkillIds FROM SkillTree ORDER BY id",
+        );
+        expect(skills).toMatchObject([
+          { id: "mixed", requiredSkillIds: ["ordinary"] },
+          { id: "ordinary", requiredSkillIds: [] },
+          { id: "retired-only", requiredSkillIds: [] },
+        ]);
         const [owned] = await query<RowDataPacket[]>("SELECT skillId FROM UserSkill");
         expect(owned.map((row) => row.skillId)).toEqual(["ordinary"]);
         const [columns] = await query<RowDataPacket[]>("SHOW COLUMNS FROM SkillTree");

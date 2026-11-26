@@ -152,6 +152,14 @@ describe("jutsu-specific Bloodright", () => {
       ),
     ).toBeNull();
   });
+  it("rejects a same-ID catalog snapshot changed between initiation reads", () => {
+    const changed = { ...source, effects: [DamageTag.parse({ power: 30 })] };
+    expect(inheritBloodrightChanges("source", changed, [change()])).toBeNull();
+    expect(buildBloodrightChanges([source, changed], [option], [source])).toEqual({});
+    expect(
+      buildBloodrightChanges([changed, source], [option], [source]),
+    ).toHaveProperty("source");
+  });
   it("validates combined ancestor and descendant choices", () => {
     const tag = StunTag.parse({ rounds: 80 });
     const root = { ...identity("root"), effects: [tag] };

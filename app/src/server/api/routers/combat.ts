@@ -3438,8 +3438,9 @@ export const initiateBattle = async (
       const actors = usersState.filter(
         (actor) =>
           actor.controllerId === user.userId &&
-          actor.isOriginal &&
-          (!actor.isAi || actor.isVillageDutyCopy),
+          !actor.isSummon &&
+          ((actor.isOriginal && (!actor.isAi || actor.isVillageDutyCopy)) ||
+            (!user.isAi && AutoBattleTypes.includes(battleType))),
       );
       if (!actors.length) continue;
       const options = (user.bloodline?.bloodrightOptions ?? []).filter(

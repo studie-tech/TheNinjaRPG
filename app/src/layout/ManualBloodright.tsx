@@ -236,7 +236,7 @@ const BloodrightEditor = ({
     <form
       className="space-y-4"
       onSubmit={form.handleSubmit(
-        (data) => save.mutate({ id: option?.id, data }),
+        (data) => save.mutate({ id: option?.id, updatedAt: option?.updatedAt, data }),
         showFormErrorsToast,
       )}
     >

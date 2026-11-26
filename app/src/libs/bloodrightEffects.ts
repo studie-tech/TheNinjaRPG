@@ -125,7 +125,8 @@ export const inheritBloodrightChanges = (
   target: Pick<Jutsu, "id" | "effects">,
   changes: BloodrightChange[],
 ) => {
-  if (sourceId === target.id) return changes;
+  if (sourceId === target.id)
+    return isBloodrightCurrent(changes, target.effects) ? changes : null;
   const mechanics = (value: unknown): unknown => {
     if (typeof value === "number") return "numeric";
     if (Array.isArray(value)) return value.map(mechanics);
@@ -183,7 +184,8 @@ export const buildBloodrightChanges = (
 ): Record<string, BloodrightAppliedChange[]> => {
   const result: Record<string, BloodrightAppliedChange[]> = {};
   const byId = new Map(catalog.map((entry) => [entry.id, entry]));
-  for (const jutsu of jutsus) {
+  // The last catalog copy is authoritative when initiation loaded the same jutsu twice.
+  for (const jutsu of new Map(jutsus.map((entry) => [entry.id, entry])).values()) {
     const ancestors = bloodrightJutsuAncestors(jutsu.id, byId);
     const changes = options
       .filter(

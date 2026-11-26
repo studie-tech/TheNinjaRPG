@@ -13,11 +13,16 @@ import {
 import { bloodrightSwapRefund, matchBloodrightSnapshot } from "@/libs/bloodright";
 import { calcEnergy } from "@/libs/profile";
 import * as socials from "@/libs/socials";
+import { saveBloodrightOption } from "@/queries/bloodright";
+import { deleteJutsuForDelete } from "@/queries/jutsu";
 import { bloodlineRouter, updateBloodline } from "@/server/api/routers/bloodline";
 import { bloodrightRouter } from "@/server/api/routers/bloodright";
+import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { staffRouter } from "@/server/api/routers/staff";
 import { DamageTag, StunTag, type ZodAllTags } from "@/validators/combat";
+import { insertJutsus } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import {
   callerForDatabase,
@@ -60,6 +65,7 @@ const option = (id: string) => ({
 
 describeWithDatabase("Bloodright economy on MySQL", () => {
   beforeEach(async () => {
+    stubRateLimitTransport();
     const db = await getTestDatabase();
     await resetTables(
       actionLog,
@@ -130,8 +136,13 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     });
     if (!source) throw new Error("Missing option");
     expect(
-      (await caller.save({ id: "root", data: { ...source, name: "Renamed option" } }))
-        .success,
+      (
+        await caller.save({
+          id: "root",
+          updatedAt: source.updatedAt,
+          data: { ...source, name: "Renamed option" },
+        })
+      ).success,
     ).toBe(true);
     expect(
       (
@@ -140,11 +151,16 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
         })
       )?.name,
     ).toBe("child");
+    const renamed = await db.query.bloodrightOption.findFirst({
+      where: eq(bloodrightOption.id, "root"),
+    });
+    if (!renamed) throw new Error("Missing renamed option");
     expect((await caller.purchase({ optionId: "root" })).success).toBe(true);
     expect(
       (
         await caller.save({
           id: "root",
+          updatedAt: renamed.updatedAt,
           data: { ...source, changes: [{ ...source.changes[0]!, value: 2 }] },
         })
       ).success,
@@ -152,6 +168,103 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     expect((await caller.delete({ optionId: "root" })).success).toBe(false);
     expect((await caller.refund({ optionId: "root" })).success).toBe(true);
     expect((await caller.delete({ optionId: "root" })).success).toBe(true);
+  });
+  it("rejects an editor's stale revision without overwriting another save", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, userId));
+    const caller = callerForDatabase(bloodrightRouter, userId, db);
+    const loaded = await db.query.bloodrightOption.findFirst({
+      where: eq(bloodrightOption.id, "root"),
+    });
+    if (!loaded) throw new Error("Missing option");
+    expect(
+      (
+        await caller.save({
+          id: loaded.id,
+          updatedAt: loaded.updatedAt,
+          data: { ...loaded, name: "Saved edit" },
+        })
+      ).success,
+    ).toBe(true);
+    const stale = await caller.save({
+      id: loaded.id,
+      updatedAt: loaded.updatedAt,
+      data: { ...loaded, name: "Stale edit" },
+    });
+    expect(stale).toMatchObject({ success: false });
+    expect(stale.message).toContain("Refresh");
+    expect(
+      (
+        await db.query.bloodrightOption.findFirst({
+          where: eq(bloodrightOption.id, loaded.id),
+        })
+      )?.name,
+    ).toBe("Saved edit");
+  });
+  it("keeps source jutsu while unowned or purchased options reference it", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, userId));
+    const api = callerForDatabase(jutsuRouter, userId, db);
+    expect(
+      (await api.getJutsuRelations({ jutsuId: "line-jutsu" })).bloodrightOptions,
+    ).toHaveLength(6);
+    expect((await api.delete({ id: "line-jutsu" })).success).toBe(false);
+    expect((await invoke("purchase", { optionId: "root" })).success).toBe(true);
+    expect((await api.delete({ id: "line-jutsu" })).success).toBe(false);
+    expect((await read()).bloodright).toEqual([{ optionId: "root", cost: 100 }]);
+    expect((await read()).seichiSilver).toBe(900);
+    expect((await invoke("refund", { optionId: "root" })).success).toBe(true);
+    await db.delete(bloodrightOption);
+    expect((await api.delete({ id: "line-jutsu" })).success).toBe(true);
+  });
+  it("withholds hidden Bloodright relation names from player content lookups", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(bloodrightOption)
+      .set({ hidden: true })
+      .where(eq(bloodrightOption.id, "root"));
+    const caller = callerForDatabase(jutsuRouter, userId, db);
+    expect(
+      (await caller.getJutsuRelations({ jutsuId: "line-jutsu" })).bloodrightOptions.map(
+        (entry) => entry.id,
+      ),
+    ).not.toContain("root");
+    await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, userId));
+    expect(
+      (await caller.getJutsuRelations({ jutsuId: "line-jutsu" })).bloodrightOptions.map(
+        (entry) => entry.id,
+      ),
+    ).toContain("root");
+  });
+  it("does not orphan an option when creation races source deletion", async () => {
+    const db = await getTestDatabase();
+    for (let index = 0; index < 8; index++) {
+      const id = `race-jutsu-${index}`;
+      await insertJutsus([
+        {
+          id,
+          name: id,
+          image: "",
+          description: "",
+          effects: [damage],
+          bloodlineId: "line",
+        },
+      ]);
+      const source = await db.query.jutsu.findFirst({ where: eq(jutsu.id, id) });
+      if (!source) throw new Error("Missing source");
+      const data = { ...option(`race-option-${index}`), jutsuId: id };
+      await Promise.all([
+        saveBloodrightOption(db, data.id, data, source),
+        deleteJutsuForDelete(db, { id }),
+      ]);
+      const [saved, remaining] = await Promise.all([
+        db.query.bloodrightOption.findFirst({
+          where: eq(bloodrightOption.id, data.id),
+        }),
+        db.query.jutsu.findFirst({ where: eq(jutsu.id, id) }),
+      ]);
+      expect(!!saved && !remaining).toBe(false);
+    }
   });
   it("saves an enhancement for a historical source tag with omitted defaults", async () => {
     const db = await getTestDatabase();
