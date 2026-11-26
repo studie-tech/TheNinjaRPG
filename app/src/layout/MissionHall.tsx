@@ -410,6 +410,12 @@ export default function MissionHall({ userData }: MissionHallProps) {
                     <AlertDialogTrigger asChild>
                       <button
                         type="button"
+                        // Lessons point at a tile by its kind and rank, such as an errand.
+                        id={
+                          isErrand
+                            ? "tutorial-missionhall-errand"
+                            : `tutorial-missionhall-${setting.type}-${setting.rank.toLowerCase()}`
+                        }
                         disabled={grayScale || isSpecificStartBlocked}
                         className={cn(
                           "disabled:cursor-not-allowed disabled:opacity-60",
@@ -493,6 +499,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           </AlertDialogAction>
                         ) : (
                           <AlertDialogAction
+                            id="tutorial-missionhall-accept"
                             disabled={isSpecificStartBlocked}
                             onClick={(e) => {
                               e.preventDefault();

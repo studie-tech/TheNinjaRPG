@@ -27,7 +27,10 @@ import { SortableList } from "@/components/ui/sortable-list";
 import type { QuestType } from "@/drizzle/constants";
 import {
   IMG_URL_ASSISTANT,
+  LEMU_SCENE_CHARACTER_IDS,
   OrderedQuestTypesInTutorial,
+  TUTORIAL_GENIN_EXAM_QUEST_ID,
+  TUTORIAL_STARTER_QUEST_ID,
   TUTORIAL_STEPS_COUNT,
 } from "@/drizzle/constants";
 import type { UserQuest } from "@/drizzle/schema";
@@ -36,7 +39,7 @@ import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useRetryQuestBattle } from "@/hooks/quest";
 import { TUTORIAL_REMATCH_TITLE, useTutorialStep } from "@/hooks/tutorial";
 import { characterStorageKey } from "@/hooks/useActivityDock";
-import { useStoryGuidance } from "@/hooks/useStoryGuidance";
+import { useStoryGuidance, useStoryObjectiveGuidance } from "@/hooks/useStoryGuidance";
 import {
   spokenStepAtom,
   storyScenePlayingAtom,
@@ -753,7 +756,10 @@ const PlayerTutorialAssistant: React.FC<
 
   // Once the trials are over the story leads: its chapter and Leads come before other quests.
   const { story, user: storyUser } = useStoryGuidance();
+  // A Mission Hall quest that counts towards the chapter comes first, so its claim shows.
+  const objectiveGuidance = useStoryObjectiveGuidance();
   const storyQuestIds = [
+    ...(objectiveGuidance?.focus.countsFor ? [objectiveGuidance.focus.questId] : []),
     ...(story?.currentQuestId ? [story.currentQuestId] : []),
     ...(story?.activeLeadIds ?? []),
   ];
@@ -968,14 +974,16 @@ const PlayerTutorialAssistant: React.FC<
     void updateTutorialStep({ step: catchUpIndex });
   }, [catchUpIndex, stepNumber, updateTutorialStep]);
 
-  // Get character images for post-tutorial quest (no background)
-  // For starter quests, skip fetching scene characters - we'll use the A/B tested assistant image instead
+  // The guided quest's speaker. Lemu teaches the Academy Trials, so their lessons keep her
+  // portrait; every other quest shows who its scene names.
   const postTutorialCharacterIds: string[] = [];
   if (showPostTutorialQuest && postTutorialQuest) {
     const quest = postTutorialQuest.userQuest.quest;
-    const isStarterQuest = quest.questType === "starter";
+    const isTrialsQuest =
+      quest.id === TUTORIAL_STARTER_QUEST_ID ||
+      quest.id === TUTORIAL_GENIN_EXAM_QUEST_ID;
     // Only consecutive quests have an active objective, which may cast its own scene.
-    if (!isStarterQuest) {
+    if (!isTrialsQuest) {
       postTutorialCharacterIds.push(
         ...(postTutorialObjective?.sceneCharacters?.length
           ? postTutorialObjective.sceneCharacters
@@ -1094,7 +1102,11 @@ const PlayerTutorialAssistant: React.FC<
     showPostTutorialQuest && postTutorialQuest
       ? postTutorialCharacterAssets
           ?.filter((asset) => asset.type === "SCENE_CHARACTER")
-          .map((asset) => asset.image)?.[0]
+          .map((asset) =>
+            LEMU_SCENE_CHARACTER_IDS.includes(asset.id)
+              ? IMG_URL_ASSISTANT
+              : asset.image,
+          )?.[0]
       : undefined;
 
   // A control pressed on the way to the step's target has a call to action of its own,
@@ -1135,6 +1147,7 @@ const PlayerTutorialAssistant: React.FC<
     isPostTutorial &&
     storyCard &&
     (STORY_CARD_OVERRIDES.some((prefix) => storyCard.id.startsWith(prefix)) ||
+      storyCard.leads ||
       !showPostTutorialQuest)
   ) {
     return (
@@ -1145,6 +1158,7 @@ const PlayerTutorialAssistant: React.FC<
           eyebrow={storyCard.eyebrow}
           stepId={storyCard.id}
           lead={storyCard.lead}
+          action={storyCard.action}
           footer={storyCard.footer}
           onOpenDisableModal={openDisableModal}
           disableLabel={disableLabel}

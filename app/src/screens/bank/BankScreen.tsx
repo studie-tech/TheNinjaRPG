@@ -239,7 +239,7 @@ export function BankScreen() {
             <Coins className="h-20 w-20" />
             <p className="text-lg">{money.toLocaleString()} ryo</p>
             <h2 className="font-bold text-xl">Money on hand</h2>
-            <div className="w-full px-4 pt-3">
+            <div id="tutorial-bank-deposit" className="w-full px-4 pt-3">
               <AmountForm
                 form={toBankForm}
                 onSubmit={onDeposit}

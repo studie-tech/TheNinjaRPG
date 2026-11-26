@@ -2006,9 +2006,10 @@ describe("quest steps", () => {
         questId: "high",
         nextObjectiveId: "after",
       });
+      // Only the Academy Trials keep Lemu whoever their scene names; this quest is not one.
       expect(state.sceneAssets).toHaveBeenLastCalledWith(
-        { assetIds: first === "starter" ? [] : ["scene-character"] },
-        { enabled: first !== "starter" },
+        { assetIds: ["scene-character"] },
+        { enabled: true },
       );
 
       fireEvent.click(view.getByTitle("Sort quest priorities"));

@@ -29,6 +29,25 @@ describe("getTutorialWay", () => {
     expect(way("/academy", { pathname: "/academy" })).toBeUndefined();
   });
 
+  it("leads story objectives to village buildings and main-menu pages", () => {
+    expect(way("/missionhall", { pathname: "/village" })).toMatchObject({
+      elementIds: ["tutorial-missionhall"],
+      action: "Tap Mission Hall.",
+    });
+    expect(way("/bank")?.elementIds).toEqual(["tutorial-village"]);
+    expect(way("/tavern")).toMatchObject({
+      elementIds: ["tutorial-tavern"],
+      action: "Tap Tavern in the main menu.",
+      isInGameMenu: true,
+      href: "/tavern",
+    });
+    expect(way("/occupation")).toMatchObject({
+      elementIds: ["tutorial-jobs"],
+      href: "/occupation",
+    });
+    expect(way("/tavern", { pathname: "/tavern" })).toBeUndefined();
+  });
+
   it("leads home over the map first from another sector", () => {
     const away = { sector: 222 };
     expect(way("/academy", away)?.elementIds).toEqual(["tutorial-travel"]);

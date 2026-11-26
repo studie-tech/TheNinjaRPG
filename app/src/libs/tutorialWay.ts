@@ -34,6 +34,8 @@ export const getTutorialWay = (info: {
     return menuWay("travel", "Travel", "The map will show us where to go.");
   if (path === "/profile")
     return menuWay("profile", "Profile", "Your profile keeps all of this.");
+  const menuEntry = MENU_PAGES[path];
+  if (menuEntry) return menuWay(menuEntry.id, menuEntry.name, menuEntry.lead, path);
   if (path === "/profile/experience") {
     if (hasUnassignedExperience)
       return {
@@ -101,16 +103,41 @@ const BUILDINGS: Partial<Record<string, { name: string; isOnWakeIsland?: boolean
   "/battlearena": { name: "Battle Arena" },
   "/ramenshop": { name: "Ramen Shop" },
   "/pets": { name: "Bondkeeper Sanctuary", isOnWakeIsland: true },
+  "/missionhall": { name: "Mission Hall" },
+  "/bank": { name: "Bank" },
+  "/towerDefense": { name: "Guard Hall" },
+  "/blackmarket": { name: "Black Market" },
+  "/clanhall": { name: "Clan Hall" },
+  "/chakraStorm": { name: "Scout Post" },
+  "/hospital": { name: "Hospital" },
+  "/home": { name: "Home" },
 };
 
+/** Pages the main menu opens, by route: its entry's id, name and what Lemu says of it. */
+const MENU_PAGES: Partial<Record<string, { id: string; name: string; lead: string }>> =
+  {
+    "/tavern": {
+      id: "tavern",
+      name: "Tavern",
+      lead: "The <b>Tavern</b> is in the main menu.",
+    },
+    "/items": {
+      id: "items",
+      name: "Items",
+      lead: "Your gear waits under <b>Items</b>.",
+    },
+    "/occupation": { id: "jobs", name: "Jobs", lead: "Trades are under <b>Jobs</b>." },
+  };
+
 const menuWay = (
-  route: "travel" | "profile",
+  id: string,
   name: string,
   lead: string,
+  href = `/${id}`,
 ): TutorialWay => ({
-  elementIds: [`tutorial-${route}`],
+  elementIds: [`tutorial-${id}`],
   action: `Tap ${name} in the main menu.`,
   lead,
   isInGameMenu: true,
-  href: `/${route}`,
+  href,
 });

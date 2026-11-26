@@ -825,7 +825,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                     </Quote>
                   );
                 })}
-              <div className="relative">
+              <div id="tutorial-conversation-composer" className="relative">
                 {isNativeShell !== undefined && (
                   <RichInput
                     id="comment"

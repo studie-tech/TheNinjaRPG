@@ -1,11 +1,16 @@
 "use client";
 
+import { useAtomValue, useSetAtom } from "jotai";
 import { ArrowRight, Check, Circle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useStoryGuidance } from "@/hooks/useStoryGuidance";
+import {
+  storyPointedIdAtom,
+  useStoryGuidance,
+  useStoryObjectiveGuidance,
+} from "@/hooks/useStoryGuidance";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import {
@@ -25,6 +30,8 @@ import {
   type StoryXpSource,
 } from "@/libs/storyGuidance";
 import { showMutationToast } from "@/libs/toast";
+import { getTutorialStepPath } from "@/libs/tutorial";
+import { parseHtml } from "@/utils/parse";
 import { usePublicPathname } from "@/utils/routing";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
@@ -34,7 +41,11 @@ export type StoryDockCard = {
   title: string;
   eyebrow: string;
   lead: React.ReactNode;
+  /** The one thing to do now, shown as the card's call to action. */
+  action?: string;
   footer?: React.ReactNode;
+  /** The card teaches the objective under way, so it comes before the quest itself. */
+  leads?: boolean;
 };
 
 /**
@@ -46,6 +57,8 @@ export type StoryDockCard = {
  */
 export const useStoryDockCard = (): StoryDockCard | null => {
   const { user, item, story } = useStoryGuidance();
+  const guidance = useStoryObjectiveGuidance();
+  const pointedId = useAtomValue(storyPointedIdAtom);
   const pathname = usePublicPathname();
   const recap = useLapsedRecap(user?.userId, user?.lastActiveAt);
   useChapterUnlockToast(item);
@@ -71,6 +84,8 @@ export const useStoryDockCard = (): StoryDockCard | null => {
       ),
     };
   }
+  if (item.kind === "chapterActive" && guidance)
+    return activeChapterCard(item, guidance, pathname, pointedId);
   return cardFor(item, pathname, user, story.openLeadIds.length);
 };
 
@@ -79,27 +94,70 @@ export const useStoryDockCard = (): StoryDockCard | null => {
  * since the player may go elsewhere. A full story pointer (G3) keeps the hand there; a
  * lighter one (G2) only rings the Academy for a moment.
  */
-export const StorySpotlight: React.FC<{ isHidden: boolean }> = ({ isHidden }) => {
+export const StorySpotlight: React.FC<{
+  /** A dialog is open over the page; the Academy's ring waits, a dialog's own control is pointed at. */
+  isHidden: boolean;
+}> = ({ isHidden }) => {
   const { item } = useStoryGuidance();
+  const guidance = useStoryObjectiveGuidance();
   const pathname = usePublicPathname();
-  const navigation = item?.kind === "chapterReady" ? item.navigation : undefined;
-  const questId = item?.kind === "chapterReady" ? item.questId : undefined;
-  const isFull = navigation === "G3";
-  const isPointing = !isHidden && (isFull || navigation === "G2");
+  // A chapter waiting at the Academy rings the Academy, and at full guidance its Take
+  // quest button; a chapter under way points at the next control towards its objective.
+  const pointing =
+    item?.kind === "chapterReady" &&
+    (item.navigation === "G3" || item.navigation === "G2")
+      ? {
+          isFull: item.navigation === "G3",
+          ids: [
+            "tutorial-academy",
+            ...(item.navigation === "G3"
+              ? [`tutorial-take-quest-${item.questId}`]
+              : []),
+          ],
+        }
+      : guidance?.depth.points && guidance.targets.length > 0
+        ? {
+            isFull: guidance.depth.points === "full",
+            // On a phone the menus wait in the game menu, whose button leads to them.
+            ids: [
+              ...guidance.targets,
+              ...(guidance.way?.isInGameMenu ? [GAME_MENU_BUTTON_ID] : []),
+            ],
+          }
+        : undefined;
+  // Objective guidance points into an open dialog: what it covers is not a usable target.
+  const isPointing = !!pointing && (!isHidden || item?.kind === "chapterActive");
+  const isFull = !!pointing?.isFull;
+  const idsKey = pointing?.ids.join(",") ?? "";
   const [box, setBox] = useState<SpotlightBox | null>(null);
+  const setPointedId = useSetAtom(storyPointedIdAtom);
+  const scrolledTo = useRef<string>(undefined);
   useEffect(() => {
     if (!isPointing) return;
-    const ids = [
-      "tutorial-academy",
-      ...(isFull ? [`tutorial-take-quest-${questId}`] : []),
-    ];
+    const ids = idsKey.split(",");
     const stop = trackLayout(() => {
       const element = ids.map((id) => getUsableHighlightElement(id)).find(Boolean);
+      // A full lesson brings each new target into view once, high enough to stay clear of
+      // the dock at the foot of the screen; after that the player scrolls freely.
+      const key = element ? `${pathname}:${element.id}` : undefined;
+      if (isFull && element && key !== scrolledTo.current) {
+        scrolledTo.current = key;
+        const rect = element.getBoundingClientRect();
+        if (
+          !element.closest('[role="dialog"],[role="alertdialog"]') &&
+          (rect.top < 64 || rect.bottom > window.innerHeight * 0.55)
+        )
+          window.scrollBy({
+            top: rect.top - window.innerHeight * 0.2,
+            behavior: "smooth",
+          });
+      }
       const rect = element?.getBoundingClientRect();
       const next = rect
         ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
         : null;
       setBox((prev) => (prev && next && isSameBox(prev, next) ? prev : next));
+      setPointedId(element?.id);
       return element ?? null;
     });
     const timer = isFull
@@ -112,12 +170,16 @@ export const StorySpotlight: React.FC<{ isHidden: boolean }> = ({ isHidden }) =>
       clearTimeout(timer);
       stop();
       setBox(null);
+      setPointedId(undefined);
     };
-  }, [isPointing, isFull, questId, pathname]);
+  }, [isPointing, isFull, idsKey, pathname, setPointedId]);
   return box ? <Spotlight box={box} dim={false} pointer={isFull} /> : null;
 };
 
-/** How long a light story pointer rings the Academy. */
+/** The button that opens the game menu on a phone, where the main and location menus wait. */
+const GAME_MENU_BUTTON_ID = "tutorial-gameBtn";
+
+/** How long a light story pointer rings its control. */
 const LIGHT_POINTER_MS = 4000;
 
 const cardFor = (
@@ -293,6 +355,87 @@ const SourceChips: React.FC<{ sources: StoryXpSource[] }> = ({ sources }) => (
 );
 
 /** A card footer holding one button that links to where the card's step is done. */
+/**
+ * The chapter under way, as its navigation level teaches it: the objective and its count,
+ * what Lemu says of how it is done, and a way to its page. A Mission Hall quest that counts
+ * towards it is taught in its place, and one waiting to be claimed is left to its quest.
+ */
+const activeChapterCard = (
+  item: Extract<StoryDockItem, { questId: string }>,
+  guidance: NonNullable<ReturnType<typeof useStoryObjectiveGuidance>>,
+  pathname: string,
+  /** The control the spotlight found: the game menu's button while that menu is closed. */
+  pointedId: string | undefined,
+): StoryDockCard => {
+  const { focus, depth, way } = guidance;
+  const base = {
+    id: `story-active-${item.chapter.chapter}`,
+    title: item.chapter.title,
+    eyebrow: `Chapter ${item.chapter.chapter}`,
+  };
+  const counted = focus.countsFor?.progress ?? focus.progress;
+  const count = counted && (
+    <span className="text-muted-foreground whitespace-nowrap">
+      {" "}
+      ({counted.value}/{counted.target})
+    </span>
+  );
+  if (focus.isClaimable)
+    return {
+      ...base,
+      id: `${base.id}-claim-${focus.questId}`,
+      lead: (
+        <p className="text-base leading-relaxed">
+          <b>{focus.questName}</b> is done. Claim its reward from its quest, then take
+          the next one.{count}
+        </p>
+      ),
+      action: "Claim the reward.",
+    };
+  const guide = depth.explains ? focus.guide : undefined;
+  if (!guide)
+    return {
+      ...base,
+      lead: (
+        <p className="text-base leading-relaxed">
+          Your current objective is under Quests.
+        </p>
+      ),
+    };
+  const isOnPage = getTutorialStepPath(guide.page) === pathname;
+  return {
+    ...base,
+    id: `${base.id}-${focus.questId}-${focus.objective.id}`,
+    leads: true,
+    lead: (
+      <div className="space-y-2 text-base leading-relaxed">
+        {focus.countsFor ? (
+          <p>
+            Under way: <b>{focus.questName}</b>
+            {count}
+          </p>
+        ) : (
+          focus.objective.description && (
+            <p className="italic">
+              {parseHtml(focus.objective.description)}
+              {count}
+            </p>
+          )
+        )}
+        <p>{parseHtml(way?.lead ?? guide.how)}</p>
+      </div>
+    ),
+    action:
+      pointedId === GAME_MENU_BUTTON_ID
+        ? "Open the game menu in the top right corner."
+        : (way?.action ?? guide.action),
+    footer:
+      depth.linksPage && !isOnPage ? (
+        <LinkFooter href={guide.page}>Take me there</LinkFooter>
+      ) : undefined,
+  };
+};
+
 const LinkFooter: React.FC<{ href: string; children: React.ReactNode }> = ({
   href,
   children,
