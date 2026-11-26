@@ -10,6 +10,7 @@ import { isInfiltrator } from "./board";
 import {
   cardValueMilli,
   catalogFingerprint,
+  copyKey,
   itemToKessenCard,
   kessenSets,
   summonValueMilli,
@@ -108,6 +109,8 @@ export interface KessenBalanceFlag {
   rule: KessenBalanceRule;
   severity: KessenBalanceSeverity;
   message: string;
+  /** Exact set named by a Bond or Summon diagnostic. */
+  set?: string;
 }
 
 /** One card against the guidelines. */
@@ -421,7 +424,13 @@ const catalogFlags = (
   if (card.variant === "FORBIDDEN") {
     const base = catalog.find((other) => other.id === card.baseCardId);
     const fields = base ? differingFields(card, base) : [];
-    if (base && fields.length > 0) {
+    if (!base) {
+      flags.push({
+        rule: "variant",
+        severity: "break",
+        message: `Base card ${card.baseCardId} is missing from the catalog`,
+      });
+    } else if (fields.length > 0) {
       flags.push({
         rule: "variant",
         severity: "break",
@@ -451,6 +460,7 @@ const summonFlags = (
     return [
       {
         rule: "summonSet",
+        set,
         severity: "warn",
         message: `Summon ${set} has no unit its decks can pull`,
       },
@@ -464,6 +474,7 @@ const summonFlags = (
   return [
     {
       rule: "summonSet",
+      set,
       severity: "break",
       message: `Summon ${set} can pull ${strongest.name} (power ${strongest.power}), over the ${points(limit)} a Summon from it allows`,
     },
@@ -489,6 +500,7 @@ const bondFlags = (
     return [
       {
         rule: "bondSet",
+        set,
         severity: "warn",
         message: `Bond ${set} has no other unit its decks can field`,
       },
@@ -499,6 +511,7 @@ const bondFlags = (
   return [
     {
       rule: "bondSet",
+      set,
       severity: "break",
       message: `Bond ${set} counts ${size} units, outside ${low}–${high}`,
     },
@@ -561,12 +574,12 @@ const sameAbilities = (a: readonly KessenAbility[], b: readonly KessenAbility[])
 const sameList = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((entry, index) => entry === b[index]);
 
-/** A caller can pull another copy of itself when its rarity allows multiple copies. */
+/** Base and Forbidden cards share the standard member's rarity limit in a deck. */
 const isSummonableBy = (caller: KessenCard, member: KessenCard) =>
   member.kind === "UNIT" &&
   !isInfiltrator(member) &&
   sharesDeck(caller.faction, member.faction) &&
-  (caller.id !== member.id || KESSEN_COPY_LIMITS[caller.rarity] > 1);
+  (copyKey(caller) !== copyKey(member) || KESSEN_COPY_LIMITS[member.rarity] > 1);
 
 /** Cards of the two factions can share a deck. */
 const sharesDeck = (a: KessenFaction, b: KessenFaction) =>

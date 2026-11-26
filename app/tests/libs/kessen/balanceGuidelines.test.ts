@@ -96,6 +96,21 @@ describe("Kessen balance guidelines", () => {
     expect(flags[0]?.message).toContain("in power");
   });
 
+  it("breaks a Forbidden variant whose base card is absent from the catalog", () => {
+    const variant: KessenCard = {
+      ...seedCardByName("The Drowned Gatekeeper"),
+      id: "orphan-forbidden",
+      variant: "FORBIDDEN",
+      baseCardId: "missing-base",
+    };
+    expect(cardBalance(variant, KESSEN_SEED_CATALOG).flags).toContainEqual({
+      rule: "variant",
+      severity: "break",
+      message: "Base card missing-base is missing from the catalog",
+    });
+    expect(cardBalance(variant).flags).toEqual([]);
+  });
+
   it("reports and diffs Forbidden parity when its base is edited, without counting variants in faction pools", () => {
     const base = seedCardByName("Amaterasu's Avatar");
     const variant = KESSEN_SEED_CATALOG.find((card) => card.baseCardId === base.id);

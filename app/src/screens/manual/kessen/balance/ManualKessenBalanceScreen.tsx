@@ -197,7 +197,11 @@ export function ManualKessenBalanceScreen() {
               subtitle="Gauntlet win rate, curve bias, pool and reference decks"
               initialBreak
             >
-              <FactionGrid report={report} gauntlet={sims.gauntlet} />
+              <FactionGrid
+                report={report}
+                gauntlet={sims.gauntlet}
+                simStatus={sims.status}
+              />
             </ContentBox>
           ) : null}
           {section === "Match health" ? (
@@ -207,7 +211,7 @@ export function ManualKessenBalanceScreen() {
               subtitle={`Across ${sims.gauntlet?.health.games ?? "the"} gauntlet games`}
               initialBreak
             >
-              <HealthGrid gauntlet={sims.gauntlet} />
+              <HealthGrid gauntlet={sims.gauntlet} simStatus={sims.status} />
             </ContentBox>
           ) : null}
           {section === "Cards" ? (
@@ -219,6 +223,7 @@ export function ManualKessenBalanceScreen() {
             >
               <CardList
                 rows={rows}
+                simStatus={sims.status}
                 canEdit={canEdit}
                 filters={filters}
                 onFiltersChange={(value) => {
@@ -247,7 +252,12 @@ export function ManualKessenBalanceScreen() {
               subtitle="Leader bonus and what the ability adds with the same faction passive"
               initialBreak
             >
-              <LeaderList report={report} trials={sims.trials} canEdit={canEdit} />
+              <LeaderList
+                report={report}
+                trials={sims.trials}
+                simStatus={sims.status}
+                canEdit={canEdit}
+              />
             </ContentBox>
           ) : null}
           {section === "Sets" ? (
@@ -320,7 +330,9 @@ function Summary({
           label="Factions in band"
           value={
             factionsInBand === null
-              ? "…"
+              ? sims.status === "error" || sims.status === "done"
+                ? "Unavailable"
+                : "…"
               : `${factionsInBand}/${KESSEN_DECK_FACTIONS.length}${unavailableFactions > 0 ? ` · ${unavailableFactions} unavailable` : ""}`
           }
           status={
@@ -426,9 +438,11 @@ function SimProgress({ sims }: { sims: KessenSimState }) {
 function FactionGrid({
   report,
   gauntlet,
+  simStatus,
 }: {
   report: KessenCatalogBalance;
   gauntlet: KessenGauntletSummary | null;
+  simStatus: KessenSimState["status"];
 }) {
   const [low, high] = KESSEN_BALANCE.factionWinRate;
   const [targetLow, targetHigh] = KESSEN_BALANCE.factionTarget;
@@ -501,7 +515,9 @@ function FactionGrid({
                 </div>
               ) : (
                 <p className="text-muted-foreground text-sm">
-                  {rate ? "Gauntlet win rate unavailable" : "Simulating…"}
+                  {rate || simStatus === "error" || simStatus === "done"
+                    ? "Gauntlet win rate unavailable"
+                    : "Simulating…"}
                 </p>
               )}
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
@@ -549,8 +565,21 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 }
 
 /** The gauntlet's match length, ties, opener score, swings and rows against their limits. */
-function HealthGrid({ gauntlet }: { gauntlet: KessenGauntletSummary | null }) {
-  if (!gauntlet) return <p className="text-muted-foreground">Simulating…</p>;
+function HealthGrid({
+  gauntlet,
+  simStatus,
+}: {
+  gauntlet: KessenGauntletSummary | null;
+  simStatus: KessenSimState["status"];
+}) {
+  if (!gauntlet)
+    return (
+      <p className="text-muted-foreground">
+        {simStatus === "error" || simStatus === "done"
+          ? "Match health unavailable"
+          : "Simulating…"}
+      </p>
+    );
   const { health } = gauntlet;
   const limits = KESSEN_BALANCE.health;
   const tiles: { label: string; value: string | null; limit: string; ok: boolean }[] = [
@@ -656,6 +685,7 @@ const SORTS: { value: CardSort; label: string }[] = [
 /** Deck cards with filters: faction, flagged only, search and sort. */
 function CardList({
   rows: allRows,
+  simStatus,
   canEdit,
   filters,
   onFiltersChange,
@@ -665,6 +695,7 @@ function CardList({
   onPageChange,
 }: {
   rows: ReturnType<typeof cardRows>;
+  simStatus: KessenSimState["status"];
   canEdit: boolean;
   filters: CardFilters;
   onFiltersChange: (filters: CardFilters) => void;
@@ -761,7 +792,12 @@ function CardList({
           {rows
             .slice(currentPage * CARD_PAGE_SIZE, (currentPage + 1) * CARD_PAGE_SIZE)
             .map((row) => (
-              <CardRow key={row.entry.card.id} {...row} canEdit={canEdit} />
+              <CardRow
+                key={row.entry.card.id}
+                {...row}
+                simStatus={simStatus}
+                canEdit={canEdit}
+              />
             ))}
         </ul>
       )}
@@ -806,12 +842,14 @@ function CardRow({
   trial,
   flags,
   status,
+  simStatus,
   canEdit,
 }: {
   entry: KessenCardBalance;
   trial: KessenTrialSummary | null;
   flags: KessenBalanceFlag[];
   status: KessenBalanceStatus;
+  simStatus: KessenSimState["status"];
   canEdit: boolean;
 }) {
   const { card } = entry;
@@ -847,7 +885,7 @@ function CardRow({
         <FlagList flags={flags} className="mt-1 text-sm" />
       </div>
       <GapCell entry={entry} />
-      <TrialCell card={card} trial={trial} />
+      <TrialCell card={card} trial={trial} simStatus={simStatus} />
     </li>
   );
 }
@@ -890,9 +928,11 @@ function GapCell({ entry }: { entry: KessenCardBalance }) {
 function TrialCell({
   card,
   trial,
+  simStatus,
 }: {
   card: KessenCardBalance["card"];
   trial: KessenTrialSummary | null;
+  simStatus: KessenSimState["status"];
 }) {
   if (!isTrialSubject(card)) {
     return <p className="text-muted-foreground text-sm">Parity check only</p>;
@@ -900,7 +940,13 @@ function TrialCell({
   if (!trial) {
     return (
       <div className="text-muted-foreground text-sm">
-        <span className="@3xl:sr-only">Match trial: </span>Simulating…
+        {simStatus === "error" || simStatus === "done" ? (
+          "Match trial unavailable"
+        ) : (
+          <>
+            <span className="@3xl:sr-only">Match trial: </span>Simulating…
+          </>
+        )}
       </div>
     );
   }
@@ -934,10 +980,12 @@ function TrialCell({
 function LeaderList({
   report,
   trials,
+  simStatus,
   canEdit,
 }: {
   report: KessenCatalogBalance;
   trials: Record<string, KessenTrialSummary> | null;
+  simStatus: KessenSimState["status"];
   canEdit: boolean;
 }) {
   const leaders = report.cards
@@ -989,7 +1037,9 @@ function LeaderList({
                 {entry.card.leaderBonus} (limit {KESSEN_BALANCE.leaderBonus[0]}–
                 {KESSEN_BALANCE.leaderBonus[1]})
               </p>
-              {trial && trial.games > 0 && median !== null ? (
+              {!isTrialSubject(entry.card) ? (
+                <p className="text-muted-foreground text-sm">Parity check only</p>
+              ) : trial && trial.games > 0 && median !== null ? (
                 <div className="grid gap-1 text-sm">
                   <span>
                     <span className="text-muted-foreground">Adds </span>
@@ -1017,7 +1067,9 @@ function LeaderList({
                 </div>
               ) : (
                 <p className="text-muted-foreground text-sm">
-                  {trial ? "Match trial unavailable" : "Simulating…"}
+                  {trial || simStatus === "error" || simStatus === "done"
+                    ? "Match trial unavailable"
+                    : "Simulating…"}
                 </p>
               )}
               <FlagList flags={flags} className="text-sm" />
@@ -1047,7 +1099,7 @@ function SetList({ report }: { report: KessenCatalogBalance }) {
               entry.flags.filter(
                 (flag) =>
                   (flag.rule === "summonSet" || flag.rule === "bondSet") &&
-                  flag.message.includes(set.name),
+                  flag.set === set.name,
               ),
             );
           const unique = [

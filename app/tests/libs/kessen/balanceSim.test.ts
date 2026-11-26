@@ -25,6 +25,7 @@ import {
   runTrials,
 } from "@/libs/kessen/balanceSimRunner";
 import { kessenCardToCardData, summonValueMilli } from "@/libs/kessen/catalog";
+import { catalogById, validateDeck } from "@/libs/kessen/deck";
 import { actingSeats, applyAction, createMatch, viewFor } from "@/libs/kessen/engine";
 import type { KessenCard } from "@/libs/kessen/types";
 import { cardDataSchema } from "@/validators/itemCard";
@@ -328,6 +329,54 @@ describe("Kessen balance Summon diagnostics", () => {
     },
   );
 
+  it.each(["COMMON", "RARE", "EPIC", "LEGENDARY"] as const)(
+    "uses the base card's %s copy limit for a Forbidden Summon caller",
+    (rarity) => {
+      const base: KessenCard = {
+        ...seedCardByName("The Drowned Gatekeeper"),
+        rarity,
+        sets: ["Crew"],
+      };
+      const variant: KessenCard = {
+        ...base,
+        id: "forbidden-summoner",
+        variant: "FORBIDDEN",
+        baseCardId: base.id,
+      };
+      const catalog = KESSEN_SEED_CATALOG.map((card) =>
+        card.id === base.id ? base : card,
+      ).concat(variant);
+      const summoningFlags = (card: KessenCard) =>
+        cardBalance(card, catalog).flags.filter((flag) => flag.rule === "summonSet");
+      expect(summoningFlags(variant)).toEqual(summoningFlags(base));
+      expect(
+        summoningFlags({
+          ...variant,
+          rarity: rarity === "COMMON" ? "LEGENDARY" : "COMMON",
+        }),
+      ).toEqual(summoningFlags(base));
+      const list = kessenReferenceDecks().find(
+        (deck) => deck.faction === base.faction,
+      )!.list;
+      const { errors } = validateDeck(
+        {
+          ...list,
+          cards: [
+            { itemId: base.id, count: 1 },
+            { itemId: variant.id, count: 1 },
+          ],
+        },
+        catalogById(catalog),
+      );
+      expect(errors.some((error) => error.code === "copies")).toBe(
+        KESSEN_COPY_LIMITS[rarity] === 1,
+      );
+      expect(summoningFlags(variant).some((flag) => flag.severity === "break")).toBe(
+        KESSEN_COPY_LIMITS[rarity] > 1,
+      );
+    },
+  );
+
   it.each(["COMMON", "RARE"] as const)(
     "includes another %s copy as the strongest eligible Summon pull",
     (rarity) => {
@@ -339,6 +388,7 @@ describe("Kessen balance Summon diagnostics", () => {
       };
       const flag = {
         rule: "summonSet",
+        set: "Sandworm",
         severity: "break",
         message:
           "Summon Sandworm can pull Beta Sandworm (power 6), over the 5.0 a Summon from it allows",

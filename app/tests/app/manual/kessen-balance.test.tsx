@@ -230,6 +230,106 @@ it("keeps observed health metrics when all games are unfinished and leaves the o
   expect(health.getAllByText("Breaks a guideline")).toHaveLength(1);
 });
 
+it("marks missing metrics unavailable after a stopped sweep", () => {
+  mockReport(KESSEN_SEED_CATALOG, { ...IDLE, status: "error", error: "worker failed" });
+  const view = render(<ManualKessenBalanceScreen />);
+  expect(view.getByRole("alert").textContent).toContain("worker failed");
+  expect(view.getAllByText("Gauntlet win rate unavailable")).toHaveLength(6);
+  expect(view.getByText("Factions in band").parentElement!.textContent).toContain(
+    "Unavailable",
+  );
+  for (const section of ["Match health", "Cards", "Leaders"]) {
+    fireEvent.click(view.getByRole("button", { name: section }));
+    expect(view.queryByText("Simulating…")).toBeNull();
+    expect(
+      view.getAllByText(
+        section === "Match health"
+          ? "Match health unavailable"
+          : "Match trial unavailable",
+      ).length,
+    ).toBeGreaterThan(0);
+  }
+});
+
+it("preserves completed measurements when later simulation work stops", () => {
+  const decks = kessenReferenceDecks();
+  const jobs = gauntletJobs(decks, 1);
+  const job = jobs[0]!;
+  const outcome: KessenSimOutcome = {
+    id: job.id,
+    finished: true,
+    winner: 0,
+    opener: 0,
+    plays: 24,
+    rounds: 2,
+    ties: 0,
+    swings: [3],
+    maxRow: 12,
+  };
+  const gauntlet = summarizeGauntlet(decks, jobs, new Map([[job.id, outcome]]));
+  const card = seedCardByName("Cryverin");
+  mockReport(KESSEN_SEED_CATALOG, {
+    ...completedCardTrial(card),
+    status: "error",
+    gauntlet,
+    error: "worker failed",
+  });
+  const view = render(<ManualKessenBalanceScreen />);
+  expect(view.queryByText("Simulating…")).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "Match health" }));
+  expect(view.getByText("24.0")).toBeTruthy();
+  fireEvent.click(view.getByRole("button", { name: "Cards" }));
+  const row = within(document.getElementById(`card-${card.id}`)!);
+  expect(row.getByText("+40.0")).toBeTruthy();
+  expect(row.queryByText("Match trial unavailable")).toBeNull();
+});
+
+it("labels a Forbidden leader as a parity check after a completed sweep", () => {
+  const base = seedCardByName("Ravena Bloodsilk");
+  const variant: KessenCard = {
+    ...base,
+    id: "forbidden-leader",
+    variant: "FORBIDDEN",
+    baseCardId: base.id,
+  };
+  mockReport([...KESSEN_SEED_CATALOG, variant], {
+    ...IDLE,
+    status: "done",
+    trials: {},
+  });
+  const view = render(<ManualKessenBalanceScreen />);
+  fireEvent.click(view.getByRole("button", { name: "Leaders" }));
+  const row = within(document.getElementById(`card-${variant.id}`)!);
+  expect(row.getByText("Parity check only")).toBeTruthy();
+  expect(row.queryByText("Simulating…")).toBeNull();
+});
+
+it("keeps diagnostics with their exact set when names overlap", () => {
+  const caller: KessenCard = {
+    ...seedCardByName("Colossus"),
+    abilities: [
+      { k: "summon", group: "Crew" },
+      { k: "summon", group: "CrewElite" },
+    ],
+  };
+  const member: KessenCard = {
+    ...seedCardByName("Cryverin"),
+    sets: ["CrewElite"],
+    power: 10,
+  };
+  mockReport(
+    KESSEN_SEED_CATALOG.map((card) =>
+      card.id === caller.id ? caller : card.id === member.id ? member : card,
+    ),
+  );
+  const view = render(<ManualKessenBalanceScreen />);
+  fireEvent.click(view.getByRole("button", { name: "Sets" }));
+  const crew = view.getByText("Crew", { exact: true }).closest("li")!;
+  const elite = view.getByText("CrewElite", { exact: true }).closest("li")!;
+  expect(crew.textContent).not.toContain("Summon CrewElite can pull Cryverin");
+  expect(elite.textContent).toContain("Summon CrewElite can pull Cryverin");
+});
+
 it("shows one section and follows browser history and issue hashes", async () => {
   mockReport(KESSEN_SEED_CATALOG);
   const view = render(<ManualKessenBalanceScreen />);
