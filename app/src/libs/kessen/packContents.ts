@@ -210,6 +210,26 @@ export const kessenTierClassOf = (
   return found;
 };
 
+/** Reject rare-slot layouts whose selectable tiers cannot pay standard-card pity. */
+export const kessenPackPityProblem = (
+  effects: readonly ZodAllTags[],
+  cards: readonly KessenCard[],
+) => {
+  const caches = storedCaches(effects);
+  if (caches.length < 2) return null;
+  const byId = new Map(cards.map((card) => [card.id, card]));
+  const tiers = caches[caches.length - 1]!.tiers.filter(
+    (tier) => tier.probability > 0,
+  ).map((tier) => kessenTierClassOf(tier, byId));
+  if (
+    !tiers.includes("LEGENDARY") ||
+    (!tiers.includes("EPIC") &&
+      tiers.some((tier) => tier === null || tier === "COMMON" || tier === "RARE"))
+  )
+    return "Rare slots need a selectable Legendary tier and an Epic tier when lower rarities can be drawn for pity guarantees. Set Rare slots to 0 for a pack without pity.";
+  return null;
+};
+
 /** Name of the rare-slot cache: "Paper Bundle: fifth card" for the default layout. */
 const rareSlotCacheName = (name: string, slots: KessenPackSlots) =>
   slots.rareSlot === 1

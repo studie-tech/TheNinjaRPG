@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { and, eq, gt } from "drizzle-orm";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
+  CACHE_PROBABILITY_TOTAL,
   KESSEN_CARD_SELL_VALUES,
   KESSEN_PACK_ID_PREFIX,
   KESSEN_VILLAGE_BUNDLE_WEEKLY_LIMIT,
@@ -20,6 +21,7 @@ import {
   EARNED_PACK_BLOCK_REASON,
 } from "@/libs/kessen/cardSale";
 import { kessenCardToCardData } from "@/libs/kessen/catalog";
+import { buildKessenPackEffects } from "@/libs/kessen/packContents";
 import {
   isKessenPackId,
   KESSEN_PACK_IDS,
@@ -50,6 +52,23 @@ const LACQUER = `${KESSEN_PACK_ID_PREFIX}lacquer`;
 const HYORIN_BUNDLE = KESSEN_PACK_IDS.village("HYORIN");
 const AKASUMI_BUNDLE = KESSEN_PACK_IDS.village("AKASUMI");
 const SHARED_LIMIT_MESSAGE = "You already bought this week's Village Bundle";
+const COMMON_ONLY = {
+  COMMON: CACHE_PROBABILITY_TOTAL,
+  RARE: 0,
+  EPIC: 0,
+  LEGENDARY: 0,
+  FORBIDDEN: 0,
+};
+const LEGENDARY_ONLY = {
+  ...COMMON_ONLY,
+  COMMON: 0,
+  LEGENDARY: CACHE_PROBABILITY_TOTAL,
+};
+const FORBIDDEN_ONLY = {
+  ...COMMON_ONLY,
+  COMMON: 0,
+  FORBIDDEN: CACHE_PROBABILITY_TOTAL,
+};
 
 const moneyOf = async () =>
   (
@@ -322,8 +341,7 @@ describeWithDatabase("item router and Kessen goods", () => {
   describe("staff-created packs", () => {
     const STAFF = "pack-maker";
 
-    it("creates a hidden pack the stall sells and the Card Hall opens once released", async () => {
-      const db = await getTestDatabase();
+    beforeEach(async () => {
       await resetTables(kessenProgress, actionLog);
       await insertUsers([
         {
@@ -348,6 +366,105 @@ describeWithDatabase("item router and Kessen goods", () => {
           cardData: kessenCardToCardData(card),
         })),
       );
+    });
+
+    it.each(["EPIC", "LEGENDARY"] as const)(
+      "refuses creation without selectable %s pity rewards before inserting a pack",
+      async (rarity) => {
+        const db = await getTestDatabase();
+        await db.delete(item).where(eq(item.rarity, rarity));
+        const before = await db.select({ id: item.id }).from(item);
+        const staff = await callerFor(itemRouter, STAFF);
+        const result = await staff.create({ type: "CONSUMABLE", kessenPack: true });
+        expect(result.success).toBe(false);
+        expect(result.message).toContain("pity guarantees");
+        expect(await db.select({ id: item.id }).from(item)).toEqual(before);
+        expect(await db.select().from(actionLog)).toEqual([]);
+      },
+    );
+
+    it("refuses unpayable rare-slot saves without changing the pack or logging a save", async () => {
+      const db = await getTestDatabase();
+      const staff = await callerFor(itemRouter, STAFF);
+      const created = await staff.create({ type: "CONSUMABLE", kessenPack: true });
+      expect(created.success).toBe(true);
+      const saved = await db.query.item.findFirst({
+        where: eq(item.id, created.message),
+      });
+      if (!saved) throw new Error("Missing pack fixture");
+      for (const rareSlotWeights of [
+        FORBIDDEN_ONLY,
+        {
+          ...COMMON_ONLY,
+          COMMON: 0,
+          RARE: CACHE_PROBABILITY_TOTAL / 2,
+          LEGENDARY: CACHE_PROBABILITY_TOTAL / 2,
+        },
+      ]) {
+        const effects = buildKessenPackEffects(
+          {
+            name: saved.name,
+            faction: null,
+            normalWeights: COMMON_ONLY,
+            rareSlotWeights,
+          },
+          KESSEN_SEED_CATALOG,
+        );
+        const result = await staff.update({
+          id: saved.id,
+          data: ItemValidator.parse({ ...saved, hidden: false, inShop: true, effects }),
+        });
+        expect(result.success).toBe(false);
+        expect(result.message).toContain("pity guarantees");
+        expect(await db.query.item.findFirst({ where: eq(item.id, saved.id) })).toEqual(
+          saved,
+        );
+        expect(await db.select().from(actionLog)).toEqual([]);
+      }
+    });
+
+    it("saves Legendary-floor and no-pity Forbidden packs", async () => {
+      const db = await getTestDatabase();
+      const staff = await callerFor(itemRouter, STAFF);
+      const created = await staff.create({ type: "CONSUMABLE", kessenPack: true });
+      expect(created.success).toBe(true);
+      const saved = await db.query.item.findFirst({
+        where: eq(item.id, created.message),
+      });
+      if (!saved) throw new Error("Missing pack fixture");
+      for (const config of [
+        {
+          slots: { normal: 1, rareSlot: 1 },
+          normalWeights: COMMON_ONLY,
+          rareSlotWeights: LEGENDARY_ONLY,
+        },
+        {
+          slots: { normal: 1, rareSlot: 0 },
+          normalWeights: FORBIDDEN_ONLY,
+          rareSlotWeights: FORBIDDEN_ONLY,
+        },
+      ]) {
+        const effects = buildKessenPackEffects(
+          { name: saved.name, faction: null, ...config },
+          KESSEN_SEED_CATALOG,
+        );
+        const result = await staff.update({
+          id: saved.id,
+          data: ItemValidator.parse({ ...saved, hidden: false, inShop: true, effects }),
+        });
+        expect(result.success, result.message).toBe(true);
+        expect(
+          await db.query.item.findFirst({ where: eq(item.id, saved.id) }),
+        ).toMatchObject({
+          effects,
+          hidden: false,
+          inShop: true,
+        });
+      }
+    });
+
+    it("creates a hidden pack the stall sells and the Card Hall opens once released", async () => {
+      const db = await getTestDatabase();
       const staff = await callerFor(itemRouter, STAFF);
       const created = await staff.create({ type: "CONSUMABLE", kessenPack: true });
       expect(created.success).toBe(true);

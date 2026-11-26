@@ -144,7 +144,11 @@ import {
   isKessenGood,
 } from "@/libs/kessen/cardSale";
 import { kessenCatalogCards } from "@/libs/kessen/catalog";
-import { kessenPackPool, kessenPackPoolProblem } from "@/libs/kessen/packContents";
+import {
+  kessenPackPityProblem,
+  kessenPackPool,
+  kessenPackPoolProblem,
+} from "@/libs/kessen/packContents";
 import { isKessenPackId } from "@/libs/kessen/packs";
 import {
   buildMissingLoadouts,
@@ -711,7 +715,10 @@ export const itemRouter = createTRPCRouter({
         const cards = kessenCatalogCards(cardRows);
         const poolProblem = kessenPackPoolProblem(kessenPackPool(cards, null));
         if (poolProblem) return errorResponse(poolProblem);
-        await insertItemValues(ctx.drizzle, kessenNewPackItem(id, cards));
+        const pack = kessenNewPackItem(id, cards);
+        const pityProblem = kessenPackPityProblem(pack.effects, cards);
+        if (pityProblem) return errorResponse(pityProblem);
+        await insertItemValues(ctx.drizzle, pack);
         return { success: true, message: id };
       }
       const id = nanoid();
@@ -873,6 +880,7 @@ export const itemRouter = createTRPCRouter({
         lpcDesign,
         warehouseVillage,
         requiredByVariants,
+        cardRows,
       ] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
@@ -903,6 +911,10 @@ export const itemRouter = createTRPCRouter({
           ? findWarehouseVillage(ctx.drizzle, input.data.villageId)
           : Promise.resolve(undefined),
         listItemVariantRequiringItemForUpdate(ctx.drizzle, input),
+        isKessenPackId(input.id) &&
+        input.data.effects.filter(isWeightedCacheEffect).length > 1
+          ? listKessenCards(ctx.drizzle)
+          : [],
       ]);
       if (titleError) return errorResponse(titleError);
       if (input.data.requiredSkillId && requiredSkill?.pathType !== "SKILL") {
@@ -917,6 +929,10 @@ export const itemRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to edit item");
       }
+      const pityProblem = isKessenPackId(entry.id)
+        ? kessenPackPityProblem(input.data.effects, kessenCatalogCards(cardRows))
+        : null;
+      if (pityProblem) return errorResponse(pityProblem);
       const spriteError = lpcSelectionError(
         input.data.lpcProfile,
         entry.lpcProfile,

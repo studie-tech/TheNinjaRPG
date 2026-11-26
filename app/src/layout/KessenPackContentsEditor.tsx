@@ -17,6 +17,7 @@ import {
   KESSEN_PACK_TIERS,
   kessenPackFactions,
   kessenPackOdds,
+  kessenPackPityProblem,
   kessenPackPool,
   kessenPackPoolProblem,
   kessenPackSlots,
@@ -63,10 +64,23 @@ export function KessenPackContentsEditor({
   const hasRareSlot = draft.slots.rareSlot > 0;
   const normalTotal = totalOf(draft.normal);
   const rareTotal = totalOf(draft.rareSlot);
-  const problem =
+  const draftError =
     (!name.trim() ? "Enter a pack name." : null) ??
     kessenPackPoolProblem(pool) ??
     draftProblem(draft, normalTotal, rareTotal, poolCounts);
+  const built = draftError
+    ? []
+    : buildKessenPackEffects(
+        {
+          name,
+          faction: draft.faction === ALL ? null : draft.faction,
+          slots: draft.slots,
+          normalWeights: weightsOf(draft.normal),
+          rareSlotWeights: weightsOf(draft.rareSlot),
+        },
+        cards,
+      );
+  const problem = draftError ?? kessenPackPityProblem(built, cards);
   const setWeight = (column: WeightColumn, tier: KessenPackTier, value: number) =>
     setDraft((current) => ({
       ...current,
@@ -206,16 +220,7 @@ export function KessenPackContentsEditor({
           disabled={disabled || problem !== null}
           onClick={() =>
             onBuild([
-              ...buildKessenPackEffects(
-                {
-                  name,
-                  faction: draft.faction === ALL ? null : draft.faction,
-                  slots: draft.slots,
-                  normalWeights: weightsOf(draft.normal),
-                  rareSlotWeights: weightsOf(draft.rareSlot),
-                },
-                cards,
-              ),
+              ...built,
               ...effects.filter((effect) => !isWeightedCacheEffect(effect)),
             ])
           }
@@ -305,19 +310,6 @@ const draftProblem = (
       )
   )
     return "Each slot kind needs positive odds for a rarity in its pool.";
-  const rareWeights = weightsOf(draft.rareSlot);
-  // Pity needs its target tier whenever a lower rarity can be drawn from the rare cache.
-  if (
-    rareSlot > 0 &&
-    (["EPIC", "LEGENDARY"] as const).some(
-      (tier) =>
-        (rareWeights[tier] <= 0 || poolCounts[tier] === 0) &&
-        KESSEN_PACK_TIERS.slice(0, KESSEN_PACK_TIERS.indexOf(tier)).some(
-          (lower) => rareWeights[lower] > 0 && poolCounts[lower] > 0,
-        ),
-    )
-  )
-    return "Rare slots need Epic and Legendary cards with positive odds for pity guarantees when lower rarities can be drawn.";
   return null;
 };
 

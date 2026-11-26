@@ -139,21 +139,82 @@ describe("Kessen pack contents editor", () => {
     expect(kessenPackSlots(built)).toEqual({ normal: 4, rareSlot: 1 });
   });
 
-  it("describes pity on the final card of a pack with multiple rare slots", () => {
-    const effects = buildKessenPackEffects(
+  it.each([false, true])(
+    "describes final-card pity with variable draws: %s",
+    (variable) => {
+      const effects = buildKessenPackEffects(
+        {
+          name: "Frost Crate",
+          faction: null,
+          slots: { normal: 3, rareSlot: 2 },
+          normalWeights: KESSEN_PACK_SLOT_WEIGHTS,
+          rareSlotWeights: KESSEN_PACK_RARE_SLOT_WEIGHTS,
+        },
+        KESSEN_SEED_CATALOG,
+      );
+      if (variable) {
+        const rare = effects[1];
+        if (!rare || !isWeightedCacheEffect(rare) || !rare.weightedCache)
+          throw new Error("Missing rare cache");
+        rare.weightedCache.rolls = [
+          { count: 1, probability: CACHE_PROBABILITY_TOTAL / 2 },
+          { count: 2, probability: CACHE_PROBABILITY_TOTAL / 2 },
+        ];
+      }
+      render(
+        <KessenPackRules packItemId="kessen-pack-custom" effects={effects} inStall />,
+      );
+      expect(screen.getByText(/Epic or better on its final card/)).toBeDefined();
+      expect(
+        screen.getByText(/Forbidden draws are kept instead; pity remains due/),
+      ).toBeDefined();
+    },
+  );
+
+  it("requires Legendary pity targets in rare slots, including Forbidden-only pools", () => {
+    const { onBuild } = renderEditor();
+    for (const rarity of ["Common", "Rare", "Epic", "Legendary", "Forbidden"]) {
+      fireEvent.input(
+        screen.getByRole("spinbutton", { name: `${rarity} odds, Slot 5` }),
+        { target: { value: rarity === "Forbidden" ? "100" : "0" } },
+      );
+    }
+    expect(rebuild()).toHaveProperty("disabled", true);
+    expect(screen.getByRole("alert").textContent).toContain(
+      "selectable Legendary tier",
+    );
+    fireEvent.click(rebuild());
+    expect(onBuild).not.toHaveBeenCalled();
+
+    fireEvent.input(
+      screen.getByRole("spinbutton", { name: "Forbidden odds, Slot 5" }),
       {
-        name: "Frost Crate",
-        faction: null,
-        slots: { normal: 3, rareSlot: 2 },
-        normalWeights: KESSEN_PACK_SLOT_WEIGHTS,
-        rareSlotWeights: KESSEN_PACK_RARE_SLOT_WEIGHTS,
+        target: { value: "0" },
       },
-      KESSEN_SEED_CATALOG,
     );
-    render(
-      <KessenPackRules packItemId="kessen-pack-custom" effects={effects} inStall />,
+    fireEvent.input(
+      screen.getByRole("spinbutton", { name: "Legendary odds, Slot 5" }),
+      {
+        target: { value: "100" },
+      },
     );
-    expect(screen.getByText(/the next fifth card is Epic/)).toBeDefined();
+    expect(rebuild()).toHaveProperty("disabled", false);
+    fireEvent.click(rebuild());
+    expect(onBuild).toHaveBeenCalledTimes(1);
+
+    fireEvent.input(screen.getByLabelText("Rare slots"), { target: { value: "0" } });
+    for (const rarity of ["Common", "Rare", "Epic", "Legendary", "Forbidden"]) {
+      fireEvent.input(
+        screen.getByRole("spinbutton", { name: `${rarity} odds, Slots 1–4` }),
+        { target: { value: rarity === "Forbidden" ? "100" : "0" } },
+      );
+    }
+    expect(rebuild()).toHaveProperty("disabled", false);
+    fireEvent.click(rebuild());
+    expect(kessenPackSlots(onBuild.mock.calls[1]![0])).toEqual({
+      normal: 4,
+      rareSlot: 0,
+    });
   });
 
   it("blocks rare slots that cannot pay the advertised pity guarantees", () => {

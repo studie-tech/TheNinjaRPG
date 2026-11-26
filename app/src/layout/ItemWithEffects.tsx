@@ -34,7 +34,7 @@ import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFarmPlantExperience } from "@/libs/farming";
 import { type Fortification, getFortifyProgress } from "@/libs/fortify";
-import { kessenPackSlots, ordinalWord } from "@/libs/kessen/packContents";
+import { kessenPackSlots } from "@/libs/kessen/packContents";
 import { isKessenPackId, KESSEN_PACK_IDS } from "@/libs/kessen/packs";
 import { cardTextPlain, type KESSEN_TERMS, ROW_LABELS } from "@/libs/kessen/text";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
@@ -1672,7 +1672,6 @@ export const KessenPackRules = ({
 }) => {
   const hasEpicFloor = EPIC_FLOOR_PACK_IDS.has(packItemId);
   const slots = kessenPackSlots(effects);
-  const rareCard = `${ordinalWord(slots.normal + slots.rareSlot)} card`;
   return (
     <div
       className={cn(
@@ -1687,8 +1686,9 @@ export const KessenPackRules = ({
         {slots.rareSlot === 0
           ? "this pack has no rare slot, so no pity applies."
           : hasEpicFloor
-            ? `the ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings one you do not own.`
-            : `after ${KESSEN_EPIC_PITY_PACKS} packs without an Epic, the next ${rareCard} is Epic. The ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings one you do not own.`}
+            ? `the ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings a Legendary, preferring one you do not own.`
+            : `the ${KESSEN_EPIC_PITY_PACKS}th pack without an Epic brings an Epic or better on its final card. The ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings a Legendary, preferring one you do not own.`}
+        {slots.rareSlot > 0 && " Forbidden draws are kept instead; pity remains due."}
       </p>
       <p>
         <b>Duplicates</b>: copies beyond a card&apos;s copy limit are swapped for cards
