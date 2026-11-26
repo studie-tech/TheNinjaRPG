@@ -8,6 +8,9 @@ import {
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   IMG_SCENE_BACKGROUND,
   IMG_URL_ASSISTANT,
+  LEMU_SCENE_CHARACTER_IDS,
+  TUTORIAL_GENIN_EXAM_QUEST_ID,
+  TUTORIAL_STARTER_QUEST_ID,
 } from "@/drizzle/constants";
 import type { UserQuest } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -464,7 +467,9 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const quest = userQuest.quest;
   const tierOrDaily = ["tier", "daily"].includes(quest.questType);
   const missionOrCrime = ["mission", "crime"].includes(quest.questType);
-  const isStarterQuest = quest.questType === "starter";
+  // Lemu teaches the Academy Trials, so their scenes show her whoever the content names.
+  const isTrialsQuest =
+    quest.id === TUTORIAL_STARTER_QUEST_ID || quest.id === TUTORIAL_GENIN_EXAM_QUEST_ID;
   const rewardMultiplier =
     userData &&
     missionOrCrime &&
@@ -545,8 +550,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     } else if (quest.content.sceneBackground) {
       assetIds.push(quest.content.sceneBackground);
     }
-    // For starter quests, skip adding scene characters (we'll use IMG_URL_ASSISTANT directly)
-    if (!isStarterQuest) {
+    if (!isTrialsQuest) {
       if (
         activeObjective?.sceneCharacters &&
         activeObjective.sceneCharacters.length > 0
@@ -563,8 +567,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     if (quest.content.sceneBackground) {
       assetIds.push(quest.content.sceneBackground);
     }
-    // For starter quests, skip adding scene characters (we'll use IMG_URL_ASSISTANT directly)
-    if (!isStarterQuest) {
+    if (!isTrialsQuest) {
       assetIds.push(...(quest.content.sceneCharacters || []));
     }
   }
@@ -579,12 +582,14 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const background =
     gameAssets?.filter((asset) => asset.type === "SCENE_BACKGROUND")?.[0]?.image ||
     IMG_SCENE_BACKGROUND;
-  // For starter quests, use the A/B tested assistant image instead of quest characters
-  const characters = isStarterQuest
+  // Lemu is drawn with her current portrait wherever a scene names her.
+  const characters = isTrialsQuest
     ? [IMG_URL_ASSISTANT]
     : gameAssets
         ?.filter((asset) => asset.type === "SCENE_CHARACTER")
-        .map((asset) => asset.image) || [];
+        .map((asset) =>
+          LEMU_SCENE_CHARACTER_IDS.includes(asset.id) ? IMG_URL_ASSISTANT : asset.image,
+        ) || [];
 
   // Mutations
   const { checkRewards, isCheckingRewards } = useCheckRewards();

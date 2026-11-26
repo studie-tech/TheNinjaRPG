@@ -1724,6 +1724,11 @@ export const TUTORIAL_ITEM_ID = "VOditPJ3X2id0yC-F5Kz3";
 export const EXPRESS_TRIALS_SHURIKEN = 3;
 export const TUTORIAL_STARTER_QUEST_ID = "eYDVpL63vPhK3lywMexdv";
 export const TUTORIAL_GENIN_EXAM_QUEST_ID = "9-t1rNWEzXbIfdUfxWrny";
+/** Scene characters that stand for Lemu in quest content; she is drawn as IMG_URL_ASSISTANT. */
+export const LEMU_SCENE_CHARACTER_IDS: readonly string[] = [
+  "UxcxyMdvZoae6zaSMZklT",
+  "alsLzZGTl2s2Tag9zmKVv",
+];
 export const HEAVENLY_SONATA_BLOODLINE_ID = "clh4d6q6s000atb0h0qdqdh1z";
 export const BLUE_BLADE_EYES_BLOODLINE_ID = "clh4d6qo4000itb0hrx8t06wq";
 export const TUTORIAL_ARENA_DUMMY_ID = "ICXb49Z0Jle3GyJ-rosTi";
