@@ -308,7 +308,8 @@ export const syncDiscordAccount = async (
             roles: wanted,
           });
         } else {
-          // Keep the member checkpoint pending so sync retries after a manual join.
+          // Clear the nickname checkpoint so hourly sync retries after a manual join.
+          update.syncedUsername = null;
           applied = false;
         }
       } else {

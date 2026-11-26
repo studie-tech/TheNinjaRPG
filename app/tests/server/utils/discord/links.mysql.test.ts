@@ -849,51 +849,73 @@ describeWithDatabase("Discord links (SQL)", () => {
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
   });
 
-  it("retries the rank role after a player without guilds.join joins the server", async () => {
-    const database = await getTestDatabase();
-    fakeClerk({
-      tokens: [
-        {
-          token: "clerk-access",
-          scopes: ["identify", "email", "role_connections.write"],
-          externalAccountId: "eac_discord",
-        },
-      ],
-    });
-    await insertDiscordLink(database, {
-      ...linkValues("user-a", OLD_DISCORD),
-      tokenSource: "CLERK",
-      scopes: "identify email role_connections.write",
-      syncedLevel: 20,
-      syncedUsername: "Alpha",
-      syncedVillageId: "village-a",
-      syncedRank: "STUDENT",
-      syncedAt: new Date(),
-    });
-    await database
-      .update(userData)
-      .set({ rank: "CHUNIN" })
-      .where(eq(userData.userId, "user-a"));
+  it.each(["STUDENT", "CHUNIN"] as const)(
+    "retries membership after a player without guilds.join joins with %s checkpoint",
+    async (syncedRank) => {
+      const database = await getTestDatabase();
+      fakeClerk({
+        tokens: [
+          {
+            token: "clerk-access",
+            scopes: ["identify", "email", "role_connections.write"],
+            externalAccountId: "eac_discord",
+          },
+        ],
+      });
+      await insertDiscordLink(database, {
+        ...linkValues("user-a", OLD_DISCORD),
+        tokenSource: "CLERK",
+        scopes: "identify email role_connections.write",
+        syncedLevel: 20,
+        syncedUsername: "Alpha",
+        syncedVillageId: "village-a",
+        syncedRank,
+        syncedAt: new Date(),
+      });
+      await database
+        .update(userData)
+        .set({ rank: "CHUNIN" })
+        .where(eq(userData.userId, "user-a"));
 
-    expect((await syncDiscordMember(database, "user-a")).synced).toBe(true);
-    expect(calls.some((call) => call.method === "PUT" || call.method === "PATCH")).toBe(
-      false,
-    );
-    expect((await database.query.discordLink.findFirst())?.syncedRank).toBe("STUDENT");
-    expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(1);
+      expect(
+        (
+          await syncDiscordMember(database, "user-a", {
+            force: syncedRank === "CHUNIN",
+          })
+        ).synced,
+      ).toBe(true);
+      expect(
+        calls.some(
+          (call) =>
+            call.path.startsWith(`/guilds/${GUILD}/members/`) &&
+            (call.method === "PUT" || call.method === "PATCH"),
+        ),
+      ).toBe(false);
+      const pendingLink = await database.query.discordLink.findFirst();
+      expect(pendingLink?.syncedRank).toBe(syncedRank);
+      expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(1);
+      expect(pendingLink?.syncedUsername).toBeNull();
 
-    guildMember = { nick: "Alpha", roles: [VERIFIED_ROLE, VILLAGE_ROLE, STUDENT_ROLE] };
-    calls = [];
-    await reconcileDiscordLinks(database);
-    expect(
-      calls.filter((call) => call.method === "PUT").map((call) => call.path),
-    ).toEqual([`/guilds/${GUILD}/members/${OLD_DISCORD}/roles/${CHUNIN_ROLE}`]);
-    expect(
-      calls.filter((call) => call.method === "DELETE").map((call) => call.path),
-    ).toEqual([`/guilds/${GUILD}/members/${OLD_DISCORD}/roles/${STUDENT_ROLE}`]);
-    expect((await database.query.discordLink.findFirst())?.syncedRank).toBe("CHUNIN");
-    expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
-  });
+      guildMember = {
+        nick: "Alpha",
+        roles: [VERIFIED_ROLE, VILLAGE_ROLE, STUDENT_ROLE],
+      };
+      calls = [];
+      await reconcileDiscordLinks(database);
+      expect(
+        calls
+          .filter((call) => call.method === "PUT" && call.path.includes("/members/"))
+          .map((call) => call.path),
+      ).toEqual([`/guilds/${GUILD}/members/${OLD_DISCORD}/roles/${CHUNIN_ROLE}`]);
+      expect(
+        calls.filter((call) => call.method === "DELETE").map((call) => call.path),
+      ).toEqual([`/guilds/${GUILD}/members/${OLD_DISCORD}/roles/${STUDENT_ROLE}`]);
+      const syncedLink = await database.query.discordLink.findFirst();
+      expect(syncedLink?.syncedRank).toBe("CHUNIN");
+      expect(syncedLink?.syncedUsername).toBe("Alpha");
+      expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
+    },
+  );
 
   it("swaps the rank role on a promotion and for an outlaw rank", async () => {
     const database = await getTestDatabase();
