@@ -85,16 +85,8 @@ const SingleEditSkillTree: React.FC<SingleEditSkillTreeProps> = (props) => {
     <>
       <ContentBox
         title={heading}
-        subtitle={
-          skillTree.pathType === "BLOODRIGHT"
-            ? "Bloodright Management"
-            : "Skill Tree Management"
-        }
-        defaultBackHref={
-          skillTree.pathType === "BLOODRIGHT"
-            ? "/manual/bloodright"
-            : "/manual/skillTree"
-        }
+        subtitle="Skill Tree Management"
+        defaultBackHref="/manual/skillTree"
         topRightContent={
           <div className="flex justify-end">
             <SkillTreeHelper
@@ -119,7 +111,7 @@ const SingleEditSkillTree: React.FC<SingleEditSkillTreeProps> = (props) => {
       </ContentBox>
 
       <EffectTagListEditor
-        allowActivityBonuses={skillTree.pathType === "SKILL"}
+        allowActivityBonuses
         type="skillTree"
         effects={effects}
         setEffects={setEffects}

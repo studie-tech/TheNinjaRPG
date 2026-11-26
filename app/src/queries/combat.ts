@@ -610,7 +610,7 @@ export const listUserDataForQueryBattleUsers = (
       titles: true,
       attributes: true,
       cookingJobs: true,
-      bloodline: { with: { bloodrightTiers: true } },
+      bloodline: { with: { bloodrightOptions: { with: { jutsu: true } } } },
       sageMode: true,
       village: {
         with: {
@@ -1864,7 +1864,7 @@ export const listUserDataForProcessUsersForBattle = (
     with: {
       cosmeticSlots: cosmeticSlotRelation,
       spriteAnimationBindings: { with: { animation: true } },
-      bloodline: { with: { bloodrightTiers: true } },
+      bloodline: { with: { bloodrightOptions: { with: { jutsu: true } } } },
       sageMode: true,
       village: true,
       items: {

@@ -24,25 +24,3 @@ export const bloodrightSwapRefund = (bloodlineId: string | null) => {
     bloodrightSpent: sql`IF(${changed}, 0, ${userData.bloodrightSpent})`,
   };
 };
-
-/** Removing a prerequisite also removes every transitive dependent. */
-export const getBloodrightRefundIds = (
-  skillId: string,
-  purchasedIds: string[],
-  tiers: { id: string; requiredSkillIds: string[] }[],
-) => {
-  const removed = new Set([skillId]);
-  let previousSize = 0;
-  while (previousSize !== removed.size) {
-    previousSize = removed.size;
-    for (const tier of tiers) {
-      if (
-        purchasedIds.includes(tier.id) &&
-        tier.requiredSkillIds.some((id) => removed.has(id))
-      ) {
-        removed.add(tier.id);
-      }
-    }
-  }
-  return purchasedIds.filter((id) => removed.has(id));
-};

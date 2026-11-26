@@ -1,68 +1,175 @@
 /**
  * Database access for bloodright; authorization and transaction scopes stay in callers.
  */
-import { and, eq, gte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { UserRole } from "@/drizzle/constants";
 import { SKILL_RESET_STAFF_RELATED_MSG } from "@/drizzle/constants";
-import { actionLog, skillTree, skillTreeFolder, userData } from "@/drizzle/schema";
+import { actionLog, bloodrightOption, jutsu, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { canAccessHiddenSkillTree, getContentRole } from "@/utils/permissions";
 import { getNextUserSnapshotAt } from "@/utils/time";
+import type { BloodrightOptionData } from "@/validators/bloodright";
 
-/** Build the `skillTree` listing for `get`, using predicates on `pathType`. */
-export const listSkillTreeForGet = (client: Pick<DrizzleClient, "query">) =>
-  client.query.skillTree.findMany({
-    where: eq(skillTree.pathType, "BLOODRIGHT"),
-    with: { folder: true },
-    orderBy: [skillTree.tier, skillTree.name],
+/** Load options with their source jutsu for validation and preview. */
+export const listBloodrightOptions = (client: Pick<DrizzleClient, "query">) =>
+  client.query.bloodrightOption.findMany({
+    with: { jutsu: true },
+    orderBy: [bloodrightOption.name],
   });
 
-/** Build the `userData` update for `purchase`, including predicates on `userId`, `bloodlineId`, `folderId`. */
+/** Fetch a single option and the jutsu whose tags it changes. */
+export const findBloodrightOption = (
+  client: Pick<DrizzleClient, "query">,
+  id: string,
+) =>
+  client.query.bloodrightOption.findFirst({
+    where: eq(bloodrightOption.id, id),
+    with: { jutsu: true },
+  });
+
+/** Preload jutsu lineage for evolution and mechanics-reskin inheritance. */
+export const listBloodrightJutsuIdentities = (client: Pick<DrizzleClient, "query">) =>
+  client.query.jutsu.findMany({
+    columns: { id: true, parentJutsuId: true, reskinParentJutsuId: true },
+  });
+
+/** Preload every participating bloodline's jutsu, including unequipped lobby choices. */
+export const listBattleBloodrightJutsus = (
+  client: Pick<DrizzleClient, "query" | "select">,
+  userIds: string[],
+) =>
+  client.query.jutsu.findMany({
+    columns: { id: true, effects: true },
+    where: inArray(
+      jutsu.bloodlineId,
+      client
+        .select({ bloodlineId: userData.bloodlineId })
+        .from(userData)
+        .where(inArray(userData.userId, userIds)),
+    ),
+  });
+
+/** List a bloodline's jutsu for the dedicated content editor. */
+export const listBloodrightJutsus = (
+  client: Pick<DrizzleClient, "query">,
+  bloodlineId: string,
+) =>
+  client.query.jutsu.findMany({
+    where: eq(jutsu.bloodlineId, bloodlineId),
+    orderBy: [jutsu.name],
+  });
+
+/** Load the option's bloodline jutsu so inherited combinations are checked before payment. */
+export const listBloodrightPurchaseJutsus = (
+  client: Pick<DrizzleClient, "query" | "select">,
+  optionId: string,
+) =>
+  client.query.jutsu.findMany({
+    where: inArray(
+      jutsu.bloodlineId,
+      client
+        .select({ bloodlineId: bloodrightOption.bloodlineId })
+        .from(bloodrightOption)
+        .where(eq(bloodrightOption.id, optionId)),
+    ),
+  });
+
+/** Debit Silver and claim an option against both account and content snapshots. */
 export const updateUserDataForPurchase = (
   client: Pick<DrizzleClient, "update">,
-  user: {
+  user: { updatedAt: Date; role: UserRole; playsAsPlayer: boolean },
+  option: {
+    seichiSilverCost: number;
+    bloodlineId: string;
+    id: string;
     updatedAt: Date;
-    role: UserRole;
-    playsAsPlayer: boolean;
+    jutsu: { id: string; updatedAt: Date };
   },
-  tier: { seichiSilverCost: number; bloodlineId: string; id: string; updatedAt: Date },
-  bloodright: { skillId: string; cost: number }[],
+  bloodright: { optionId: string; cost: number }[],
   ctx: { userId: string },
-  purchased: { skillId: string; cost: number }[],
+  purchased: { optionId: string; cost: number }[],
 ) =>
   client
     .update(userData)
     .set({
       updatedAt: getNextUserSnapshotAt(user.updatedAt),
-      seichiSilver: sql`${userData.seichiSilver} - ${tier.seichiSilverCost}`,
-      bloodrightSpent: sql`${userData.bloodrightSpent} + ${tier.seichiSilverCost}`,
+      seichiSilver: sql`${userData.seichiSilver} - ${option.seichiSilverCost}`,
+      bloodrightSpent: sql`${userData.bloodrightSpent} + ${option.seichiSilverCost}`,
       bloodright,
     })
     .where(
       and(
         eq(userData.userId, ctx.userId),
-        eq(userData.bloodlineId, tier.bloodlineId),
-        // Content may change between loading the card and claiming its purchase.
-        sql`EXISTS (SELECT 1 FROM ${skillTree} LEFT JOIN ${skillTreeFolder} ON ${skillTree.folderId} = ${skillTreeFolder.id} WHERE ${skillTree.id} = ${tier.id} AND ${skillTree.updatedAt} = ${tier.updatedAt} AND (${canAccessHiddenSkillTree(getContentRole(user))} OR (${skillTree.hidden} = false AND COALESCE(${skillTreeFolder.hidden}, false) = false)))`,
+        eq(userData.bloodlineId, option.bloodlineId),
+        sql`EXISTS (SELECT 1 FROM ${bloodrightOption} JOIN ${jutsu} ON ${jutsu.id} = ${bloodrightOption.jutsuId} WHERE ${bloodrightOption.id} = ${option.id} AND ${bloodrightOption.updatedAt} = ${option.updatedAt} AND ${jutsu.updatedAt} = ${option.jutsu.updatedAt} AND ${jutsu.bloodlineId} = ${option.bloodlineId} AND (${canAccessHiddenSkillTree(getContentRole(user))} OR (${bloodrightOption.hidden} = false AND ${jutsu.hidden} = false)))`,
         ne(userData.status, "BATTLE"),
         sql`${userData.bloodright} = CAST(${JSON.stringify(purchased)} AS JSON)`,
-        gte(userData.seichiSilver, tier.seichiSilverCost),
+        gte(userData.seichiSilver, option.seichiSilverCost),
       ),
     );
 
-/** Build the `skillTree` listing for `refund`, using predicates on `pathType`. */
-export const listSkillTreeForRefund = (client: Pick<DrizzleClient, "query">) =>
-  client.query.skillTree.findMany({
-    where: eq(skillTree.pathType, "BLOODRIGHT"),
+/** Save content against the option and source jutsu snapshots. */
+export const saveBloodrightOption = (
+  client: Pick<DrizzleClient, "insert" | "update">,
+  id: string,
+  data: BloodrightOptionData,
+  previous?: { updatedAt: Date },
+  source?: { updatedAt: Date },
+) => {
+  if (!previous) return client.insert(bloodrightOption).values({ id, ...data });
+  return client
+    .update(bloodrightOption)
+    .set({ ...data, updatedAt: getNextUserSnapshotAt(previous.updatedAt) })
+    .where(
+      and(
+        eq(bloodrightOption.id, id),
+        eq(bloodrightOption.updatedAt, previous.updatedAt),
+        source
+          ? sql`EXISTS (SELECT 1 FROM ${jutsu} WHERE ${jutsu.id} = ${data.jutsuId} AND ${jutsu.updatedAt} = ${source.updatedAt})`
+          : undefined,
+        sql`(NOT EXISTS (SELECT 1 FROM ${userData} WHERE JSON_SEARCH(${userData.bloodright}, 'one', ${id}, NULL, '$[*].optionId') IS NOT NULL) OR (${bloodrightOption.bloodlineId} = ${data.bloodlineId} AND ${bloodrightOption.jutsuId} = ${data.jutsuId} AND ${bloodrightOption.changes} = CAST(${JSON.stringify(data.changes)} AS JSON)))`,
+      ),
+    );
+};
+
+/** Delete content only when nobody owns the option. */
+export const deleteBloodrightOption = (
+  client: Pick<DrizzleClient, "delete">,
+  id: string,
+) =>
+  client
+    .delete(bloodrightOption)
+    .where(
+      and(
+        eq(bloodrightOption.id, id),
+        sql`NOT EXISTS (SELECT 1 FROM ${userData} WHERE JSON_SEARCH(${userData.bloodright}, 'one', ${id}, NULL, '$[*].optionId') IS NOT NULL)`,
+      ),
+    );
+
+/** Record a staff content change using the shared ActionLog convention. */
+export const logBloodrightContent = (
+  client: Pick<DrizzleClient, "insert">,
+  userId: string,
+  id: string,
+  name: string,
+  changes: string[],
+) =>
+  client.insert(actionLog).values({
+    id: nanoid(),
+    userId,
+    tableName: "bloodrightOption",
+    relatedId: id,
+    relatedMsg: name,
+    changes,
   });
 
 /** Build the `userData` update for `refund`, using predicates on `userId`, `status`, `bloodright`. */
 export const updateUserDataForRefund = (
   client: Pick<DrizzleClient, "update">,
-  user: { updatedAt: Date; bloodright: { skillId: string; cost: number }[] },
+  user: { updatedAt: Date; bloodright: { optionId: string; cost: number }[] },
   refund: number,
-  bloodright: { skillId: string; cost: number }[],
+  bloodright: { optionId: string; cost: number }[],
   ctx: { userId: string },
 ) =>
   client
@@ -86,7 +193,7 @@ export const updateUserDataForReset = (
   client: Pick<DrizzleClient, "update">,
   user: {
     updatedAt: Date;
-    bloodright: { skillId: string; cost: number }[];
+    bloodright: { optionId: string; cost: number }[];
     monthlySkillResets: { month: string; count: number };
     bloodrightSpent: number;
   },

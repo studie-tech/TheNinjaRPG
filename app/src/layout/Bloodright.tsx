@@ -1,311 +1,227 @@
 "use client";
 
 import { useState } from "react";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   COST_SKILL_RESET,
-  MAX_BLOODRIGHT_TIERS,
+  MAX_BLOODRIGHT_OPTIONS,
   SKILL_TREE_RESET_FREE,
 } from "@/drizzle/constants";
-import type { SkillTree } from "@/drizzle/schema";
-import { BloodrightTree } from "@/layout/BloodrightTree";
+import { useBloodrightMutations } from "@/hooks/bloodright";
+import { BloodrightChanges } from "@/layout/BloodrightChanges";
 import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
-import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { QueryError } from "@/layout/QueryError";
+import { isBloodrightCurrent } from "@/libs/bloodrightEffects";
 import { freeResetNote } from "@/libs/skillReset";
-import { showMutationToast } from "@/libs/toast";
 import { isStaffMember } from "@/utils/permissions";
 import { useRequiredUserDataSelector, useUserDataSelector } from "@/utils/UserContext";
-import type { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const Bloodright = () => {
-  const utils = api.useUtils();
-  const {
-    data: user,
-    prepareUserUpdate,
-    updateUser,
-  } = useRequiredUserDataSelector((u) => ({
+  const { data: user } = useRequiredUserDataSelector((u) => ({
     seichiSilver: u.seichiSilver,
     bloodline: u.bloodline,
   }));
   const { data, isPending, isError, refetch } = api.bloodright.get.useQuery();
-  const onSuccess = async (
-    result: z.infer<typeof userDeltaResponseSchema>,
-    _input: unknown,
-    revision: number | undefined,
-  ) => {
-    showMutationToast(result);
-    if (result.success)
-      await Promise.all([
-        utils.bloodright.get.invalidate(),
-        updateUser(result.userPatch, {
-          revision,
-          delta: result.userPatch?.bloodright ? result.userDelta : undefined,
-        }),
-      ]);
-  };
-  const purchase = api.bloodright.purchase.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess,
-  });
-  const refund = api.bloodright.refund.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess,
-  });
+  const { purchase, refund } = useBloodrightMutations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const isMutating = purchase.isPending || refund.isPending;
-  if (isPending) return <Loader explanation="Loading Bloodright" />;
+  if (isPending || !user) return <Loader explanation="Loading Bloodright" />;
   if (isError)
     return (
       <QueryError message="Unable to load Bloodright." onRetry={() => void refetch()} />
     );
-  if (!data?.tiers.length && !data?.purchased.length)
-    return <p>No Bloodright Path for this Bloodline</p>;
-  const purchasedIds = data?.purchased.map((entry) => entry.skillId) ?? [];
-  const summary = describeBloodright(data?.tiers ?? []);
-  const bloodline = user?.bloodline;
-  const isTierModalOpen = isOpen && data?.tiers.some((tier) => tier.id === selectedId);
-  const mutationErrors = (
+  const options = data?.options ?? [];
+  const purchased = data?.purchased ?? [];
+  const selected = options.find((option) => option.id === selectedId);
+  const isOwned = purchased.some((entry) => entry.optionId === selectedId);
+  const current =
+    !!selected?.jutsu && isBloodrightCurrent(selected.changes, selected.jutsu.effects);
+  const jutsus = [
+    ...new Map(
+      options.flatMap((option) =>
+        option.jutsu ? [[option.jutsu.id, option.jutsu] as const] : [],
+      ),
+    ).values(),
+  ];
+  const errors = (
     <>
-      {purchase.data && !purchase.data.success && (
-        <p role="alert" className="text-destructive">
-          {purchase.data.message}
-        </p>
-      )}
-      {refund.data && !refund.data.success && (
-        <p role="alert" className="text-destructive">
-          {refund.data.message}
-        </p>
+      {[purchase.data, refund.data].map((result, index) =>
+        result && !result.success ? (
+          <p key={index} role="alert" className="text-destructive">
+            {result.message}
+          </p>
+        ) : null,
       )}
     </>
   );
   return (
     <div className="space-y-4">
-      {bloodline && (
+      {user.bloodline && (
         <div className="bg-card flex items-center gap-4 rounded-lg border p-3">
-          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full">
-            <Image
-              src={bloodline.image}
-              alt={bloodline.name}
-              width={64}
-              height={64}
-              className="h-full w-full object-cover"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-muted-foreground text-xs tracking-wide uppercase">
-              Bloodright
-            </p>
-            <h3 className="text-lg font-bold wrap-break-word">{bloodline.name}</h3>
-            <p className="text-sm">
-              <span className="font-semibold">Rank {bloodline.rank}</span>
-              {summary.jutsu && (
-                <span className="text-muted-foreground"> · {summary.jutsu}</span>
-              )}
-            </p>
+          <Image
+            src={user.bloodline.image}
+            alt={user.bloodline.name}
+            width={64}
+            height={64}
+            className="h-16 w-16 rounded-full object-cover"
+          />
+          <div>
+            <p className="text-muted-foreground text-xs uppercase">Bloodright</p>
+            <h3 className="text-lg font-bold">{user.bloodline.name}</h3>
+            <p>Rank {user.bloodline.rank}</p>
           </div>
         </div>
       )}
       <p>
-        {purchasedIds.length} / {MAX_BLOODRIGHT_TIERS} active tiers ·{" "}
+        {purchased.length} / {MAX_BLOODRIGHT_OPTIONS} active options ·{" "}
         {data?.spent.toLocaleString()} Seichi Silver invested ·{" "}
-        {user?.seichiSilver.toLocaleString()} available
+        {user.seichiSilver.toLocaleString()} available
       </p>
       <p className="text-muted-foreground text-sm">
-        Changing bloodlines refunds all invested Silver. Refunding a tier removes it and
-        every dependent tier, returning their original purchase costs.
+        Each option improves only its named jutsu and its evolutions and reskins. Flat
+        increases apply first, then percentage increases add together. Bloodright is
+        disabled in ranked combat. Changing bloodlines refunds all invested Silver.
       </p>
-      <BloodrightTree
-        tiers={data?.tiers ?? []}
-        purchasedIds={purchasedIds}
-        silver={user?.seichiSilver ?? 0}
-        onSelect={(id) => {
-          if (!purchase.isPending) purchase.reset();
-          if (!refund.isPending) refund.reset();
-          setSelectedId(id);
-          setIsOpen(true);
-        }}
-      />
-      {summary.note && (
-        <p className="text-muted-foreground text-center text-sm">{summary.note}</p>
+      {!options.length && (
+        <p>No Bloodright options are available for this bloodline.</p>
       )}
-      {data?.tiers
-        .filter((tier) => tier.id === selectedId)
-        .map((tier) => {
-          const isOwned = purchasedIds.includes(tier.id);
-          const hasPrerequisites = tier.requiredSkillIds.every((id) =>
-            purchasedIds.includes(id),
-          );
-          return (
-            <Modal
-              key={tier.id}
-              title={tier.name}
-              isOpen={isOpen}
-              setIsOpen={setIsOpen}
-              isLoading={isMutating}
-              className="max-w-2xl"
-            >
-              <ItemWithEffects item={tier} />
-              <p>
-                Tier {tier.tier} · {tier.seichiSilverCost.toLocaleString()} Seichi
-                Silver
-                {isOwned ? " · Active" : ""}
-              </p>
-              {tier.requiredSkillIds.length > 0 && (
-                <p className="text-sm">
-                  Requires:{" "}
-                  {tier.requiredSkillIds
-                    .map(
-                      (id) =>
-                        data.tiers.find((entry) => entry.id === id)?.name ??
-                        "Purchased prerequisite",
-                    )
-                    .join(", ")}
-                </p>
-              )}
-              {isOwned ? (
-                <Confirm
-                  disabled={isMutating}
-                  confirmDisabled={isMutating}
-                  title="Refund Bloodright tier"
-                  button={
-                    <Button disabled={isMutating} variant="outline">
-                      Refund tier
-                    </Button>
-                  }
-                  onAccept={() => refund.mutate({ skillId: tier.id })}
+      {jutsus.map((jutsu) => (
+        <section key={jutsu.id} className="space-y-3 rounded-lg border p-4">
+          <div className="flex items-center gap-3">
+            <Image
+              src={jutsu.image}
+              alt={jutsu.name}
+              width={48}
+              height={48}
+              className="h-12 w-12 rounded object-cover"
+            />
+            <h4 className="font-bold">{jutsu.name}</h4>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {options
+              .filter((option) => option.jutsuId === jutsu.id)
+              .map((option) => (
+                <button
+                  type="button"
+                  key={option.id}
+                  className="bg-card hover:bg-accent space-y-2 rounded-md border p-3 text-left"
+                  onClick={() => {
+                    purchase.reset();
+                    refund.reset();
+                    setSelectedId(option.id);
+                    setIsOpen(true);
+                  }}
                 >
-                  Remove this tier and all dependent tiers and refund their original
-                  Seichi Silver costs?
-                </Confirm>
-              ) : (
-                <Button
-                  disabled={
-                    isMutating ||
-                    !hasPrerequisites ||
-                    (user?.seichiSilver ?? 0) < tier.seichiSilverCost ||
-                    purchasedIds.length >= MAX_BLOODRIGHT_TIERS
-                  }
-                  onClick={() => purchase.mutate({ skillId: tier.id })}
-                >
-                  {!hasPrerequisites ? "Prerequisites required" : "Unlock tier"}
+                  <div className="flex justify-between gap-2">
+                    <b>{option.name}</b>
+                    {purchased.some((entry) => entry.optionId === option.id) && (
+                      <span className="text-primary">Active</span>
+                    )}
+                  </div>
+                  <p className="text-sm">{option.description}</p>
+                  <BloodrightChanges changes={option.changes} effects={jutsu.effects} />
+                  <p className="text-muted-foreground text-sm">
+                    {option.seichiSilverCost.toLocaleString()} Seichi Silver
+                  </p>
+                  {!isBloodrightCurrent(option.changes, jutsu.effects) && (
+                    <p className="text-destructive text-sm">
+                      Awaiting a content update
+                    </p>
+                  )}
+                </button>
+              ))}
+          </div>
+        </section>
+      ))}
+      {selected && (
+        <Modal
+          title={selected.name}
+          isOpen={isOpen}
+          setIsOpen={setIsOpen}
+          isLoading={isMutating}
+          className="max-w-2xl"
+        >
+          <p className="font-bold">{selected.jutsu?.name}</p>
+          <p>{selected.description}</p>
+          {selected.jutsu && (
+            <BloodrightChanges
+              changes={selected.changes}
+              effects={selected.jutsu.effects}
+            />
+          )}
+          <p>
+            {selected.seichiSilverCost.toLocaleString()} Seichi Silver
+            {isOwned ? " · Active" : ""}
+          </p>
+          {isOwned ? (
+            <Confirm
+              disabled={isMutating}
+              confirmDisabled={isMutating}
+              title="Refund Bloodright option"
+              button={
+                <Button variant="outline" disabled={isMutating}>
+                  Refund option
                 </Button>
-              )}
-              {mutationErrors}
-            </Modal>
-          );
-        })}
-      {data?.purchased
-        .filter((entry) => !data.tiers.some((tier) => tier.id === entry.skillId))
+              }
+              onAccept={() => refund.mutate({ optionId: selected.id })}
+            >
+              Remove this option and refund its original Seichi Silver cost?
+            </Confirm>
+          ) : (
+            <Button
+              disabled={
+                isMutating ||
+                !current ||
+                user.seichiSilver < selected.seichiSilverCost ||
+                purchased.length >= MAX_BLOODRIGHT_OPTIONS
+              }
+              onClick={() => purchase.mutate({ optionId: selected.id })}
+            >
+              {current ? "Activate option" : "Awaiting content update"}
+            </Button>
+          )}
+          {errors}
+        </Modal>
+      )}
+      {purchased
+        .filter((entry) => !options.some((option) => option.id === entry.optionId))
         .map((entry) => (
           <Confirm
+            key={entry.optionId}
             disabled={isMutating}
             confirmDisabled={isMutating}
-            key={entry.skillId}
-            title="Refund unavailable tier"
+            title="Refund unavailable option"
             button={
-              <Button disabled={isMutating} variant="outline">
-                Refund unavailable tier ({entry.cost} Silver)
+              <Button variant="outline" disabled={isMutating}>
+                Refund unavailable option ({entry.cost} Silver)
               </Button>
             }
-            onAccept={() => refund.mutate({ skillId: entry.skillId })}
+            onAccept={() => refund.mutate({ optionId: entry.optionId })}
           >
-            Refund this tier and all dependents?
+            Refund this option at its original purchase cost?
           </Confirm>
         ))}
-      {!isTierModalOpen && mutationErrors}
+      {(!selected || !isOpen) && errors}
     </div>
   );
 };
 
-/** Summarize self-targeted potency paths; mixed or other-target paths show only costs. */
-export const describeBloodright = (
-  tiers: Pick<SkillTree, "target" | "effects" | "seichiSilverCost">[],
-) => {
-  const isPotencyPath = tiers.every(
-    (tier) =>
-      tier.target === "SELF" &&
-      tier.effects.every(
-        (effect) => effect.type === "increasepotency" && effect.target === "SELF",
-      ),
-  );
-  const scopes = isPotencyPath
-    ? tiers.flatMap((tier) =>
-        tier.effects.flatMap((effect) =>
-          effect.type === "increasepotency" &&
-          (effect.affectedTag !== "none" || effect.affectedElements.length > 0)
-            ? [effect.affectedElements]
-            : [],
-        ),
-      )
-    : [];
-  // Effective potency without an element restriction can modify matching tags on any jutsu.
-  const unrestricted = scopes.some((scope) => !scope.length);
-  const elements = unrestricted
-    ? []
-    : [...new Set(scopes.flat())].map((element) =>
-        element === "None" ? "Non-elemental" : element,
-      );
-  const jutsu = elements.length ? `${elements.join(", ")} jutsu` : null;
-  if (!tiers.length) return { jutsu, note: null };
-  const costs = tiers.map((tier) => tier.seichiSilverCost);
-  const [low, high] = [Math.min(...costs), Math.max(...costs)];
-  const cost =
-    low === high
-      ? `Each node costs ${low.toLocaleString()} Seichi Silver`
-      : `Nodes cost ${low.toLocaleString()} to ${high.toLocaleString()} Seichi Silver`;
-  const potency = scopes.length
-    ? `Effects modify the power of matching tags on ${jutsu ?? "all jutsu"}. `
-    : "";
-  return {
-    jutsu,
-    note: `${potency}${cost}; up to ${MAX_BLOODRIGHT_TIERS} active.`,
-  };
-};
-
 export const ResetBloodright = () => {
-  const utils = api.useUtils();
-  const {
-    data: user,
-    prepareUserUpdate,
-    updateUser,
-  } = useUserDataSelector((u) => ({
-    staffAccount: u.staffAccount,
-  }));
+  const { data: user } = useUserDataSelector((u) => ({ staffAccount: u.staffAccount }));
+  const { reset } = useBloodrightMutations();
   const { data: info, isError, refetch } = api.skillTree.getResetInfo.useQuery();
-  const reset = api.bloodright.reset.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (result, _input, revision) => {
-      showMutationToast(result);
-      if (result.success)
-        await Promise.all([
-          utils.bloodright.get.invalidate(),
-          updateUser(result.userPatch, {
-            revision,
-            delta:
-              result.userPatch?.bloodright &&
-              result.userPatch.bloodrightSpent !== undefined &&
-              result.userPatch.monthlySkillResets
-                ? result.userDelta
-                : undefined,
-          }),
-          utils.skillTree.getResetInfo.invalidate(),
-        ]);
-    },
-  });
   return (
     <div className="space-y-4 p-4">
       <p>
-        Reset all Bloodright tiers and refund all invested Seichi Silver. Bloodright and
-        Skills share the monthly reset allowance: {SKILL_TREE_RESET_FREE.NORMAL} free
-        reset, or {SKILL_TREE_RESET_FREE.GOLD} with Gold Federal. After that, resets
-        cost {COST_SKILL_RESET} reputation points.
+        Reset all Bloodright options and refund all invested Seichi Silver. Bloodright
+        and Skills share the monthly reset allowance: {SKILL_TREE_RESET_FREE.NORMAL}{" "}
+        free reset, or {SKILL_TREE_RESET_FREE.GOLD} with Gold Federal. After that,
+        resets cost {COST_SKILL_RESET} reputation points.
       </p>
       <Confirm
         disabled={!info || reset.isPending}
@@ -323,7 +239,7 @@ export const ResetBloodright = () => {
         }
         onAccept={() => reset.mutate()}
       >
-        Remove all Bloodright tiers and refund your Seichi Silver
+        Remove all Bloodright options and refund your Seichi Silver
         {info?.isFree ? " for free" : ` for ${COST_SKILL_RESET} reputation points`}?
       </Confirm>
       {isError && (

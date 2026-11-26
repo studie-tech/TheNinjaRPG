@@ -25,14 +25,12 @@ import {
   deleteUserSkillForResetAllUsersSkillPoints,
   deleteUserSkills,
   fetchUserSkills,
-  findBloodlineIdentityById,
   findSkillTreeFolderForDeleteFolder,
   findSkillTreeFolderForUpdate,
   findSkillTreeFolderForUpdateFolder,
   findSkillTreeForDelete,
   findSkillTreeForUpdate,
   findSkillWithFolderById,
-  findUserDataForUpdate,
   insertActionLogForDelete,
   insertActionLogForResetAllUsersSkillPoints,
   insertActionLogForResetAllUsersSkillPoints2,
@@ -43,7 +41,6 @@ import {
   insertUserSkillForPurchaseSkill,
   listItemForDelete,
   listJutsuForDelete,
-  listSkillTreeFolderAssignments,
   listSkillTreeFolderForGetAllFolders,
   listSkillTreeForDelete,
   listSkillTreeForDeleteFolder,
@@ -93,10 +90,6 @@ const skillTreeFolderSchema = z.object({
   hidden: z.boolean().optional(),
   order: z.int().optional(),
 });
-
-const createSkillSchema = z
-  .object({ bloodlineId: z.string().min(1).optional() })
-  .optional();
 
 export const skillTreeRouter = createTRPCRouter({
   // Get all skill names for selectors
@@ -220,7 +213,6 @@ export const skillTreeRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       if (
         !skill ||
-        skill.pathType === "BLOODRIGHT" ||
         !isSkillVisible(skill, canAccessHiddenSkillTree(getContentRole(user)))
       ) {
         return errorResponse("Skill not found");
@@ -328,35 +320,26 @@ export const skillTreeRouter = createTRPCRouter({
     }),
 
   // Admin: Create new skill with placeholder data
-  create: protectedProcedure
-    .input(createSkillSchema)
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Check permissions
-      const [user, line] = await Promise.all([
-        findUserById(ctx.drizzle, ctx.userId),
-        input?.bloodlineId
-          ? findBloodlineIdentityById(ctx.drizzle, input.bloodlineId)
-          : Promise.resolve(null),
-      ]);
-      if (!user || !canChangeContent(user.role)) {
-        return errorResponse("You are not authorized to create skills");
-      }
-      // New skills start hidden, so their creator must be allowed to access them.
-      if (!canAccessHiddenSkillTree(user.role)) {
-        return errorResponse("You are not authorized to create hidden skills");
-      }
+  create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
+    // Check permissions
+    const user = await findUserById(ctx.drizzle, ctx.userId);
+    if (!user || !canChangeContent(user.role)) {
+      return errorResponse("You are not authorized to create skills");
+    }
+    // New skills start hidden, so their creator must be allowed to access them.
+    if (!canAccessHiddenSkillTree(user.role)) {
+      return errorResponse("You are not authorized to create hidden skills");
+    }
 
-      if (input?.bloodlineId && !line) return errorResponse("Bloodline not found");
-      const id = nanoid();
-      await insertSkillTreeForCreate(ctx.drizzle, id, input);
+    const id = nanoid();
+    await insertSkillTreeForCreate(ctx.drizzle, id);
 
-      await callDiscordContent(user.username, `Created skill: New Skill - ${id}`, [
-        "skill created",
-      ]);
+    await callDiscordContent(user.username, `Created skill: New Skill - ${id}`, [
+      "skill created",
+    ]);
 
-      return { success: true, message: id };
-    }),
+    return { success: true, message: id };
+  }),
 
   // Admin: Update skill
   update: protectedProcedure
@@ -365,34 +348,19 @@ export const skillTreeRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Check permissions
       const requestedFolderId = input.data.folderId || null;
-      const nextBloodlineId = input.data.bloodlineId || null;
-      const [
-        user,
-        skill,
-        skillWithName,
-        targetFolder,
-        line,
-        prerequisites,
-        purchased,
-        dependents,
-      ] = await Promise.all([
-        findUserById(ctx.drizzle, ctx.userId),
-        findSkillWithFolderById(ctx.drizzle, input.id),
-        findSkillTreeForUpdate(ctx.drizzle, input),
-        requestedFolderId
-          ? findSkillTreeFolderForUpdate(ctx.drizzle, requestedFolderId)
-          : Promise.resolve(null),
-        input.data.bloodlineId
-          ? findBloodlineIdentityById(ctx.drizzle, input.data.bloodlineId)
-          : Promise.resolve(null),
-        input.data.requiredSkillIds.length
-          ? listSkillTreeForUpdate(ctx.drizzle, input)
-          : Promise.resolve([]),
-        input.data.pathType === "BLOODRIGHT"
-          ? findUserDataForUpdate(ctx.drizzle, input)
-          : Promise.resolve(null),
-        listSkillTreeForUpdate2(ctx.drizzle, input),
-      ]);
+      const [user, skill, skillWithName, targetFolder, prerequisites, dependents] =
+        await Promise.all([
+          findUserById(ctx.drizzle, ctx.userId),
+          findSkillWithFolderById(ctx.drizzle, input.id),
+          findSkillTreeForUpdate(ctx.drizzle, input),
+          requestedFolderId
+            ? findSkillTreeFolderForUpdate(ctx.drizzle, requestedFolderId)
+            : Promise.resolve(null),
+          input.data.requiredSkillIds.length
+            ? listSkillTreeForUpdate(ctx.drizzle, input)
+            : Promise.resolve([]),
+          listSkillTreeForUpdate2(ctx.drizzle, input),
+        ]);
       if (!user || !canChangeContent(user.role)) {
         return errorResponse("You are not authorized to edit this content");
       }
@@ -408,54 +376,22 @@ export const skillTreeRouter = createTRPCRouter({
       if (skillWithName && skillWithName.id !== skill.id)
         return errorResponse("Skill name already exists");
 
-      if (input.data.pathType !== skill.pathType)
-        return errorResponse("A tier's path type cannot be changed");
-      if (
-        input.data.pathType === "BLOODRIGHT" &&
-        (!input.data.bloodlineId || input.data.skillType !== "DEFAULT")
-      ) {
-        return errorResponse(
-          "Bloodright tiers require a bloodline and the DEFAULT entry type",
-        );
-      }
-      if (input.data.pathType === "BLOODRIGHT" && !line)
-        return errorResponse("Bloodline not found");
       const changesHierarchy =
         skill.tier !== input.data.tier ||
-        (skill.bloodlineId ?? null) !== nextBloodlineId ||
         JSON.stringify(skill.requiredSkillIds) !==
           JSON.stringify(input.data.requiredSkillIds);
       if (
         changesHierarchy &&
         (prerequisites.length !== input.data.requiredSkillIds.length ||
           prerequisites.some(
-            (tier) =>
-              tier.id === skill.id ||
-              tier.tier >= input.data.tier ||
-              tier.pathType !== input.data.pathType ||
-              (tier.bloodlineId ?? null) !== nextBloodlineId,
+            (tier) => tier.id === skill.id || tier.tier >= input.data.tier,
           ))
       ) {
         return errorResponse(
           "Prerequisites must belong to the same path and bloodline, and a lower tier",
         );
       }
-      if (purchased && changesHierarchy)
-        return errorResponse(
-          "Refund purchased Bloodright tiers before changing their bloodline, tier or prerequisites",
-        );
-      if (input.data.pathType === "SKILL" && input.data.bloodlineId)
-        return errorResponse("Only Bloodright tiers can have a bloodline");
-
-      if (
-        changesHierarchy &&
-        dependents.some(
-          (tier) =>
-            tier.pathType !== input.data.pathType ||
-            tier.bloodlineId !== nextBloodlineId ||
-            tier.tier <= input.data.tier,
-        )
-      )
+      if (changesHierarchy && dependents.some((tier) => tier.tier <= input.data.tier))
         return errorResponse(
           "This change would invalidate a dependent tier. Update its prerequisites first",
         );
@@ -473,9 +409,6 @@ export const skillTreeRouter = createTRPCRouter({
         tier: input.data.tier,
         requiredSkillIds: input.data.requiredSkillIds,
         costSkillPoints: input.data.costSkillPoints,
-        pathType: input.data.pathType,
-        bloodlineId: nextBloodlineId,
-        seichiSilverCost: input.data.seichiSilverCost,
         hidden: input.data.hidden,
         skillType: input.data.skillType,
         folderId: input.data.folderId || null,
@@ -489,13 +422,7 @@ export const skillTreeRouter = createTRPCRouter({
       });
 
       if (diff.length > 0) {
-        const result = await updateSkillTreeForUpdate(
-          ctx.drizzle,
-          data,
-          skill,
-          input,
-          changesHierarchy,
-        );
+        const result = await updateSkillTreeForUpdate(ctx.drizzle, data, skill, input);
         if (result.rowsAffected !== 1)
           return errorResponse("Tier changed or was purchased. Refresh and try again");
 
@@ -513,23 +440,15 @@ export const skillTreeRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [
-        user,
-        skill,
-        usersWithSkill,
-        bloodrightOwner,
-        dependents,
-        requiredItems,
-        requiredJutsus,
-      ] = await Promise.all([
-        findUserById(ctx.drizzle, ctx.userId),
-        findSkillTreeForDelete(ctx.drizzle, input),
-        listUserSkillForDelete(ctx.drizzle, input),
-        findUserDataForUpdate(ctx.drizzle, input),
-        listSkillTreeForDelete(ctx.drizzle, input),
-        listItemForDelete(ctx.drizzle, input),
-        listJutsuForDelete(ctx.drizzle, input),
-      ]);
+      const [user, skill, usersWithSkill, dependents, requiredItems, requiredJutsus] =
+        await Promise.all([
+          findUserById(ctx.drizzle, ctx.userId),
+          findSkillTreeForDelete(ctx.drizzle, input),
+          listUserSkillForDelete(ctx.drizzle, input),
+          listSkillTreeForDelete(ctx.drizzle, input),
+          listItemForDelete(ctx.drizzle, input),
+          listJutsuForDelete(ctx.drizzle, input),
+        ]);
       if (!user || !canChangeContent(user.role)) {
         return errorResponse("You are not authorized to delete this content");
       }
@@ -546,7 +465,7 @@ export const skillTreeRouter = createTRPCRouter({
         return errorResponse(
           "Cannot delete a tier referenced by dependent tiers. Update their prerequisites first",
         );
-      if (usersWithSkill.length > 0 || bloodrightOwner) {
+      if (usersWithSkill.length > 0) {
         return errorResponse("Cannot delete skill that users have purchased");
       }
 
@@ -751,35 +670,17 @@ export const skillTreeRouter = createTRPCRouter({
       z
         .object({
           includeHidden: z.boolean().optional(),
-          skillFoldersOnly: z.boolean().optional(),
         })
         .nullish(),
     )
     .query(async ({ ctx, input }) => {
-      const [viewerRole, folders, assignments] = await Promise.all([
+      const [viewerRole, folders] = await Promise.all([
         fetchContentViewerRole(ctx.drizzle, ctx.userId),
         listSkillTreeFolderForGetAllFolders(ctx.drizzle),
-        input?.skillFoldersOnly
-          ? listSkillTreeFolderAssignments(ctx.drizzle)
-          : Promise.resolve([]),
       ]);
       const isStaff = canAccessHiddenSkillTree(viewerRole);
-      const skillIds = new Set(
-        assignments
-          .filter((entry) => entry.pathType === "SKILL")
-          .map((entry) => entry.folderId),
-      );
-      const bloodrightIds = new Set(
-        assignments
-          .filter((entry) => entry.pathType === "BLOODRIGHT")
-          .map((entry) => entry.folderId),
-      );
       return folders.filter(
-        (folder) =>
-          ((input?.includeHidden && isStaff) || !folder.hidden) &&
-          (!input?.skillFoldersOnly ||
-            !bloodrightIds.has(folder.id) ||
-            skillIds.has(folder.id)),
+        (folder) => (input?.includeHidden && isStaff) || !folder.hidden,
       );
     }),
 
@@ -942,8 +843,7 @@ export const skillTreeRouter = createTRPCRouter({
  * @returns The where conditions for the skill tree database filter
  */
 export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
-  const filters = [eq(skillTree.pathType, input.pathType ?? "SKILL")];
-  if (input.bloodlineId) filters.push(eq(skillTree.bloodlineId, input.bloodlineId));
+  const filters = [];
 
   if (input.name) {
     filters.push(like(skillTree.name, `%${input.name}%`));

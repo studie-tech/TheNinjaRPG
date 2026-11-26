@@ -11,7 +11,6 @@ import { tagTypes } from "@/validators/combat";
 
 interface SkillTreeFilteringProps {
   state: SkillTreeFilteringState;
-  isBloodright?: boolean;
 }
 
 const SKILL_TREE_FILTERING_SCHEMA = defineFilteringSchema({
@@ -40,8 +39,6 @@ const SKILL_TREE_FILTERING_SCHEMA = defineFilteringSchema({
     {
       id: "costSkillPoints",
       label: "Skill Points Cost",
-      visibleIf: (ctx) =>
-        !(ctx as { isBloodright?: boolean } | undefined)?.isBloodright,
       type: "single-select",
       noneOption: { value: "ANY", label: "ANY" },
       defaultValue: "ANY",
@@ -57,7 +54,7 @@ const SKILL_TREE_FILTERING_SCHEMA = defineFilteringSchema({
 });
 
 const SkillTreeFiltering: React.FC<SkillTreeFilteringProps> = (props) => {
-  const context = { ...useContentEditContext(), isBloodright: props.isBloodright };
+  const context = useContentEditContext();
   return (
     <ContentFiltering
       schema={SKILL_TREE_FILTERING_SCHEMA}

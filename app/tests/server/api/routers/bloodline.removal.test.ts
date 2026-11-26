@@ -56,7 +56,7 @@ describeWithDatabase("bloodline change rejection recovery", () => {
         money: 1000,
         seichiSilver: 200,
         bloodrightSpent: 77,
-        bloodright: [{ skillId: "old-tier", cost: 77 }],
+        bloodright: [{ optionId: "old-tier", cost: 77 }],
       },
     ]);
     const db = await getTestDatabase();

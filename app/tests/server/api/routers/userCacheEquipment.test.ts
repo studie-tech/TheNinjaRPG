@@ -8,8 +8,10 @@ import {
 } from "@/drizzle/constants";
 import {
   bloodline,
+  bloodrightOption,
   item,
   itemLoadout,
+  jutsu,
   jutsuLoadout,
   skillTree,
   title,
@@ -28,6 +30,7 @@ import { bloodrightRouter } from "@/server/api/routers/bloodright";
 import { itemRouter } from "@/server/api/routers/item";
 import { staffRouter } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
+import { DamageTag } from "@/validators/combat";
 import { makeEffect } from "../../../setup/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
@@ -48,12 +51,14 @@ describeWithDatabase("committed profile cache patches", () => {
   beforeEach(async () => {
     const db = await getTestDatabase();
     await resetTables(
+      bloodrightOption,
       userTitle,
       title,
       userQueue,
       userItemImbuement,
       userSkill,
       skillTree,
+      jutsu,
       jutsuLoadout,
       itemLoadout,
       userItem,
@@ -786,16 +791,29 @@ describeWithDatabase("committed profile cache patches", () => {
       .update(userData)
       .set({ bloodlineId: "cache-line" })
       .where(eq(userData.userId, userId));
-    await db.insert(skillTree).values({
-      id: "cache-tier",
-      name: "Cache Tier",
+    const damage = DamageTag.parse({ power: 20 });
+    await db.insert(jutsu).values({
+      id: "cache-br-jutsu",
+      name: "Cache BR Jutsu",
+      battleDescription: "Cache BR Jutsu",
+      target: "OPPONENT",
+      range: 3,
+      requiredRank: "STUDENT",
+      jutsuType: "BLOODLINE",
       image: "",
       description: "Fixture",
-      effects: [],
-      tier: 1,
-      pathType: "BLOODRIGHT",
+      effects: [damage],
       bloodlineId: "cache-line",
+    });
+    await db.insert(bloodrightOption).values({
+      id: "cache-tier",
+      name: "Cache Option",
+      description: "Fixture",
+      bloodlineId: "cache-line",
+      jutsuId: "cache-br-jutsu",
       seichiSilverCost: 100,
+      hidden: false,
+      changes: [{ tagIndex: 0, tag: damage, field: "power", mode: "FLAT", value: 1 }],
     });
     let requiresUserRefresh = false;
     stubProfile("fetchUpdatedUser", async ({ client }: { client: DrizzleClient }) => ({
@@ -806,17 +824,17 @@ describeWithDatabase("committed profile cache patches", () => {
     }));
     const counted = countUserReads(db);
     const caller = callerForDatabase(bloodrightRouter, userId, counted.client);
-    const purchased = await caller.purchase({ skillId: "cache-tier" });
+    const purchased = await caller.purchase({ optionId: "cache-tier" });
     expect(purchased.userPatch).toEqual({
-      bloodright: [{ skillId: "cache-tier", cost: 100 }],
+      bloodright: [{ optionId: "cache-tier", cost: 100 }],
     });
     expect(purchased.userDelta).toEqual({ bloodrightSpent: 100, seichiSilver: -100 });
     expect(counted.getReads()).toBe(1);
-    const refunded = await caller.refund({ skillId: "cache-tier" });
+    const refunded = await caller.refund({ optionId: "cache-tier" });
     expect(refunded.userPatch).toEqual({ bloodright: [] });
     expect(refunded.userDelta).toEqual({ bloodrightSpent: -100, seichiSilver: 100 });
     expect(counted.getReads()).toBe(2);
-    await caller.purchase({ skillId: "cache-tier" });
+    await caller.purchase({ optionId: "cache-tier" });
     const reset = await caller.reset();
     const stored = await db.query.userData.findFirst({
       where: eq(userData.userId, userId),
@@ -832,10 +850,10 @@ describeWithDatabase("committed profile cache patches", () => {
     expect(stored?.seichiSilver).toBe(300);
     requiresUserRefresh = true;
     expect(
-      (await caller.purchase({ skillId: "cache-tier" })).userDelta,
+      (await caller.purchase({ optionId: "cache-tier" })).userDelta,
     ).toBeUndefined();
-    expect((await caller.refund({ skillId: "cache-tier" })).userDelta).toBeUndefined();
-    await caller.purchase({ skillId: "cache-tier" });
+    expect((await caller.refund({ optionId: "cache-tier" })).userDelta).toBeUndefined();
+    await caller.purchase({ optionId: "cache-tier" });
     expect((await caller.reset()).userDelta).toBeUndefined();
   });
 
@@ -843,7 +861,10 @@ describeWithDatabase("committed profile cache patches", () => {
     const db = await getTestDatabase();
     await db
       .update(userData)
-      .set({ bloodright: [{ skillId: "cache-tier", cost: 100 }], bloodrightSpent: 100 })
+      .set({
+        bloodright: [{ optionId: "cache-tier", cost: 100 }],
+        bloodrightSpent: 100,
+      })
       .where(eq(userData.userId, userId));
     stubProfile("fetchUpdatedUser", async () => ({
       user: await db.query.userData.findFirst({ where: eq(userData.userId, userId) }),
@@ -865,6 +886,6 @@ describeWithDatabase("committed profile cache patches", () => {
     });
     expect(stored?.seichiSilver).toBe(300);
     expect(stored?.bloodrightSpent).toBe(101);
-    expect(stored?.bloodright).toEqual([{ skillId: "cache-tier", cost: 100 }]);
+    expect(stored?.bloodright).toEqual([{ optionId: "cache-tier", cost: 100 }]);
   });
 });

@@ -33,9 +33,6 @@ const skill = (
   folder,
   folderId: folder.id,
   skillType: "DEFAULT",
-  pathType: "SKILL",
-  bloodlineId: null,
-  seichiSilverCost: 0,
   costSkillPoints: 2,
   tier: 1,
   effects: [],
@@ -116,28 +113,6 @@ const setup = (role: UserRole | null, playsAsPlayer = false) => {
 };
 
 describe("hidden skill-tree permissions", () => {
-  it("excludes bloodright-only folders from the player skill tree", async () => {
-    const { drizzle } = setup("CONTENT");
-    drizzle.query.skillTreeFolder.findMany.mockResolvedValue([
-      ...folders,
-      { id: "bloodright", name: "Bloodright", image: "", hidden: false },
-      { id: "empty", name: "Empty", image: "", hidden: false },
-    ] as never);
-    drizzle.query.skillTree.findMany.mockResolvedValue([
-      { folderId: "visible", pathType: "SKILL" },
-      { folderId: "visible", pathType: "BLOODRIGHT" },
-      { folderId: "bloodright", pathType: "BLOODRIGHT" },
-    ] as never);
-    const result = await invoke("getAllFolders", drizzle, {
-      includeHidden: true,
-      skillFoldersOnly: true,
-    });
-    expect((result as { id: string }[]).map((folder) => folder.id)).toEqual([
-      "visible",
-      "hidden",
-      "empty",
-    ]);
-  });
   it.each([
     { role: "MODERATOR-ADMIN", hidden: true, allowed: false },
     { role: "MODERATOR-ADMIN", hidden: false, allowed: true },
@@ -228,7 +203,7 @@ describe("hidden skill-tree permissions", () => {
 
   it.each([
     ["create", undefined],
-    ["update", { id: "public", data: { requiredSkillIds: [], pathType: "SKILL" } }],
+    ["update", { id: "public", data: { requiredSkillIds: [] } }],
     ["delete", { id: "public" }],
     ["createFolder", { name: "Folder", hidden: false }],
     ["updateFolder", { id: "visible", data: { name: "Folder", hidden: false } }],
@@ -449,14 +424,16 @@ describe("hidden skill-tree permissions", () => {
       };
       expect(options).toMatchObject({ limit: 500, offset: 0 });
       if (allowed) {
-        expect(new MySqlDialect().sqlToQuery(options.where!).params).toEqual(["SKILL"]);
+        expect(options.where).toBeUndefined();
       } else {
-        const query = new MySqlDialect().sqlToQuery(options.where!);
+        const query = options.where
+          ? new MySqlDialect().sqlToQuery(options.where)
+          : { sql: "", params: [] };
         expect(query.sql).toContain("`SkillTree`.`hidden` = ?");
         expect(query.sql).toContain("`SkillTree`.`folderId` is null");
         expect(query.sql).toContain("not in (select");
         expect(query.sql).toContain("`SkillTreeFolder`.`hidden` = ?");
-        expect(query.params).toEqual(["SKILL", false, true]);
+        expect(query.params).toEqual([false, true]);
       }
       drizzle.query.skillTree.findMany.mockResolvedValue(
         allowed ? [owned[0]!.skill] : [],

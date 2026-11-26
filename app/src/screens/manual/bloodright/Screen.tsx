@@ -1,6 +1,6 @@
-import ManualSkillTree from "@/layout/ManualSkillTree";
+import { ManualBloodright } from "@/layout/ManualBloodright";
 
-/** Render the manual bloodright screen independently of its route adapter. */
+/** Render the dedicated bloodline-jutsu option catalog. */
 export function Screen() {
-  return <ManualSkillTree isBloodright />;
+  return <ManualBloodright />;
 }

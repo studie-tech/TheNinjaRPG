@@ -101,10 +101,8 @@ export const isPetJutsuAllowed = (jutsu: Jutsu) =>
 /** Only standalone, published self passives can be transferred to a companion. */
 export const isPetSkillAllowed = (skill: SkillTree) =>
   !skill.hidden &&
-  skill.pathType === "SKILL" &&
   skill.skillType === "DEFAULT" &&
   skill.target === "SELF" &&
-  !skill.bloodlineId &&
   skill.requiredSkillIds.length === 0 &&
   Number.isInteger(skill.tier) &&
   skill.tier >= 1 &&

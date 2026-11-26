@@ -917,7 +917,7 @@ export const itemRouter = createTRPCRouter({
           : [],
       ]);
       if (titleError) return errorResponse(titleError);
-      if (input.data.requiredSkillId && requiredSkill?.pathType !== "SKILL") {
+      if (input.data.requiredSkillId && !requiredSkill) {
         return errorResponse("Select a valid SkillTree skill entry");
       }
       // Guard
@@ -1120,7 +1120,7 @@ export const itemRouter = createTRPCRouter({
       const readiness = prepareActionReadiness(updated.user, updated.settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      if (!user || user.status !== "AWAKE" || user.battleId)
+      if (user?.status !== "AWAKE" || user.battleId)
         return errorResponse("You must be awake and outside battle to fortify");
       const owned = inventory.find((row) => row.id === input.userItemId);
       if (

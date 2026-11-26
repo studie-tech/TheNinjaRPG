@@ -1178,7 +1178,7 @@ export const jutsuRouter = createTRPCRouter({
       if (
         input.data.requiredSkillId &&
         !input.data.reskinParentJutsuId &&
-        requiredSkill?.pathType !== "SKILL"
+        !requiredSkill
       ) {
         return errorResponse("Select a valid SkillTree skill entry");
       }

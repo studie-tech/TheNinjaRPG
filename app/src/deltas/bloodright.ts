@@ -4,21 +4,21 @@
  */
 export const getPurchaseUserUpdate = ({
   updatedUserRequiresUserRefresh,
-  tierSeichiSilverCost,
+  optionSeichiSilverCost,
   bloodright,
 }: {
   updatedUserRequiresUserRefresh: boolean;
-  tierSeichiSilverCost: number;
+  optionSeichiSilverCost: number;
   bloodright: {
-    skillId: string;
+    optionId: string;
     cost: number;
   }[];
 }) => ({
   userDelta: updatedUserRequiresUserRefresh
     ? undefined
     : {
-        seichiSilver: -tierSeichiSilverCost,
-        bloodrightSpent: tierSeichiSilverCost,
+        seichiSilver: -optionSeichiSilverCost,
+        bloodrightSpent: optionSeichiSilverCost,
       },
   userPatch: { bloodright },
 });
@@ -35,7 +35,7 @@ export const getRefundUserUpdate = ({
   updatedUserRequiresUserRefresh: boolean;
   refund: number;
   bloodright: {
-    skillId: string;
+    optionId: string;
     cost: number;
   }[];
 }) => ({
@@ -72,3 +72,18 @@ export const getResetUserUpdate = ({
       },
   userPatch: { bloodright: [], bloodrightSpent: 0, monthlySkillResets },
 });
+
+/** Replace the owner's allocation and recompute invested Silver from confirmed purchase prices. */
+export const getConfirmedBloodright = <
+  T extends { purchased: { optionId: string; cost: number }[]; spent: number },
+>(
+  current: T | undefined,
+  purchased: { optionId: string; cost: number }[] | undefined,
+): T | undefined =>
+  current && purchased
+    ? {
+        ...current,
+        purchased,
+        spent: purchased.reduce((sum, entry) => sum + entry.cost, 0),
+      }
+    : undefined;

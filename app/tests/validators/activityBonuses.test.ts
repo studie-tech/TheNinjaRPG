@@ -78,17 +78,9 @@ describe("activity tag contracts", () => {
       requiredSkillIds: [],
       costSkillPoints: 1,
       tier: 1,
-      pathType: "SKILL",
       effects: [{ type, power: 10 }],
     };
     expect(SkillTreeValidator.safeParse(skill).success).toBe(true);
-    expect(
-      SkillTreeValidator.safeParse({
-        ...skill,
-        pathType: "BLOODRIGHT",
-        bloodlineId: "bloodline",
-      }).success,
-    ).toBe(false);
   });
   it("accepts bloodlines and skills and describes power units", () => {
     const effects = [DecreaseGatheringTime.parse({ power: 10 })];

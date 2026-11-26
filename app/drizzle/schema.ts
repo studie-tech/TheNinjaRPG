@@ -35,6 +35,7 @@ import type { Fortification, FortifyResult } from "@/libs/fortify";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { VillageDutyPatrol } from "@/libs/villageDuty";
 import type { AiRuleType } from "@/validators/ai";
+import type { BloodrightChange } from "@/validators/bloodright";
 import type { ZodAllTags } from "@/validators/combat";
 import type { ChallengeMatch } from "@/validators/comments";
 import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
@@ -874,7 +875,7 @@ export type BloodlineReskin = InferSelectModel<typeof bloodlineReskin>;
 
 export const bloodlineRelations = relations(bloodline, ({ one, many }) => ({
   users: many(userData),
-  bloodrightTiers: many(skillTree),
+  bloodrightOptions: many(bloodrightOption),
   village: one(village, {
     fields: [bloodline.villageId],
     references: [village.id],
@@ -933,11 +934,6 @@ export const skillTree = mysqlTable(
     tier: tinyint("tier").default(1).notNull(),
     requiredSkillIds: json("requiredSkillIds").$type<string[]>().default([]).notNull(),
     costSkillPoints: int("costSkillPoints").default(1).notNull(),
-    pathType: mysqlEnum("pathType", consts.SkillTreePathTypes)
-      .default("SKILL")
-      .notNull(),
-    bloodlineId: varchar("bloodlineId", { length: 191 }),
-    seichiSilverCost: int("seichiSilverCost").default(0).notNull(),
     hidden: boolean("hidden").default(false).notNull(),
     skillType: mysqlEnum("skillType", consts.SkillTreeEntryTypes)
       .default("DEFAULT")
@@ -957,7 +953,6 @@ export const skillTree = mysqlTable(
       hiddenIdx: index("SkillTree_hidden_idx").on(table.hidden),
       skillTypeIdx: index("SkillTree_skillType_idx").on(table.skillType),
       folderIdIdx: index("SkillTree_folderId_idx").on(table.folderId),
-      bloodlineIdIdx: index("SkillTree_bloodlineId_idx").on(table.bloodlineId),
     };
   },
 );
@@ -965,14 +960,43 @@ export type SkillTree = InferSelectModel<typeof skillTree>;
 
 export const skillTreeRelations = relations(skillTree, ({ one, many }) => ({
   userSkills: many(userSkill),
-  bloodline: one(bloodline, {
-    fields: [skillTree.bloodlineId],
-    references: [bloodline.id],
-  }),
   folder: one(skillTreeFolder, {
     fields: [skillTree.folderId],
     references: [skillTreeFolder.id],
   }),
+}));
+
+/** Purchasable changes to numeric fields on one bloodline jutsu's tags. */
+export const bloodrightOption = mysqlTable(
+  "BloodrightOption",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    bloodlineId: varchar("bloodlineId", { length: 191 }).notNull(),
+    jutsuId: varchar("jutsuId", { length: 191 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    description: text("description").notNull(),
+    seichiSilverCost: int("seichiSilverCost").default(0).notNull(),
+    hidden: boolean("hidden").default(true).notNull(),
+    changes: json("changes").$type<BloodrightChange[]>().notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => [
+    index("BloodrightOption_bloodlineId_idx").on(table.bloodlineId),
+    index("BloodrightOption_jutsuId_idx").on(table.jutsuId),
+  ],
+);
+export type BloodrightOption = InferSelectModel<typeof bloodrightOption>;
+export const bloodrightOptionRelations = relations(bloodrightOption, ({ one }) => ({
+  bloodline: one(bloodline, {
+    fields: [bloodrightOption.bloodlineId],
+    references: [bloodline.id],
+  }),
+  jutsu: one(jutsu, { fields: [bloodrightOption.jutsuId], references: [jutsu.id] }),
 }));
 
 export const userSkill = mysqlTable(
@@ -3197,7 +3221,7 @@ export const userData = mysqlTable(
       .notNull(),
     seichiSilver: int("seichiSilver").default(0).notNull(),
     bloodright: json("bloodright")
-      .$type<{ skillId: string; cost: number }[]>()
+      .$type<{ optionId: string; cost: number }[]>()
       .default([])
       .notNull(),
     bloodrightSpent: int("bloodrightSpent").default(0).notNull(),

@@ -323,7 +323,7 @@ export const userPatchSchema = z.object({
   tavernTitleColor: z.enum(TavernColorPresets).optional(),
   primaryElement: z.enum(ElementNames).nullable().optional(),
   secondaryElement: z.enum(ElementNames).nullable().optional(),
-  bloodright: z.array(z.object({ skillId: z.string(), cost: z.number() })).optional(),
+  bloodright: z.array(z.object({ optionId: z.string(), cost: z.number() })).optional(),
   bloodrightSpent: z.number().optional(),
   monthlySkillResets: z.object({ month: z.string(), count: z.number() }).optional(),
   maxEnergy: z.number().optional(),

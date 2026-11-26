@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { userJutsuToAction } from "@/libs/combat/actions";
 import { maskBattle } from "@/libs/combat/masking";
 import { isPvpRewardOpponent } from "@/libs/combat/participants";
 import { calcBattleResult, villageDutyVictory } from "@/libs/combat/settlement";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
-import { makeCompleteBattle, makeUser } from "../../setup/combat";
+import { DamageTag } from "@/validators/combat";
+import { makeCompleteBattle, makeJutsu, makeUser } from "../../setup/combat";
 import { fakeInitiationClient, makeInitiationUser } from "./helpers/preload";
 
 /** Decided duel retaining the original copy's reservation and both teams' identities. */
@@ -65,6 +67,89 @@ describe("village duty PvP points", () => {
     battle.usersState[0]!.curHealth = 100;
     battle.usersState[1]!.curHealth = 0;
     expect(calcBattleResult(battle, "invader")?.weeklyPvpKills).toBe(1);
+  });
+  it("keeps purchased jutsu upgrades on the processed Village Duty actor", async () => {
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    const damage = DamageTag.parse({ power: 20 });
+    const jutsu = makeJutsu({
+      id: "duty-jutsu",
+      bloodlineId: "duty-line",
+      effects: [damage],
+    });
+    const owner = {
+      ...makeInitiationUser({
+        userId: "owner",
+        villageId: "home",
+        bloodlineId: "duty-line",
+        bloodright: [{ optionId: "duty-option", cost: 10 }],
+        villageDutyVillageId: "home",
+        villageDutyStartedAt: new Date("2026-11-09"),
+      }),
+      joinedVillageAt: new Date("2026-01-01"),
+      bloodline: {
+        id: "duty-line",
+        effects: [],
+        bloodrightOptions: [
+          {
+            id: "duty-option",
+            bloodlineId: "duty-line",
+            jutsuId: jutsu.id,
+            changes: [
+              { tagIndex: 0, tag: damage, field: "power", mode: "FLAT", value: 5 },
+            ],
+            jutsu,
+          },
+        ],
+      },
+      jutsus: [
+        {
+          id: "owned-duty",
+          userId: "owner",
+          jutsuId: jutsu.id,
+          jutsu,
+          equipped: true,
+          level: 1,
+          experience: 0,
+        },
+      ],
+    } as unknown as ReturnType<typeof makeInitiationUser>;
+    const fake = fakeInitiationClient([
+      makeInitiationUser({ userId: "invader", villageId: "enemy" }),
+      owner,
+    ]);
+    const client = Object.create(fake.client) as DrizzleClient;
+    client.update = (() => ({
+      set: () => ({ where: async () => ({ rowsAffected: 1 }) }),
+    })) as unknown as DrizzleClient["update"];
+    const result = await initiateBattle(
+      {
+        client,
+        userIds: ["invader"],
+        targetIds: ["duty:upgrade"],
+        villageDuty: {
+          actorId: "duty:upgrade",
+          userId: "owner",
+          villageId: "home",
+          startedAt: new Date().toISOString(),
+          slot: 0,
+          battleId: "duty-upgrade-battle",
+        },
+        forceDefenderVillageId: "home",
+      },
+      "VILLAGE_PROTECTOR",
+    );
+    expect(result.success, result.message).toBe(true);
+    const stored = fake.saved();
+    const actor = stored?.usersState.find((user) => user.isVillageDutyCopy);
+    const ref = actor?.jutsus.find((row) => row.jutsuId === jutsu.id);
+    if (!stored || !actor || !ref) throw new Error("Missing duty loadout");
+    expect(
+      stored.extraState.bloodrightChanges?.[actor.userId]?.[jutsu.id],
+    ).toHaveLength(1);
+    expect(stored.extraState.bloodrightChanges).not.toHaveProperty("owner");
+    expect(userJutsuToAction(ref, stored, actor.userId).effects[0]).toMatchObject({
+      power: 25,
+    });
   });
   it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
     "awards repeat-scaled points and weekly credit for beating a copy in %s",

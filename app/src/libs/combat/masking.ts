@@ -151,6 +151,12 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
         }
       : undefined,
     jutsus,
+    bloodrightChanges: Object.fromEntries(
+      controlledUsers.flatMap((user) => {
+        const effects = state?.bloodrightChanges?.[user.userId];
+        return effects ? [[user.userId, select(effects, jutsuIds)]] : [];
+      }),
+    ),
     items,
     jutsuReskins: select(state?.jutsuReskins, reskinIds),
     sageModes: select(state?.sageModes, sageModeIds),
@@ -170,8 +176,8 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
           select(state?.bloodlines, new Set(visibleUsers.map((u) => u.bloodlineId))),
         ),
       ).map(([id, line]) => {
-        const { bloodrightTiers: _tiers, ...bloodline } = line as typeof line & {
-          bloodrightTiers?: unknown;
+        const { bloodrightOptions: _options, ...bloodline } = line as typeof line & {
+          bloodrightOptions?: unknown;
         };
         return [id, bloodline];
       }),
