@@ -4,6 +4,7 @@
  * the tests reach the same verdict. Simulated metrics live in `balanceSim.ts`.
  */
 import type { ItemRarity } from "@/drizzle/constants";
+import { KESSEN_COPY_LIMITS } from "@/drizzle/constants";
 import type { KessenAbility, KessenFaction } from "@/validators/itemCard";
 import { isInfiltrator } from "./board";
 import {
@@ -401,14 +402,7 @@ const setBalance = (name: string, catalog: readonly KessenCard[]): KessenSetBala
     card.abilities.some((ability) => ability.k === "summon" && ability.group === name),
   );
   const pulled = members
-    .filter(
-      (member) =>
-        isSummonable(member) &&
-        summoners.some(
-          (caller) =>
-            caller.id !== member.id && sharesDeck(caller.faction, member.faction),
-        ),
-    )
+    .filter((member) => summoners.some((caller) => isSummonableBy(caller, member)))
     .map((card) => card.power);
   return {
     name,
@@ -451,11 +445,7 @@ const summonFlags = (
 ): KessenBalanceFlag[] => {
   const pool = catalog.filter(
     (other) =>
-      other.id !== card.id &&
-      isBalancedCard(other) &&
-      other.sets.includes(set) &&
-      isSummonable(other) &&
-      sharesDeck(card.faction, other.faction),
+      isBalancedCard(other) && other.sets.includes(set) && isSummonableBy(card, other),
   );
   if (pool.length === 0) {
     return [
@@ -571,8 +561,12 @@ const sameAbilities = (a: readonly KessenAbility[], b: readonly KessenAbility[])
 const sameList = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((entry, index) => entry === b[index]);
 
-/** A unit a Summon can place: Infiltrators never come out of a Summon. */
-const isSummonable = (card: KessenCard) => card.kind === "UNIT" && !isInfiltrator(card);
+/** A caller can pull another copy of itself when its rarity allows multiple copies. */
+const isSummonableBy = (caller: KessenCard, member: KessenCard) =>
+  member.kind === "UNIT" &&
+  !isInfiltrator(member) &&
+  sharesDeck(caller.faction, member.faction) &&
+  (caller.id !== member.id || KESSEN_COPY_LIMITS[caller.rarity] > 1);
 
 /** Cards of the two factions can share a deck. */
 const sharesDeck = (a: KessenFaction, b: KessenFaction) =>

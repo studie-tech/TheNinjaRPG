@@ -28,6 +28,7 @@ import { kessenCardToCardData, summonValueMilli } from "@/libs/kessen/catalog";
 import { actingSeats, applyAction, createMatch, viewFor } from "@/libs/kessen/engine";
 import type { KessenCard } from "@/libs/kessen/types";
 import { cardDataSchema } from "@/validators/itemCard";
+import { act, handCard, scenario } from "./engineHelpers";
 import { KESSEN_SEED_CATALOG, seedCardByName } from "./fixtures/catalog";
 
 describe("Kessen balance simulation coverage", () => {
@@ -300,28 +301,83 @@ describe("Kessen balance simulation coverage", () => {
 });
 
 describe("Kessen balance Summon diagnostics", () => {
-  it("uses only members an actual caller can pull, including caller exclusion", () => {
-    const caller: KessenCard = {
-      ...seedCardByName("Cryverin"),
-      abilities: [{ k: "summon", group: "CrossFaction" }],
-      sets: ["CrossFaction"],
-    };
-    const member = {
-      ...seedCardByName("Beta Sandworm"),
-      abilities: [],
-      sets: ["CrossFaction"],
-    };
-    expect(catalogBalance([caller, member]).sets[0]?.maxSummonPower).toBeNull();
-    expect(
-      cardBalance(caller, [caller, member]).flags.some((flag) =>
-        flag.message.includes("no unit"),
-      ),
-    ).toBe(true);
-    const eligible: KessenCard = { ...member, faction: "NEUTRAL" };
-    expect(catalogBalance([caller, eligible]).sets[0]?.maxSummonPower).toBe(
-      eligible.power,
-    );
-  });
+  it.each(["EPIC", "LEGENDARY"] as const)(
+    "excludes the %s caller's only copy and members from another faction",
+    (rarity) => {
+      const caller: KessenCard = {
+        ...seedCardByName("Cryverin"),
+        rarity,
+        abilities: [{ k: "summon", group: "CrossFaction" }],
+        sets: ["CrossFaction"],
+      };
+      const member = {
+        ...seedCardByName("Beta Sandworm"),
+        abilities: [],
+        sets: ["CrossFaction"],
+      };
+      expect(catalogBalance([caller, member]).sets[0]?.maxSummonPower).toBeNull();
+      expect(
+        cardBalance(caller, [caller, member]).flags.some((flag) =>
+          flag.message.includes("no unit"),
+        ),
+      ).toBe(true);
+      const eligible: KessenCard = { ...member, faction: "NEUTRAL" };
+      expect(catalogBalance([caller, eligible]).sets[0]?.maxSummonPower).toBe(
+        eligible.power,
+      );
+    },
+  );
+
+  it.each(["COMMON", "RARE"] as const)(
+    "includes another %s copy as the strongest eligible Summon pull",
+    (rarity) => {
+      const caller: KessenCard = {
+        ...seedCardByName("Beta Sandworm"),
+        rarity,
+        power: 6,
+        provision: rarity === "COMMON" ? 6 : 7,
+      };
+      const flag = {
+        rule: "summonSet",
+        severity: "break",
+        message:
+          "Summon Sandworm can pull Beta Sandworm (power 6), over the 5.0 a Summon from it allows",
+      } as const;
+      expect(cardBalance(caller, [caller]).flags).toEqual([flag]);
+      expect(catalogBalance([caller]).sets[0]?.maxSummonPower).toBe(caller.power);
+      const catalog = KESSEN_SEED_CATALOG.map((card) =>
+        card.id === caller.id ? caller : card,
+      );
+      expect(cardBalance(caller, catalog).flags).toEqual([flag]);
+      expect(
+        catalogBalance(catalog).sets.find((set) => set.name === "Sandworm")
+          ?.maxSummonPower,
+      ).toBe(caller.power);
+
+      const state = scenario({
+        p0: { hand: [caller.name], deck: [caller.name] },
+        p1: { hand: ["Cryverin"] },
+      });
+      state.cards = { ...state.cards, [caller.id]: caller };
+      const result = act(state, 0, {
+        t: "play",
+        card: handCard(state, 0, caller.name),
+      });
+      expect(
+        result.state.board[0].CLOSE.map((unit) => [
+          result.state.inst[unit.id],
+          unit.stored,
+        ]),
+      ).toEqual([
+        [caller.id, caller.power],
+        [caller.id, caller.power],
+      ]);
+      expect(result.state.seats[0].deck).toEqual([]);
+      expect(result.events).toContainEqual(
+        expect.objectContaining({ t: "placed", source: "summon" }),
+      );
+    },
+  );
 
   it.each(["constructor", "toString", "__proto__", "unknown"])(
     "prices the valid set name %s at the default",
