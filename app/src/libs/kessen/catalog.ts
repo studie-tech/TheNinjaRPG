@@ -1,6 +1,6 @@
 /**
- * Catalog helpers: `Item` rows to engine cards, the per-match snapshot and its
- * fingerprint, stable seed ids and the value curve used for provision costs.
+ * Catalog helpers: `Item` rows to engine cards, the sets cards form, the per-match snapshot
+ * and its fingerprint, stable seed ids and the value curve used for provision costs.
  */
 import { type CardData, cardDataSchema } from "@/validators/itemCard";
 import { canonicalJson } from "./engine";
@@ -84,7 +84,7 @@ export const cardDataToKessenCard = (
   power: data.power,
   provision: data.provision,
   abilities: data.abilities,
-  summonGroups: data.summonGroups,
+  sets: data.sets,
   leaderBonus: data.leaderBonus,
   variant: data.variant,
   baseCardId: data.baseCardId,
@@ -102,7 +102,7 @@ export const kessenCardToCardData = (
   power: card.power,
   provision: card.provision,
   abilities: card.abilities,
-  summonGroups: card.summonGroups,
+  sets: card.sets,
   leaderBonus: card.leaderBonus,
   flavor: display.flavor ?? "",
   artUrl: display.artUrl ?? "",
@@ -116,6 +116,40 @@ export const kessenCardToCardData = (
 /** Copy-limit identity: a Forbidden variant counts as its base card. */
 export const copyKey = (card: Pick<KessenCard, "id" | "baseCardId">) =>
   card.baseCardId ?? card.id;
+
+/** A set with the cards in it and the cards outside it whose Bond or Summon names it. */
+export interface KessenSetEntry<T> {
+  name: string;
+  members: T[];
+  callers: T[];
+}
+
+/**
+ * Every set the cards belong to or a Bond or Summon of theirs names, by name. Members
+ * and callers keep the order of `cards`.
+ */
+export const kessenSets = <T extends Pick<KessenCard, "sets" | "abilities">>(
+  cards: readonly T[],
+): KessenSetEntry<T>[] => {
+  const byName = new Map<string, KessenSetEntry<T>>();
+  const entryOf = (name: string) => {
+    const known = byName.get(name);
+    if (known) return known;
+    const created: KessenSetEntry<T> = { name, members: [], callers: [] };
+    byName.set(name, created);
+    return created;
+  };
+  for (const card of cards) {
+    for (const set of card.sets) entryOf(set).members.push(card);
+    for (const ability of card.abilities) {
+      if (ability.k !== "bond" && ability.k !== "summon") continue;
+      if (card.sets.includes(ability.group)) continue;
+      const { callers } = entryOf(ability.group);
+      if (!callers.includes(card)) callers.push(card);
+    }
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+};
 
 /** The engine fields of the cards (only those in `ids` when given), sorted by id. */
 export const snapshotCatalog = (

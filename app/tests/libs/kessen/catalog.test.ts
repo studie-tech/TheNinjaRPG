@@ -371,13 +371,23 @@ describe("seed catalog", () => {
     }
   });
 
-  it("defines the summon groups by membership", () => {
-    const members = (group: string) =>
-      KESSEN_DECK_CARDS.filter((card) => card.summonGroups.includes(group)).map(
+  it("defines the sets by membership", () => {
+    const members = (set: string) =>
+      KESSEN_DECK_CARDS.filter((card) => card.sets.includes(set)).map(
         (card) => card.name,
       );
     expect(members("Sandworm")).toEqual(["Beta Sandworm", "Gamma Sandworm"]);
     expect(members("Crew")).toEqual(["Ghost Ship Deckhand", "Ghost Ship Gunner"]);
+    expect(members("Subaku")).toEqual(["Subaku Princess", "Subaku Winged Captain"]);
+    expect(members("Moon Pack")).toEqual(["Moonprowler", "Owlcat"]);
+  });
+
+  it("puts every Bond card in the set its Bond names", () => {
+    for (const card of KESSEN_SEED_CATALOG) {
+      for (const ability of card.abilities) {
+        if (ability.k === "bond") expect(card.sets).toContain(ability.group);
+      }
+    }
   });
 
   it("mirrors every legendary in a Forbidden variant with identical stats", () => {

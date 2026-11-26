@@ -346,14 +346,14 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   );
 };
 
-/** The card stats editor with the groups of the card catalog as suggestions. */
-function CardStats(props: Omit<React.ComponentProps<typeof CardDataEditor>, "groups">) {
+/** The card stats editor with the sets of the card catalog as options. */
+function CardStats(props: Omit<React.ComponentProps<typeof CardDataEditor>, "sets">) {
   const { data: catalog } = useKessenCatalog();
-  const groups = catalog?.cards.flatMap((card) => [
-    ...card.summonGroups,
+  const sets = catalog?.cards.flatMap((card) => [
+    ...card.sets,
     ...card.abilities.flatMap((ability) => ("group" in ability ? ability.group : [])),
   ]);
-  return <CardDataEditor {...props} groups={groups} />;
+  return <CardDataEditor {...props} sets={sets} />;
 }
 
 /**

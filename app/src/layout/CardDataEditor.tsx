@@ -3,6 +3,7 @@
 import { type UseFormReturn, useFormState, useWatch } from "react-hook-form";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { AbilityListEditor } from "@/layout/AbilityListEditor";
@@ -19,6 +20,7 @@ import {
   type CardData,
   cardDataSchema,
   DEFAULT_CARD_DATA,
+  KESSEN_MAX_SETS,
   KessenCardKinds,
   KessenCardVariants,
   KessenFactions,
@@ -30,7 +32,7 @@ import {
  * abilities are edited as a list in printed order and previewed as printed card text.
  * Item-level validation (keyword budget by rarity, tradeability) reports under this section.
  */
-export function CardDataEditor({ form, groups, disabled }: CardDataEditorProps) {
+export function CardDataEditor({ form, sets, disabled }: CardDataEditorProps) {
   const watched = useWatch({ control: form.control, name: "cardData" });
   const rarity = useWatch({ control: form.control, name: "rarity" });
   const { errors } = useFormState({ control: form.control, name: "cardData" });
@@ -55,7 +57,7 @@ export function CardDataEditor({ form, groups, disabled }: CardDataEditorProps) 
   const overBudget =
     card.kind === "LEADER" ? null : keywordBudgetIssue(preview, rarity);
   if (overBudget) abilityMessages.push(overBudget);
-  const groupOptions = [...new Set([...card.summonGroups, ...(groups ?? [])])].sort();
+  const setOptions = [...new Set([...card.sets, ...(sets ?? [])])].sort();
   const isDisabled = disabled ?? false;
 
   return (
@@ -197,26 +199,30 @@ export function CardDataEditor({ form, groups, disabled }: CardDataEditorProps) 
           />
         </div>
         <Field
-          id="card-summon-groups"
-          label="Summon groups"
-          help="Comma separated, up to three."
+          id="card-sets"
+          label="Sets"
+          help={`Up to ${KESSEN_MAX_SETS}. A Bond naming a set counts its units, a Summon pulls them; players browse sets in the Collection.`}
           className="col-span-full"
         >
-          <Input
-            id="card-summon-groups"
-            className={TOUCH_FIELD}
-            value={card.summonGroups.join(", ")}
-            disabled={isDisabled}
-            aria-describedby="card-summon-groups-help"
-            onChange={(event) =>
-              update({
-                summonGroups: event.target.value
-                  .split(",")
-                  .map((group) => group.trim())
-                  .filter(Boolean),
-              })
-            }
-          />
+          <fieldset
+            id="card-sets"
+            aria-label="Sets"
+            aria-describedby="card-sets-help"
+            className="m-0 min-w-0 border-0 p-0"
+          >
+            <MultiSelect
+              options={setOptions.map((set) => ({ label: set, value: set }))}
+              selected={card.sets}
+              onChange={(next) =>
+                update({
+                  sets: uniqueSets(typeof next === "function" ? next(card.sets) : next),
+                })
+              }
+              allowAddNew
+              placeholder="No set"
+              disabled={isDisabled}
+            />
+          </fieldset>
         </Field>
         <Field id="card-flavor" label="Flavor text" className="col-span-full">
           <Textarea
@@ -231,7 +237,7 @@ export function CardDataEditor({ form, groups, disabled }: CardDataEditorProps) 
           className="col-span-full"
           abilities={abilities}
           cardKind={card.kind}
-          groups={groupOptions}
+          sets={setOptions}
           errors={[...new Set(abilityMessages)]}
           disabled={isDisabled}
           onChange={(next) => update({ abilities: next as CardData["abilities"] })}
@@ -311,9 +317,14 @@ const collectErrorMessages = (error: unknown, path: string[] = []): string[] => 
   return [...new Set([...own, ...nested])];
 };
 
+/** Picked set names without blanks or repeats, in the order they were picked. */
+const uniqueSets = (sets: readonly string[]) => [
+  ...new Set(sets.map((set) => set.trim()).filter(Boolean)),
+];
+
 interface CardDataEditorProps {
   form: UseFormReturn<ZodItemInput, unknown, ZodItemType>;
-  /** Bond and Summon groups other cards use, suggested while typing one. */
-  groups?: readonly string[];
+  /** Set names other cards use, offered in the set picker and the Bond and Summon fields. */
+  sets?: readonly string[];
   disabled?: boolean;
 }

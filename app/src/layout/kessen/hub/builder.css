@@ -1231,7 +1231,32 @@
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
 }
-/* Narrow books fold the chips behind this toggle; wide books show them all. */
+/* The row's name (Keywords, Sets) leads its chips. */
+.kh-chips-label {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  margin-right: 2px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+/* Owned cards of a set out of its cards, quieter than the name. */
+.kh-setchip-count {
+  margin-left: 6px;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.kh-kwchip[aria-pressed="true"] .kh-setchip-count {
+  color: inherit;
+}
+/* Narrow books fold the chips behind these toggles; wide books show them all. */
+.kh-chip-toggles {
+  display: none;
+}
 .kh-kw-toggle {
   display: none;
   height: auto;
@@ -1653,10 +1678,19 @@ div.kh-book-inspect {
    faction in its title), so every faction stays in view and the page's cards start in
    the first screen. */
 @container kh-book (max-width: 559px) {
+  .kh-chip-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
   .kh-kw-toggle {
     display: inline-flex;
   }
   .kh-kwchips:not([data-open]) {
+    display: none;
+  }
+  /* The toggle above already names the open row. */
+  .kh-chips-label {
     display: none;
   }
   .kh-book-tabs {

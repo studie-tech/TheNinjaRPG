@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { IMG_KESSEN_NPC_PORTRAITS, KESSEN_COPY_LIMITS } from "@/drizzle/constants";
 import * as mediaQuery from "@/hooks/useMediaQuery";
@@ -934,6 +935,34 @@ describe("CollectionBook", () => {
         .getByRole("region", { name: "Forbidden shelf" })
         .querySelectorAll(".kh-niche"),
     ).toHaveLength(KESSEN_FORBIDDEN.length);
+  });
+
+  it("opens a set's page with every card in it, owned or not", () => {
+    const owned = CARDS.find((card) => card.name === "Subaku Princess");
+    if (!owned) throw new Error("missing Subaku Princess");
+    render(
+      <CollectionBook
+        cards={CARDS}
+        owned={{ [owned.id]: 1 }}
+        seenKeywords={[]}
+        findContext={{ packs: PACKS, circuit: [] }}
+      />,
+    );
+    const chip = screen.getByRole("button", { name: "Subaku set: 1 of 2 collected" });
+    fireEvent.click(chip);
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("status").textContent).toContain("A Bond naming it counts");
+    const page = screen.getByRole("tabpanel", { name: "Subaku set" });
+    expect(
+      within(page)
+        .getAllByRole("img")
+        .map((card) => card.getAttribute("aria-label")),
+    ).toEqual(["Subaku Princess", "Subaku Winged Captain"]);
+    expect(
+      within(page).getAllByRole("button", { name: /^Where to find / }),
+    ).toHaveLength(1);
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /^Shirohana:/ }));
+    expect(screen.queryByRole("tabpanel", { name: "Subaku set" })).toBeNull();
   });
 });
 

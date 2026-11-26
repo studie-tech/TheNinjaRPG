@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { useState } from "react";
 import { type UseFormReturn, useForm } from "react-hook-form";
 import { AbilityListEditor } from "@/layout/AbilityListEditor";
@@ -61,11 +68,12 @@ const renderEditor = (values: ZodItemInput) => {
     });
     form.register("cardData");
     handle.form = form;
-    return <CardDataEditor form={form} groups={["Crew"]} />;
+    return <CardDataEditor form={form} sets={["Crew"]} />;
   };
   render(<Harness />);
   const abilities = () => (handle.form.getValues("cardData") as CardData).abilities;
-  return { abilities };
+  const sets = () => (handle.form.getValues("cardData") as CardData).sets;
+  return { abilities, sets };
 };
 
 const pick = async (label: string, option: string) => {
@@ -96,7 +104,7 @@ describe("card ability editor", () => {
           <AbilityListEditor
             abilities={abilities}
             cardKind={card.kind}
-            groups={[]}
+            sets={[]}
             errors={[]}
             disabled={false}
             onChange={setAbilities}
@@ -129,6 +137,21 @@ describe("card ability editor", () => {
     expect(screen.getByText("Strike 3 each enemy unit")).toBeTruthy();
     await pick("Ability 1: ability", "Summon");
     expect(abilities()).toEqual([{ k: "summon", group: "Crew" }]);
+  });
+
+  it("picks a card's sets from the known ones and adds new ones", async () => {
+    const { sets } = renderEditor(itemOf({}));
+    const picker = screen.getByRole("group", { name: "Sets" });
+    fireEvent.click(within(picker).getByRole("combobox"));
+    fireEvent.click(await screen.findByRole("option", { name: "Crew" }));
+    expect(sets()).toEqual(["Crew"]);
+    const added = screen.getByPlaceholderText("Add new option...");
+    fireEvent.change(added, { target: { value: " Tide Callers " } });
+    fireEvent.keyDown(added, { key: "Enter" });
+    expect(sets()).toEqual(["Crew", "Tide Callers"]);
+    fireEvent.click(within(picker).getByRole("button", { name: "Remove Crew" }));
+    expect(sets()).toEqual(["Tide Callers"]);
+    await flushRadixFocus();
   });
 
   it("toggles optional fields without storing an empty value", () => {

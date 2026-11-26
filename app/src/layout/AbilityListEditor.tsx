@@ -45,14 +45,14 @@ import {
 export function AbilityListEditor({
   abilities,
   cardKind,
-  groups,
+  sets,
   errors,
   disabled,
   onChange,
   className,
 }: AbilityListEditorProps) {
   const headingId = useId();
-  const groupListId = useId();
+  const setListId = useId();
   // Editor-only entry ids, so a half-typed amount and the focus follow a moved entry.
   const [storedIds, setStoredIds] = useState<readonly number[]>([]);
   const ids = entryIds(storedIds, abilities.length);
@@ -105,8 +105,8 @@ export function AbilityListEditor({
               index={index}
               count={abilities.length}
               cardKind={cardKind}
-              groups={groups}
-              groupListId={groupListId}
+              sets={sets}
+              setListId={setListId}
               disabled={disabled}
               onChange={(next) => replace(index, next)}
               onMove={(step) => move(index, step)}
@@ -115,9 +115,9 @@ export function AbilityListEditor({
           ))}
         </ol>
       )}
-      <datalist id={groupListId}>
-        {groups.map((group) => (
-          <option key={group} value={group} />
+      <datalist id={setListId}>
+        {sets.map((set) => (
+          <option key={set} value={set} />
         ))}
       </datalist>
       {errors.length > 0 && (
@@ -137,8 +137,8 @@ function AbilityEntry({
   index,
   count,
   cardKind,
-  groups,
-  groupListId,
+  sets,
+  setListId,
   disabled,
   onChange,
   onMove,
@@ -148,8 +148,8 @@ function AbilityEntry({
   index: number;
   count: number;
   cardKind: KessenCardKind;
-  groups: readonly string[];
-  groupListId: string;
+  sets: readonly string[];
+  setListId: string;
   disabled: boolean;
   onChange: (ability: DraftAbility) => void;
   onMove: (step: -1 | 1) => void;
@@ -176,7 +176,7 @@ function AbilityEntry({
             onChange(
               draftAbility(next as KessenAbilityKind, {
                 from: ability,
-                group: groups[0],
+                set: sets[0],
               }),
             )
           }
@@ -240,7 +240,7 @@ function AbilityEntry({
               field={field}
               value={ability[field.name]}
               error={issues.fields[field.name]}
-              groupListId={groupListId}
+              setListId={setListId}
               disabled={disabled}
               onChange={(value) =>
                 onChange(withAbilityField(ability, field.name, value))
@@ -273,7 +273,7 @@ function AbilityFieldControl({
   field,
   value,
   error,
-  groupListId,
+  setListId,
   disabled,
   onChange,
 }: {
@@ -282,7 +282,7 @@ function AbilityFieldControl({
   field: AbilityField;
   value: unknown;
   error: string | undefined;
-  groupListId: string;
+  setListId: string;
   disabled: boolean;
   onChange: (value: unknown) => void;
 }) {
@@ -312,7 +312,7 @@ function AbilityFieldControl({
           {message}
         </Field>
       );
-    case "group":
+    case "set":
       return (
         <Field id={id} label={field.label} className="flex-[1_1_150px]">
           <Input
@@ -321,7 +321,7 @@ function AbilityFieldControl({
             aria-label={label}
             aria-invalid={!!error}
             aria-describedby={described}
-            list={groupListId}
+            list={setListId}
             maxLength={field.maxLength}
             value={typeof value === "string" ? value : ""}
             disabled={disabled}
@@ -417,8 +417,8 @@ const moved = <T,>(list: readonly T[], index: number, step: -1 | 1) => {
 interface AbilityListEditorProps {
   abilities: readonly DraftAbility[];
   cardKind: KessenCardKind;
-  /** Known Bond and Summon groups, suggested while typing one. */
-  groups: readonly string[];
+  /** Known set names, suggested while typing the set a Bond or Summon names. */
+  sets: readonly string[];
   /** Problems of the list as a whole. */
   errors: readonly string[];
   disabled: boolean;

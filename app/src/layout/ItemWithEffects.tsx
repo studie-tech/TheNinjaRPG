@@ -1604,6 +1604,11 @@ const CardDetails = ({ item, showHidden }: { item: Item; showHidden: boolean }) 
       <p>
         <b>Faction</b>: {capitalizeFirstLetter(card.faction)}
       </p>
+      {card.sets.length > 0 && (
+        <p>
+          <b>{card.sets.length === 1 ? "Set" : "Sets"}</b>: {card.sets.join(", ")}
+        </p>
+      )}
       {card.row && (
         <p>
           <b>Row</b>:{" "}

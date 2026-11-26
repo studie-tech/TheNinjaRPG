@@ -51,7 +51,8 @@ const rallyOf = (card: KessenCard) => {
   return total;
 };
 
-const bondGroupOf = (card: KessenCard) => {
+/** The set a card's Bond counts, or null without a Bond. */
+const bondSetOf = (card: KessenCard) => {
   for (const ability of card.abilities) if (ability.k === "bond") return ability.group;
   return null;
 };
@@ -89,12 +90,13 @@ export const rawPower = (s: MatchState, ref: UnitRef) => {
     if (neighbour.id === unit.id || neighbour.sealed) continue;
     aura += rallyOf(knownCard(s, neighbour.id));
   }
-  const group = unit.sealed ? null : bondGroupOf(knownCard(s, unit.id));
-  if (group !== null) {
+  // Bond counts the other unsealed units on its side in the set it names.
+  const set = unit.sealed ? null : bondSetOf(knownCard(s, unit.id));
+  if (set !== null) {
     let partners = 0;
     for (const mate of unitsOf(s, side)) {
       if (mate.unit.id === unit.id || mate.unit.sealed) continue;
-      if (bondGroupOf(knownCard(s, mate.unit.id)) === group) partners++;
+      if (knownCard(s, mate.unit.id).sets.includes(set)) partners++;
     }
     aura += Math.min(s.knobs.bondCap, s.knobs.bondStep * partners);
   }
@@ -121,29 +123,29 @@ export const rowTotal = (s: MatchState, side: Seat, row: Row) => {
 
 /**
  * Sum of displayed power on one side. Same arithmetic as `displayedPower` per unit, with
- * each side's Rally and Bond auras gathered once instead of once per unit.
+ * each side's Rally auras and set memberships gathered once instead of once per unit.
  */
 export const sideTotal = (s: MatchState, side: Seat) => {
   const board = s.board[side];
   const cards: KessenCard[] = [];
-  const groups: (string | null)[] = [];
-  const bondNames: string[] = [];
-  const bondCounts: number[] = [];
+  const bonds: (string | null)[] = [];
+  const setNames: string[] = [];
+  const setCounts: number[] = [];
   const rallies = [0, 0, 0];
   for (let r = 0; r < ROWS.length; r++) {
     for (const unit of board[ROWS[r] as Row]) {
       const card = knownCard(s, unit.id);
       cards.push(card);
-      const group = unit.sealed ? null : bondGroupOf(card);
-      groups.push(group);
+      bonds.push(unit.sealed ? null : bondSetOf(card));
       if (unit.sealed) continue;
       rallies[r] = (rallies[r] as number) + rallyOf(card);
-      if (group === null) continue;
-      const at = bondNames.indexOf(group);
-      if (at < 0) {
-        bondNames.push(group);
-        bondCounts.push(1);
-      } else bondCounts[at] = (bondCounts[at] as number) + 1;
+      for (const set of card.sets) {
+        const at = setNames.indexOf(set);
+        if (at < 0) {
+          setNames.push(set);
+          setCounts.push(1);
+        } else setCounts[at] = (setCounts[at] as number) + 1;
+      }
     }
   }
   let total = 0;
@@ -153,11 +155,13 @@ export const sideTotal = (s: MatchState, side: Seat) => {
     const afflicted = s.terrain[side][row];
     for (const unit of board[row]) {
       const card = cards[n] as KessenCard;
-      const group = groups[n] as string | null;
+      const bond = bonds[n] as string | null;
       n += 1;
       let aura = (rallies[r] as number) - (unit.sealed ? 0 : rallyOf(card));
-      if (group !== null) {
-        const partners = (bondCounts[bondNames.indexOf(group)] as number) - 1;
+      if (bond !== null) {
+        // A Bond unit is unsealed, so its own sets were counted with the others.
+        const members = setCounts[setNames.indexOf(bond)] ?? 0;
+        const partners = members - (card.sets.includes(bond) ? 1 : 0);
         aura += Math.min(s.knobs.bondCap, s.knobs.bondStep * partners);
       }
       const raw = Math.max(0, unit.stored) + aura;

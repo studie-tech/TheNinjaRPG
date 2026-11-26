@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { type KessenSetEntry, kessenSets } from "@/libs/kessen/catalog";
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
 import {
   cardKeywords,
@@ -39,13 +40,15 @@ import {
  * popover, one open at a time). Copies listed in the auction house are still owned: they
  * count for the book and carry a "Listed" tag. Keyword chips stay greyed until the
  * keyword was seen in a match; tapping one shows its glossary line and lists every card
- * with it. The Forbidden shelf below keeps a locked niche for every variant not yet
+ * with it. Set chips count the owned cards of each set; tapping one opens the set's page
+ * with every card in it, owned or not, and the cards whose Bond or Summon names it from
+ * outside. The Forbidden shelf below keeps a locked niche for every variant not yet
  * owned; an owned variant repeats its epithet under the card only while the face cuts its
  * name short. Cards first held since the viewer last opened their page carry the NEW
  * ribbon, and each faction tab counts them until that page is viewed (remembered per
  * viewer in this browser). The faction tabs are the game's tabs (one tab stop; the arrow
- * keys, Home and End move between them). Narrow books fold the keyword chips behind a
- * toggle that counts the keywords met, and fit all seven faction tabs on one row as
+ * keys, Home and End move between them). Narrow books fold the keyword and set chips
+ * behind two toggles side by side, and fit all seven faction tabs on one row as
  * sigils with their counts (each tab keeps its full name for assistive technology), so
  * the first cards show in the first screen.
  */
@@ -76,6 +79,8 @@ export const CollectionBook = ({
 }) => {
   const [faction, setFaction] = useState<KessenFaction>(initialFaction ?? "SHIROHANA");
   const [keyword, setKeyword] = useState<KessenKeyword | null>(null);
+  /** The set whose page is open, which replaces the faction page like a keyword. */
+  const [setName, setSetName] = useState<string | null>(null);
   /** Cards first held since the last visit; they keep the ribbon for this visit. */
   const [fresh, setFresh] = useState<ReadonlySet<string>>(NO_IDS);
   /** Pages viewed on this visit, whose tab counts are cleared. */
@@ -84,7 +89,10 @@ export const CollectionBook = ({
   const [findOpen, setFindOpen] = useState<string | null>(null);
   /** Whether narrow books show the keyword chips, folded behind their toggle. */
   const [keywordsOpen, setKeywordsOpen] = useState(false);
+  /** Whether narrow books show the set chips, folded behind their own toggle. */
+  const [setsOpen, setSetsOpen] = useState(false);
   const keywordsId = useId();
+  const setsId = useId();
   const shelfRef = useRef<HTMLUListElement>(null);
   const seen = new Set(seenKeywords);
   const collectible = cards.filter(
@@ -107,9 +115,18 @@ export const CollectionBook = ({
     total: collectible.length,
   };
 
+  const sets = kessenSets(collectible);
+  const openSet = sets.find((entry) => entry.name === setName) ?? null;
+  const setProgress = (entry: KessenSetEntry<KessenCatalogEntry>) => ({
+    owned: entry.members.filter(isOwned).length,
+    total: entry.members.length,
+  });
+
   const pageCards = keyword
     ? collectible.filter((card) => cardKeywords(card.abilities).includes(keyword))
-    : collectible.filter((card) => card.faction === faction);
+    : openSet
+      ? openSet.members
+      : collectible.filter((card) => card.faction === faction);
   const leaders = pageCards.filter((card) => card.kind === "LEADER");
   const deckCards = pageCards
     .filter((card) => card.kind !== "LEADER")
@@ -122,7 +139,7 @@ export const CollectionBook = ({
     .map((card) => card.id)
     .join(",");
   const seenKey = seenStorageKey(viewerId);
-  const pageKey = keyword ? null : faction;
+  const pageKey = keyword || openSet ? null : faction;
   const freshOn = (book: KessenFaction) =>
     viewedPages.has(book)
       ? 0
@@ -132,6 +149,7 @@ export const CollectionBook = ({
   const openPage = (book: KessenFaction) => {
     setFaction(book);
     setKeyword(null);
+    setSetName(null);
   };
   // Once per visit: which held cards are new since the last one. A first visit records
   // the collection as seen, so it does not mark every card.
@@ -179,7 +197,8 @@ export const CollectionBook = ({
       setViewedPages((pages) => new Set([...pages, pageKey]));
   }, [pageKey, fresh, seenKey]);
 
-  const pageValue = keyword ? KEYWORD_PAGE : faction;
+  const pageValue = keyword ? KEYWORD_PAGE : openSet ? SET_PAGE : faction;
+  const openSetProgress = openSet ? setProgress(openSet) : null;
   const bookCard = (card: KessenCatalogEntry) => (
     <BookCard
       key={card.id}
@@ -210,27 +229,46 @@ export const CollectionBook = ({
         </p>
       </header>
 
-      <Button
-        type="button"
-        variant="outline"
-        className="kh-kw-toggle"
-        aria-expanded={keywordsOpen}
-        aria-controls={keywordsId}
-        onClick={() => setKeywordsOpen((open) => !open)}
-      >
-        <span>Keywords</span>
-        <span className="kh-kw-toggle-count">
-          {KESSEN_KEYWORDS.filter((entry) => seen.has(entry)).length}/
-          {KESSEN_KEYWORDS.length} met
-        </span>
-        <ChevronDown className="kh-kw-toggle-icon" aria-hidden />
-      </Button>
+      <div className="kh-chip-toggles">
+        <Button
+          type="button"
+          variant="outline"
+          className="kh-kw-toggle"
+          aria-expanded={keywordsOpen}
+          aria-controls={keywordsId}
+          onClick={() => setKeywordsOpen((open) => !open)}
+        >
+          <span>Keywords</span>
+          <span className="kh-kw-toggle-count">
+            {KESSEN_KEYWORDS.filter((entry) => seen.has(entry)).length}/
+            {KESSEN_KEYWORDS.length} met
+          </span>
+          <ChevronDown className="kh-kw-toggle-icon" aria-hidden />
+        </Button>
+        {sets.length > 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="kh-kw-toggle"
+            aria-expanded={setsOpen}
+            aria-controls={setsId}
+            onClick={() => setSetsOpen((open) => !open)}
+          >
+            <span>Sets</span>
+            <span className="kh-kw-toggle-count">{sets.length}</span>
+            <ChevronDown className="kh-kw-toggle-icon" aria-hidden />
+          </Button>
+        ) : null}
+      </div>
       <fieldset
         id={keywordsId}
         className="kh-kwchips"
         data-open={keywordsOpen ? "" : undefined}
       >
         <legend className="sr-only">Keywords</legend>
+        <span className="kh-chips-label" aria-hidden>
+          Keywords
+        </span>
         {KESSEN_KEYWORDS.map((entry) => {
           const isSeen = seen.has(entry);
           const pressed = keyword === entry;
@@ -244,7 +282,10 @@ export const CollectionBook = ({
               data-seen={isSeen ? "" : undefined}
               aria-pressed={pressed}
               title={isSeen ? KESSEN_GLOSSARY[entry] : "Not seen in a match yet"}
-              onClick={() => setKeyword(pressed ? null : entry)}
+              onClick={() => {
+                setKeyword(pressed ? null : entry);
+                setSetName(null);
+              }}
             >
               {pressed ? (
                 <Check className="mr-1 h-[12px] w-[12px] shrink-0" aria-hidden />
@@ -254,6 +295,46 @@ export const CollectionBook = ({
           );
         })}
       </fieldset>
+      {sets.length > 0 ? (
+        <fieldset
+          id={setsId}
+          className="kh-kwchips"
+          data-open={setsOpen ? "" : undefined}
+        >
+          <legend className="sr-only">Sets</legend>
+          <span className="kh-chips-label" aria-hidden>
+            Sets
+          </span>
+          {sets.map((entry) => {
+            const pressed = openSet?.name === entry.name;
+            const { owned: have, total } = setProgress(entry);
+            return (
+              <Button
+                key={entry.name}
+                type="button"
+                size="sm"
+                variant="outline"
+                className="kh-kwchip"
+                data-seen
+                aria-pressed={pressed}
+                aria-label={`${entry.name} set: ${have} of ${total} collected`}
+                onClick={() => {
+                  setSetName(pressed ? null : entry.name);
+                  setKeyword(null);
+                }}
+              >
+                {pressed ? (
+                  <Check className="mr-1 h-[12px] w-[12px] shrink-0" aria-hidden />
+                ) : null}
+                {entry.name}
+                <span className="kh-setchip-count">
+                  {have}/{total}
+                </span>
+              </Button>
+            );
+          })}
+        </fieldset>
+      ) : null}
       {keyword ? (
         <div className="kh-kwline" role="status">
           <p>
@@ -278,11 +359,29 @@ export const CollectionBook = ({
           </Button>
         </div>
       ) : null}
+      {openSet ? (
+        <div className="kh-kwline" role="status">
+          <p>
+            <span className="kh-kwline-term">{openSet.name}</span>: {setLine(openSet)}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="kh-kwline-close"
+            aria-label="Close the set"
+            onClick={() => setSetName(null)}
+          >
+            <X className="h-[14px] w-[14px]" aria-hidden />
+          </Button>
+        </div>
+      ) : null}
 
       <Tabs
         value={pageValue}
         onValueChange={(value) => {
-          if (value !== KEYWORD_PAGE) openPage(value as KessenFaction);
+          if (value !== KEYWORD_PAGE && value !== SET_PAGE)
+            openPage(value as KessenFaction);
         }}
       >
         <TabsList className="kh-book-tabs" aria-label="Factions">
@@ -327,13 +426,25 @@ export const CollectionBook = ({
         <TabsContent
           value={pageValue}
           className="kh-page"
-          aria-label={keyword ?? KESSEN_FACTION_NAMES[faction]}
+          aria-label={
+            keyword ?? (openSet ? `${openSet.name} set` : KESSEN_FACTION_NAMES[faction])
+          }
         >
           <div className="kh-page-head">
             {keyword ? (
               <h3 className="kh-page-title">
                 Cards with <span className="kessen-kw">{keyword}</span>
               </h3>
+            ) : openSet && openSetProgress ? (
+              <>
+                <div className="min-w-0 flex-1">
+                  <h3 className="kh-page-title">{openSet.name}</h3>
+                  <p className="kh-page-sub">Set · {setFactions(openSet.members)}</p>
+                </div>
+                <p className="kh-page-count">
+                  {openSetProgress.owned}/{openSetProgress.total}
+                </p>
+              </>
             ) : (
               <>
                 <FactionSigil faction={faction} renderSize={48} className="w-[44px]" />
@@ -357,8 +468,18 @@ export const CollectionBook = ({
               <ul className="kh-book-grid">{leaders.map(bookCard)}</ul>
             </>
           ) : null}
-          <h4 className="kh-page-h4">{keyword ? "Cards" : "Deck cards"}</h4>
+          <h4 className="kh-page-h4">
+            {keyword ? "Cards" : openSet ? "In the set" : "Deck cards"}
+          </h4>
           <ul className="kh-book-grid">{deckCards.map(bookCard)}</ul>
+          {openSet && openSet.callers.length > 0 ? (
+            <>
+              <h4 className="kh-page-h4">Uses the set</h4>
+              <ul className="kh-book-grid">
+                {[...openSet.callers].sort(byBookNumber).map(bookCard)}
+              </ul>
+            </>
+          ) : null}
         </TabsContent>
       </Tabs>
 
@@ -572,6 +693,36 @@ const byBookNumber = (a: KessenCatalogEntry, b: KessenCatalogEntry) =>
 
 /** The tab value of a keyword's page, which no faction tab selects. */
 const KEYWORD_PAGE = "keyword";
+/** The tab value of a set's page, which no faction tab selects. */
+const SET_PAGE = "set";
+
+/** Factions of a set's cards in book order ("Shirohana, Neutral"). */
+const setFactions = (members: readonly KessenCatalogEntry[]) =>
+  KESSEN_BOOK_FACTIONS.filter((faction) =>
+    members.some((card) => card.faction === faction),
+  )
+    .map((faction) => KESSEN_FACTION_NAMES[faction])
+    .join(", ");
+
+/** What a set does in play: the Bond and Summon abilities that name it. */
+const setLine = (entry: KessenSetEntry<KessenCatalogEntry>) => {
+  const named = new Set(
+    [...entry.members, ...entry.callers].flatMap((card) =>
+      card.abilities.flatMap((ability) =>
+        (ability.k === "bond" || ability.k === "summon") && ability.group === entry.name
+          ? [ability.k]
+          : [],
+      ),
+    ),
+  );
+  const uses = [
+    named.has("bond") ? "A Bond naming it counts its other units on your side." : null,
+    named.has("summon")
+      ? "A Summon naming it pulls its top-most unit from your deck."
+      : null,
+  ].filter((use) => use !== null);
+  return uses.length > 0 ? uses.join(" ") : "Cards that belong together.";
+};
 
 const NO_LISTINGS: Readonly<Record<string, number>> = {};
 const NO_IDS: ReadonlySet<string> = new Set();

@@ -1359,6 +1359,13 @@
       "when": 1795674879051,
       "tag": "0194_cooing_namorita",
       "breakpoints": false
+    },
+    {
+      "idx": 195,
+      "version": "5",
+      "when": 1795686182049,
+      "tag": "0195_kessen_card_sets",
+      "breakpoints": false
     }
   ]
 }

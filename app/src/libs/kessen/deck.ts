@@ -824,17 +824,17 @@ const buildDeck = (input: BuildInput): string[] => {
     fits(card) &&
     deck.provision + card.provision <= budget - (reserved ? reserveAfter(card) : 0);
 
-  // 1. Anchor: a faction common unit with a Bond or Summon group, else the strongest one.
+  // 1. Anchor: a faction common unit in or naming a set, else the strongest one.
   const commons = pool.filter(
     (card) =>
       card.faction === input.faction &&
       card.rarity === "COMMON" &&
       card.kind === "UNIT",
   );
-  const grouped = commons.filter((card) => groupsOf(card).length > 0);
+  const inSets = commons.filter((card) => setsOf(card).length > 0);
   const anchor =
-    grouped.length > 0
-      ? grouped[rng.int(grouped.length)]
+    inSets.length > 0
+      ? inSets[rng.int(inSets.length)]
       : commons.reduce<KessenCard | undefined>(
           (best, card) => (!best || card.power > best.power ? card : best),
           undefined,
@@ -863,15 +863,15 @@ const buildDeck = (input: BuildInput): string[] => {
     if (candidates.length === 0) break;
     const card = candidates[rng.int(candidates.length)] as KessenCard;
     deck.add(card);
-    for (const group of groupsOf(card)) {
+    for (const set of setsOf(card)) {
       const members = pool
-        .filter((member) => isGroupMember(member, group))
+        .filter((member) => isSetMember(member, set))
         .sort(
           (a, b) =>
             rarityRank(a.rarity) - rarityRank(b.rarity) || compareIds(a.id, b.id),
         );
       for (const member of members) {
-        while (deck.groupCount(group) < KESSEN_LOANER.synergyTarget && canAdd(member)) {
+        while (deck.setCount(set) < KESSEN_LOANER.synergyTarget && canAdd(member)) {
           deck.add(member);
         }
       }
@@ -968,8 +968,7 @@ const createTally = (catalog: CardLookup, fixed: readonly string[]) => {
       }
       return -1;
     },
-    groupCount: (group: string) =>
-      list.filter((card) => isGroupMember(card, group)).length,
+    setCount: (set: string) => list.filter((card) => isSetMember(card, set)).length,
     /** The quota categories a card counts toward, as a stable key. */
     categoriesOf: (card: KessenCard) =>
       [
@@ -999,24 +998,16 @@ type Tally = ReturnType<typeof createTally>;
 const hasKind = (card: KessenCard, k: string) =>
   card.abilities.some((ability) => ability.k === k);
 
-/** Bond and Summon groups a card takes part in: its Bond group, summoned and member groups. */
-const groupsOf = (card: KessenCard) => {
-  const groups = new Set<string>();
+/** Sets a card takes part in: those its Bond or Summon names and those it belongs to. */
+const setsOf = (card: KessenCard) => {
+  const sets = new Set<string>(card.sets);
   for (const ability of card.abilities) {
-    if (ability.k === "bond" || ability.k === "summon")
-      groups.add(`${ability.k}:${ability.group}`);
+    if (ability.k === "bond" || ability.k === "summon") sets.add(ability.group);
   }
-  for (const group of card.summonGroups) groups.add(`summon:${group}`);
-  return [...groups].sort();
+  return [...sets].sort();
 };
 
-/** Bond groups count cards printing that Bond; Summon groups count their members. */
-const isGroupMember = (card: KessenCard, group: string) => {
-  const [kind, name] = group.split(":") as [string, string];
-  return kind === "bond"
-    ? card.abilities.some((ability) => ability.k === "bond" && ability.group === name)
-    : card.summonGroups.includes(name);
-};
+const isSetMember = (card: KessenCard, set: string) => card.sets.includes(set);
 
 const rarityRank = (rarity: KessenRarity) => KESSEN_RARITY_ORDER.indexOf(rarity);
 

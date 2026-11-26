@@ -23,7 +23,8 @@ export interface KessenCard {
   power: number;
   provision: number;
   abilities: KessenAbility[];
-  summonGroups: string[];
+  /** Sets the card belongs to: what Bond counts and Summon pulls. */
+  sets: string[];
   leaderBonus: number;
   variant: KessenCardVariant;
   baseCardId: string | null;

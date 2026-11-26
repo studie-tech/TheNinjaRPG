@@ -366,7 +366,7 @@ describe("deterministic replay", () => {
     // so seed-catalog edits never move it.
     expect({ version: CARD_ENGINE_VERSION, fingerprint: rulesFingerprint() }).toEqual({
       version: 3,
-      fingerprint: "4b17ac5854642eb74ee264c6b7d00763836250bae6b5feade99f7ea2f5c185c1",
+      fingerprint: "26136956b8592c047a85a1436758445f02d2eb199778f987924be3ee7d5bb98c",
     });
   });
 
@@ -376,7 +376,7 @@ describe("deterministic replay", () => {
     expect({ version: CARD_ENGINE_VERSION, fingerprint: revisedFingerprint() }).toEqual(
       {
         version: 3,
-        fingerprint: "77c63898d5cdd65d791075dfc38e1d3ad7912d50c96f5de307b9a39564efdaf5",
+        fingerprint: "0ce3b5a5748e0037f090086ce15e6a4540aa5c9ce18059cd7945f7faf065fd87",
       },
     );
   });
@@ -386,14 +386,14 @@ describe("deterministic replay", () => {
     // change moves this fingerprint: bump KESSEN_AI_VERSION with it.
     expect({ version: KESSEN_AI_VERSION, fingerprint: aiFingerprint() }).toEqual({
       version: 2,
-      fingerprint: "40b34ce2cee1603ba61660223d59edb4e4b0a257b590756c089ed8caa5cde858",
+      fingerprint: "ddd87aaf415e5f6830ed9b9a6c692db9fd82b5b32913261d418fc4a5dbbc23b9",
     });
   });
 
   it("pins the seed catalog's engine data", () => {
     // Re-pin on a deliberate balance edit, without a version bump: every match
     // snapshots its own catalog, so a stored match keeps the numbers it started with.
-    expect(catalogFingerprint(KESSEN_SEED_CATALOG)).toBe("53a19431618af328");
+    expect(catalogFingerprint(KESSEN_SEED_CATALOG)).toBe("d0ccdc6e1d486ee1");
   });
 
   it("keeps floats, wall clocks and ambient randomness out of the deterministic modules", () => {

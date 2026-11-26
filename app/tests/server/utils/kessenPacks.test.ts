@@ -53,7 +53,7 @@ const card = (
   power: 1,
   provision: 4,
   abilities: [],
-  summonGroups: [],
+  sets: [],
   leaderBonus: 0,
   variant: "STANDARD",
   baseCardId: null,
