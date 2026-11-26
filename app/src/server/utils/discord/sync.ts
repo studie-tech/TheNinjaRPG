@@ -307,6 +307,9 @@ export const syncDiscordAccount = async (
             nick,
             roles: wanted,
           });
+        } else {
+          // Keep the member checkpoint pending so sync retries after a manual join.
+          applied = false;
         }
       } else {
         if (member.nick !== nick) {
