@@ -77,6 +77,8 @@ interface StatDistributionProps {
   /** Companion allocation does not advance the player's character-training tutorial. */
   advanceTutorial?: boolean;
   disabled?: boolean;
+  /** Shown at the top of the box, above the allocation, such as a level the player has earned. */
+  leading?: React.ReactNode;
 }
 
 /** Shared capped stat allocation, including caller-owned pending/rejection state and optional masteries. */
@@ -211,6 +213,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
         subtitle={subtitle}
         defaultBackHref={defaultBackHref}
       >
+        {props.leading}
         {content}
       </ContentBox>
     );
