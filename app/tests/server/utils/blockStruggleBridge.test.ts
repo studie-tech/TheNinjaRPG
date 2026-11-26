@@ -1,0 +1,873 @@
+import { describe, expect, it } from "bun:test";
+import { randomBytes } from "node:crypto";
+import { Effect, Either, Fiber, TestClock, TestContext } from "effect";
+import {
+  makeBlockStruggleBridge,
+  type RpgIdentity,
+} from "@/server/utils/blockStruggleBridge";
+
+const config = () => ({
+  apiOrigin: "https://puzzle.example",
+  siteOrigin: "https://rpg.example",
+  cookieKey: randomBytes(32).toString("base64url"),
+});
+const identity = (sessionId = "rpg-session"): RpgIdentity => ({
+  userId: "rpg-user",
+  sessionId,
+  getToken: async () => "signed.clerk.proof",
+});
+const request = (path: string, method = "GET", origin = "https://rpg.example") =>
+  new Request(`https://rpg.example/api/minigames/blockstruggle/${path}`, {
+    method,
+    headers: {
+      Origin: origin,
+      "Content-Type": "application/json",
+      "X-BlockStruggle-Player-Id": "p_player",
+    },
+    body: method === "POST" ? JSON.stringify({ opponent: "p_other" }) : undefined,
+  });
+const issued = (token: string, playerId = "p_player", expiresInMs = 60 * 60 * 1000) =>
+  Response.json({
+    token,
+    playerId,
+    expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
+  });
+
+describe("TheNinjaRPG same-origin puzzle bridge", () => {
+  it("requires a valid bootstrapped identity before game mutations", async () => {
+    let calls = 0;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async () => {
+        calls++;
+        return issued("a".repeat(43));
+      }),
+    );
+    for (const expected of [undefined, "bad/id", "__proto__"]) {
+      const result = await Effect.runPromise(
+        Effect.either(
+          bridge.handle(
+            new Request("https://rpg.example/api/minigames/blockstruggle/matches", {
+              method: "POST",
+              headers: {
+                Origin: "https://rpg.example",
+                "Content-Type": "application/json",
+                ...(expected === undefined
+                  ? {}
+                  : { "X-BlockStruggle-Player-Id": expected }),
+              },
+              body: "{}",
+            }),
+            ["matches"],
+            identity(),
+          ),
+        ),
+      );
+      expect(Either.isLeft(result) && result.left.status).toBe(400);
+    }
+    expect(calls).toBe(0);
+  });
+
+  it.each([
+    "cleared",
+    "replaced",
+    "refresh-margin",
+    "revoked",
+    "read-refresh",
+  ] as const)(
+    "does not replay an old canonical identity after %s changes the session",
+    async (scenario) => {
+      const forwards: { playerId: string; method: string }[] = [];
+      let current = "p_old";
+      let exchanges = 0;
+      const result = await Effect.runPromise(
+        Effect.gen(function* () {
+          yield* TestClock.setTime(Date.now());
+          const bridge = yield* makeBlockStruggleBridge(config(), async (url, init) => {
+            if (new URL(String(url)).pathname.endsWith("/exchange")) {
+              exchanges++;
+              return issued(
+                current === "p_old" ? "a".repeat(43) : "b".repeat(43),
+                current,
+                exchanges === 1 ? 3_600_000 : 7_200_000,
+              );
+            }
+            const playerId =
+              new Headers(init?.headers).get("authorization") ===
+              `Bearer ${"a".repeat(43)}`
+                ? "p_old"
+                : "p_new";
+            forwards.push({ playerId, method: init?.method ?? "GET" });
+            return playerId !== current
+              ? Response.json({ error: "Unauthorized" }, { status: 401 })
+              : Response.json({ playerId });
+          });
+          const bootstrap = () =>
+            bridge.handle(
+              new Request("https://rpg.example/api/minigames/blockstruggle/session", {
+                headers: { Origin: "https://rpg.example" },
+              }),
+              ["session"],
+              identity(),
+            );
+          const first = yield* bootstrap();
+          expect(first.response.headers.get("X-BlockStruggle-Player-Id")).toBe("p_old");
+          current = "p_new";
+          let cookie = scenario === "cleared" ? undefined : first.cookie?.value;
+          if (scenario === "replaced") cookie = (yield* bootstrap()).cookie?.value;
+          if (scenario === "refresh-margin") yield* TestClock.adjust(3_580_000);
+          forwards.length = 0;
+          const read = scenario === "read-refresh";
+          return yield* bridge.handle(
+            new Request(
+              `https://rpg.example/api/minigames/blockstruggle/${read ? "profile" : "matches"}`,
+              {
+                method: read ? "GET" : "POST",
+                headers: {
+                  Origin: "https://rpg.example",
+                  "Content-Type": "application/json",
+                  "X-BlockStruggle-Player-Id": "p_old",
+                },
+                ...(read ? {} : { body: "{}" }),
+              },
+            ),
+            [read ? "profile" : "matches"],
+            identity(),
+            cookie,
+          );
+        }).pipe(Effect.provide(TestContext.TestContext)),
+      );
+      expect(result.response.status).toBe(412);
+      expect(result.response.headers.get("X-BlockStruggle-Identity-Changed")).toBe("1");
+      expect(result.response.headers.get("X-BlockStruggle-Player-Id")).toBe("p_new");
+      expect(forwards.every((call) => call.playerId === "p_old")).toBe(true);
+      expect(forwards.length).toBe(
+        scenario === "revoked" || scenario === "read-refresh" ? 1 : 0,
+      );
+      expect(exchanges).toBe(2);
+      expect(result.cookie !== undefined).toBe(scenario !== "replaced");
+    },
+  );
+
+  it("allows a refreshed bearer for the same canonical player", async () => {
+    let exchanges = 0;
+    const forwards: string[] = [];
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.now());
+        const bridge = yield* makeBlockStruggleBridge(config(), async (url, init) => {
+          if (new URL(String(url)).pathname.endsWith("/exchange"))
+            return issued(
+              String(++exchanges).repeat(43),
+              "p_player",
+              exchanges === 1 ? 3_600_000 : 7_200_000,
+            );
+          if (init?.method === "POST")
+            forwards.push(new Headers(init.headers).get("authorization") ?? "");
+          return Response.json({ playerId: "p_player" });
+        });
+        const first = yield* bridge.handle(request("session"), ["session"], identity());
+        yield* TestClock.adjust(3_580_000);
+        return yield* bridge.handle(
+          request("matches", "POST"),
+          ["matches"],
+          identity(),
+          first.cookie?.value,
+        );
+      }).pipe(Effect.provide(TestContext.TestContext)),
+    );
+    expect(result.response.status).toBe(200);
+    expect(result.response.headers.get("X-BlockStruggle-Player-Id")).toBe("p_player");
+    expect(forwards).toEqual([`Bearer ${"2".repeat(43)}`]);
+  });
+
+  it("allows cleanup logout without an expected identity or with a stale one", async () => {
+    for (const expected of [undefined, "p_stale"]) {
+      let exchanges = 0;
+      let revoked = 0;
+      const bridge = await Effect.runPromise(
+        makeBlockStruggleBridge(config(), async (url, init) => {
+          if (new URL(String(url)).pathname.endsWith("/exchange")) {
+            exchanges++;
+            return issued("a".repeat(43));
+          }
+          if (init?.method === "DELETE") {
+            revoked++;
+            expect(new Headers(init.headers).get("authorization")).toBe(
+              `Bearer ${"a".repeat(43)}`,
+            );
+            return new Response(null, { status: 204 });
+          }
+          return Response.json({ playerId: "p_player" });
+        }),
+      );
+      const first = await Effect.runPromise(
+        bridge.handle(request("session"), ["session"], identity()),
+      );
+      const logout = await Effect.runPromise(
+        bridge.handle(
+          new Request("https://rpg.example/api/minigames/blockstruggle/session", {
+            method: "DELETE",
+            headers: {
+              Origin: "https://rpg.example",
+              ...(expected === undefined
+                ? {}
+                : { "X-BlockStruggle-Player-Id": expected }),
+            },
+          }),
+          ["session"],
+          identity(),
+          first.cookie?.value,
+        ),
+      );
+      expect(logout.response.status).toBe(204);
+      expect(logout.clearCookie).toBe(true);
+      expect(exchanges).toBe(1);
+      expect(revoked).toBe(1);
+    }
+  });
+
+  it("cancels a rejected exchange body while preserving its retry status", async () => {
+    let cancelled = false;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(
+        config(),
+        async () =>
+          new Response(
+            new ReadableStream({
+              cancel() {
+                cancelled = true;
+              },
+            }),
+            { status: 429, headers: { "Retry-After": "9" } },
+          ),
+      ),
+    );
+    const result = await Effect.runPromise(
+      Effect.either(bridge.handle(request("session"), ["session"], identity())),
+    );
+    expect(Either.isLeft(result) && result.left.code).toBe("RateLimited");
+    expect(Either.isLeft(result) && result.left.retryAfter).toBe("9");
+    expect(cancelled).toBe(true);
+  });
+
+  it("keeps the upstream deadline through a stalled exchange body and aborts its read", async () => {
+    let aborted = false;
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.now());
+        const bridge = yield* makeBlockStruggleBridge(
+          config(),
+          async (_url, init) =>
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  init?.signal?.addEventListener("abort", () => {
+                    aborted = true;
+                    controller.error(new Error("Aborted"));
+                  });
+                },
+              }),
+              {
+                status: 200,
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-BlockStruggle-Player-Id": "p_player",
+                },
+              },
+            ),
+        );
+        const fiber = yield* Effect.fork(
+          Effect.either(bridge.handle(request("session"), ["session"], identity())),
+        );
+        yield* TestClock.adjust(10_001);
+        return yield* Fiber.join(fiber);
+      }).pipe(Effect.provide(TestContext.TestContext)),
+    );
+    expect(Either.isLeft(result) && result.left.code).toBe("UpstreamUnavailable");
+    expect(aborted).toBe(true);
+  });
+
+  it("revokes a live bearer inside the forwarding refresh margin and releases the logout body", async () => {
+    let cancelled = false;
+    let revocations = 0;
+    const logout = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.now());
+        const bridge = yield* makeBlockStruggleBridge(config(), async (url, init) => {
+          if (new URL(String(url)).pathname.endsWith("/exchange"))
+            return issued("a".repeat(43));
+          if (init?.method === "DELETE") {
+            expect(new Headers(init.headers).get("authorization")).toBe(
+              `Bearer ${"a".repeat(43)}`,
+            );
+            revocations++;
+            return new Response(
+              new ReadableStream({
+                cancel() {
+                  cancelled = true;
+                },
+              }),
+              { status: 200 },
+            );
+          }
+          return Response.json({ playerId: "p_player" });
+        });
+        const first = yield* bridge.handle(request("session"), ["session"], identity());
+        yield* TestClock.adjust(3_580_000);
+        return yield* bridge.handle(
+          request("session", "DELETE"),
+          ["session"],
+          identity(),
+          first.cookie?.value,
+        );
+      }).pipe(Effect.provide(TestContext.TestContext)),
+    );
+    expect(logout.response.status).toBe(204);
+    expect(logout.clearCookie).toBe(true);
+    expect(revocations).toBe(1);
+    expect(cancelled).toBe(true);
+  });
+
+  it("forwards canonical safety operations using the bound game session", async () => {
+    const calls: { path: string; method: string; body?: string }[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        const target = new URL(String(url));
+        if (target.pathname.endsWith("/exchange")) return issued("a".repeat(43));
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          `Bearer ${"a".repeat(43)}`,
+        );
+        calls.push({
+          path: target.pathname + target.search,
+          method: init?.method ?? "GET",
+          body: init?.body?.toString(),
+        });
+        return Response.json({ requestId: "11111111-1111-4111-8111-111111111111" });
+      }),
+    );
+    const report = JSON.stringify({
+      requestId: "11111111-1111-4111-8111-111111111111",
+      subjectId: "p_other",
+      reason: "offensive_name",
+      details: "",
+    });
+    const operations = [
+      ["safety/blocks?cursor=p_next", "GET", undefined],
+      ["safety/blocks/p_other", "PUT", undefined],
+      ["safety/blocks/p_other", "DELETE", undefined],
+      ["safety/reports", "POST", report],
+    ] as const;
+    let cookie: string | undefined;
+    for (const [path, method, body] of operations) {
+      const result = await Effect.runPromise(
+        bridge.handle(
+          new Request(`https://rpg.example/api/minigames/blockstruggle/${path}`, {
+            method,
+            headers: {
+              Origin: "https://rpg.example",
+              "Content-Type": "application/json",
+              "X-BlockStruggle-Player-Id": "p_player",
+            },
+            body,
+          }),
+          path.split("?")[0]!.split("/"),
+          identity(),
+          cookie,
+        ),
+      );
+      cookie = result.cookie?.value ?? cookie;
+      expect(result.response.status).toBe(200);
+      expect(result.response.headers.get("cache-control")).toBe("private, no-store");
+      expect(result.response.headers.has("authorization")).toBe(false);
+    }
+    expect(calls).toEqual(
+      operations.map(([path, method, body]) => ({
+        path: `/api/ninja/${path}`,
+        method,
+        body,
+      })),
+    );
+  });
+
+  it("denies other safety methods, queries, bodies and cross-site actions before exchange", async () => {
+    let calls = 0;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async () => {
+        calls++;
+        return issued("a".repeat(43));
+      }),
+    );
+    for (const [path, method, body, origin, status] of [
+      ["safety/reports", "GET", undefined, "https://rpg.example", 405],
+      ["safety/blocks", "POST", "{}", "https://rpg.example", 405],
+      ["safety/reports/p_other", "POST", "{}", "https://rpg.example", 405],
+      ["safety/admin", "POST", "{}", "https://rpg.example", 405],
+      ["safety/blocks/p_other/extra", "PUT", undefined, "https://rpg.example", 405],
+      ["safety/blocks/__proto__", "PUT", undefined, "https://rpg.example", 405],
+      [
+        "safety/blocks?cursor=p_a&cursor=p_b",
+        "GET",
+        undefined,
+        "https://rpg.example",
+        400,
+      ],
+      ["safety/blocks?cursor=bad%2Fid", "GET", undefined, "https://rpg.example", 400],
+      ["safety/blocks?user=p_other", "GET", undefined, "https://rpg.example", 400],
+      ["safety/reports?user=p_other", "POST", "{}", "https://rpg.example", 400],
+      [
+        "safety/blocks/p_other?cursor=p_a",
+        "DELETE",
+        undefined,
+        "https://rpg.example",
+        400,
+      ],
+      ["safety/blocks/p_other", "PUT", "{}", "https://rpg.example", 400],
+      ["safety/blocks/p_other", "DELETE", "{}", "https://rpg.example", 400],
+      ["safety/reports", "POST", "x".repeat(2049), "https://rpg.example", 413],
+      ["safety/reports", "POST", "{}", "https://attacker.example", 403],
+      ["safety/blocks/p_other", "PUT", undefined, "https://attacker.example", 403],
+    ] as const) {
+      const result = await Effect.runPromise(
+        Effect.either(
+          bridge.handle(
+            new Request(`https://rpg.example/api/minigames/blockstruggle/${path}`, {
+              method,
+              headers: {
+                Origin: origin,
+                "Content-Type": "application/json",
+                "X-BlockStruggle-Player-Id": "p_player",
+              },
+              body,
+            }),
+            path.split("?")[0]!.split("/"),
+            identity(),
+          ),
+        ),
+      );
+      expect(Either.isLeft(result) && result.left.status).toBe(status);
+    }
+    expect(calls).toBe(0);
+  });
+
+  it("reads shared ownership while denying purchase and claim forwarding", async () => {
+    const paths: string[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        paths.push(path);
+        if (path.endsWith("/exchange")) return issued("a".repeat(43));
+        expect(path).toBe("/api/ninja/full-version");
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          `Bearer ${"a".repeat(43)}`,
+        );
+        return Response.json({ owned: true, purchaseOwned: false });
+      }),
+    );
+    const result = await Effect.runPromise(
+      bridge.handle(request("full-version"), ["full-version"], identity()),
+    );
+    expect(result.response.status).toBe(200);
+    expect(await result.response.json()).toEqual({ owned: true, purchaseOwned: false });
+    for (const segments of [
+      ["full-version"],
+      ["full-version", "claim"],
+      ["full-version", "google", "claim"],
+    ]) {
+      const denied = await Effect.runPromise(
+        Effect.either(
+          bridge.handle(request(segments.join("/"), "POST"), segments, identity()),
+        ),
+      );
+      expect(Either.isLeft(denied) && denied.left.status).toBe(405);
+    }
+    expect(paths).toEqual(["/api/ninja/session/exchange", "/api/ninja/full-version"]);
+  });
+  it("redeems an account link with a fresh Ninja Clerk proof without provisioning a game session", async () => {
+    const paths: string[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        paths.push(new URL(String(url)).pathname);
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer signed.clerk.proof",
+        );
+        expect(init?.body?.toString()).toBe(JSON.stringify({ code: "c".repeat(43) }));
+        return Response.json({ playerId: "p_block" });
+      }),
+    );
+    const result = await Effect.runPromise(
+      bridge.handle(
+        new Request(
+          "https://rpg.example/api/minigames/blockstruggle/identity-link/redeem",
+          {
+            method: "POST",
+            headers: {
+              Origin: "https://rpg.example",
+              "Content-Type": "application/json",
+              "X-BlockStruggle-Player-Id": "p_player",
+            },
+            body: JSON.stringify({ code: "c".repeat(43) }),
+          },
+        ),
+        ["identity-link", "redeem"],
+        identity(),
+      ),
+    );
+    expect(result.response.status).toBe(200);
+    expect(result.clearCookie).toBe(true);
+    expect(result.cookie).toBeUndefined();
+    expect(paths).toEqual(["/api/ninja/identity-link/redeem"]);
+  });
+
+  it("keeps the existing puzzle session after a link conflict", async () => {
+    let exchanges = 0;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url) => {
+        if (new URL(String(url)).pathname.endsWith("/exchange")) {
+          exchanges++;
+          return issued("a".repeat(43));
+        }
+        if (new URL(String(url)).pathname.endsWith("/identity-link/redeem"))
+          return Response.json({ error: "Conflict" }, { status: 409 });
+        return Response.json({ playerId: "p_ninja" });
+      }),
+    );
+    const first = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity()),
+    );
+    const conflict = await Effect.runPromise(
+      bridge.handle(
+        request("identity-link/redeem", "POST"),
+        ["identity-link", "redeem"],
+        identity(),
+        first.cookie?.value,
+      ),
+    );
+    expect(conflict.response.status).toBe(409);
+    expect(conflict.clearCookie).toBeUndefined();
+    expect(exchanges).toBe(1);
+  });
+
+  it("sends a short-lived Vercel identity only to the configured BlockStruggle host", async () => {
+    const token = "header.payload.signature";
+    const urls: string[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(
+        {
+          ...config(),
+          apiOrigin: "https://blockstruggle-git-codex-rebuild-the-ninja-rpg.vercel.app",
+          trustedVercelSource: "true",
+        },
+        async (url, init) => {
+          urls.push(String(url));
+          expect(
+            new Headers(init?.headers).get("x-vercel-trusted-oidc-idp-token"),
+          ).toBe(token);
+          return new URL(String(url)).pathname.endsWith("/exchange")
+            ? issued("a".repeat(43))
+            : Response.json({ playerId: "p_player" });
+        },
+        async () => token,
+      ),
+    );
+    const result = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity()),
+    );
+    expect(result.response.status).toBe(200);
+    expect(result.response.headers.has("x-vercel-trusted-oidc-idp-token")).toBe(false);
+    expect(urls).toHaveLength(2);
+    expect(
+      urls.every((url) =>
+        url.startsWith(
+          "https://blockstruggle-git-codex-rebuild-the-ninja-rpg.vercel.app/",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects trusted identity for non-BlockStruggle or non-Vercel origins", async () => {
+    for (const apiOrigin of [
+      "https://puzzle.example",
+      "https://other-project.vercel.app",
+      "https://blockstruggle-attacker.vercel.app",
+      "https://blockstruggle-attacker.example",
+    ]) {
+      let calls = 0;
+      const result = await Effect.runPromise(
+        Effect.either(
+          makeBlockStruggleBridge(
+            { ...config(), apiOrigin, trustedVercelSource: "true" },
+            async () => {
+              calls++;
+              return issued("a".repeat(43));
+            },
+            async () => "header.payload.signature",
+          ),
+        ),
+      );
+      expect(Either.isLeft(result) && result.left.code).toBe("NotConfigured");
+      expect(calls).toBe(0);
+    }
+  });
+
+  it("fails closed when trusted identity is enabled but unavailable", async () => {
+    let calls = 0;
+    const result = await Effect.runPromise(
+      Effect.either(
+        makeBlockStruggleBridge(
+          {
+            ...config(),
+            apiOrigin:
+              "https://blockstruggle-git-codex-rebuild-the-ninja-rpg.vercel.app",
+            trustedVercelSource: "true",
+          },
+          async () => {
+            calls++;
+            return issued("a".repeat(43));
+          },
+          async () => undefined,
+        ),
+      ),
+    );
+    expect(Either.isLeft(result) && result.left.code).toBe("NotConfigured");
+    expect(calls).toBe(0);
+  });
+
+  it("exchanges once, reuses an encrypted cookie, and binds it to the Clerk session", async () => {
+    let exchanges = 0;
+    const puzzleTokens: string[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/ninja/session/exchange") {
+          exchanges++;
+          expect(new Headers(init?.headers).get("authorization")).toBe(
+            "Bearer signed.clerk.proof",
+          );
+          return issued(String(exchanges).repeat(43));
+        }
+        puzzleTokens.push(new Headers(init?.headers).get("authorization") ?? "");
+        return Response.json({ playerId: "p_player" });
+      }),
+    );
+    const first = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity()),
+    );
+    expect(first.response.status).toBe(200);
+    expect(first.cookie?.value).toBeTruthy();
+    expect(first.cookie?.value).not.toContain("1".repeat(43));
+    const second = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity(), first.cookie?.value),
+    );
+    expect(second.cookie).toBeUndefined();
+    expect(exchanges).toBe(1);
+    const switched = await Effect.runPromise(
+      bridge.handle(
+        request("session"),
+        ["session"],
+        identity("new-rpg-session"),
+        first.cookie?.value,
+      ),
+    );
+    expect(switched.cookie?.value).toBeTruthy();
+    expect(exchanges).toBe(2);
+    expect(puzzleTokens).toEqual([
+      `Bearer ${"1".repeat(43)}`,
+      `Bearer ${"1".repeat(43)}`,
+      `Bearer ${"2".repeat(43)}`,
+    ]);
+  });
+
+  it("rejects unsafe routes and cross-origin writes before issuing a session", async () => {
+    let calls = 0;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async () => {
+        calls++;
+        return issued("a".repeat(43));
+      }),
+    );
+    const csrf = await Effect.runPromise(
+      Effect.either(
+        bridge.handle(
+          request("matches", "POST", "https://evil.example"),
+          ["matches"],
+          identity(),
+        ),
+      ),
+    );
+    expect(Either.isLeft(csrf) && csrf.left.status).toBe(403);
+    const crossSite = request("session");
+    crossSite.headers.set("sec-fetch-site", "cross-site");
+    const unsafeGet = await Effect.runPromise(
+      Effect.either(bridge.handle(crossSite, ["session"], identity())),
+    );
+    expect(Either.isLeft(unsafeGet) && unsafeGet.left.status).toBe(403);
+    const internal = await Effect.runPromise(
+      Effect.either(
+        bridge.handle(
+          request("internal/deletion-worker"),
+          ["internal", "deletion-worker"],
+          identity(),
+        ),
+      ),
+    );
+    expect(Either.isLeft(internal) && internal.left.status).toBe(405);
+    expect(calls).toBe(0);
+  });
+
+  it("refreshes one revoked game session and clears the cookie on logout", async () => {
+    let exchanges = 0;
+    let revokes = 0;
+    let denyOld = false;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith("/exchange")) return issued(String(++exchanges).repeat(43));
+        if (init?.method === "DELETE") {
+          expect(new Headers(init.headers).get("authorization")).toBe(
+            `Bearer ${"2".repeat(43)}`,
+          );
+          revokes++;
+          return new Response(null, { status: 204 });
+        }
+        const token = new Headers(init?.headers).get("authorization");
+        if (denyOld && token === `Bearer ${"1".repeat(43)}`)
+          return Response.json({ error: "Unauthorized" }, { status: 401 });
+        return Response.json({ playerId: "p_player" });
+      }),
+    );
+    const first = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity()),
+    );
+    denyOld = true;
+    const refreshed = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity(), first.cookie?.value),
+    );
+    expect(refreshed.response.status).toBe(200);
+    expect(refreshed.cookie?.value).toBeTruthy();
+    expect(exchanges).toBe(2);
+    const logout = await Effect.runPromise(
+      bridge.handle(
+        request("session", "DELETE"),
+        ["session"],
+        identity(),
+        refreshed.cookie?.value,
+      ),
+    );
+    expect(logout.response.status).toBe(204);
+    expect(logout.clearCookie).toBe(true);
+    expect(revokes).toBe(1);
+    expect(exchanges).toBe(2);
+  });
+
+  it("keeps the puzzle session available to retry a failed upstream logout", async () => {
+    let exchanges = 0;
+    let revokes = 0;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith("/exchange")) {
+          exchanges++;
+          return issued("r".repeat(43));
+        }
+        if (init?.method === "DELETE") {
+          revokes++;
+          if (revokes === 1) throw new TypeError("Transport unavailable");
+          if (revokes === 2)
+            return Response.json({ error: "Unavailable" }, { status: 503 });
+          return new Response(null, { status: 204 });
+        }
+        return Response.json({ playerId: "p_player" });
+      }),
+    );
+    const signedIn = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity()),
+    );
+    const cookie = signedIn.cookie?.value;
+    expect(cookie).toBeTruthy();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const failed = await Effect.runPromise(
+        Effect.either(
+          bridge.handle(request("session", "DELETE"), ["session"], identity(), cookie),
+        ),
+      );
+      expect(Either.isLeft(failed) && failed.left.status).toBe(502);
+      const stillSignedIn = await Effect.runPromise(
+        bridge.handle(request("session"), ["session"], identity(), cookie),
+      );
+      expect(stillSignedIn.response.status).toBe(200);
+      expect(stillSignedIn.cookie).toBeUndefined();
+    }
+    const logout = await Effect.runPromise(
+      bridge.handle(request("session", "DELETE"), ["session"], identity(), cookie),
+    );
+    expect(logout.response.status).toBe(204);
+    expect(logout.clearCookie).toBe(true);
+    expect(exchanges).toBe(1);
+    expect(revokes).toBe(3);
+  });
+
+  it("retains a newly issued session when the first proxied response is lost", async () => {
+    let exchanges = 0;
+    let failProxy = true;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url) => {
+        if (new URL(String(url)).pathname.endsWith("/exchange")) {
+          exchanges++;
+          return issued("a".repeat(43));
+        }
+        if (failProxy) {
+          failProxy = false;
+          throw new TypeError("Simulated upstream transport loss");
+        }
+        return Response.json({ playerId: "p_player" });
+      }),
+    );
+    const first = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity()),
+    );
+    expect(first.response.status).toBe(502);
+    expect(first.cookie?.value).toBeTruthy();
+    const retry = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity(), first.cookie?.value),
+    );
+    expect(retry.response.status).toBe(200);
+    expect(exchanges).toBe(1);
+  });
+
+  it("proxies match results but denies unsupported friendship deletion", async () => {
+    const paths: string[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url) => {
+        const path = new URL(String(url)).pathname;
+        paths.push(path);
+        return path.endsWith("/exchange")
+          ? issued("b".repeat(43))
+          : Response.json({ matchId: "m_123" });
+      }),
+    );
+    const result = await Effect.runPromise(
+      bridge.handle(
+        request("matches/m_123/result"),
+        ["matches", "m_123", "result"],
+        identity(),
+      ),
+    );
+    expect(result.response.status).toBe(200);
+    expect(paths).toEqual([
+      "/api/ninja/session/exchange",
+      "/api/ninja/matches/m_123/result",
+    ]);
+    const denied = await Effect.runPromise(
+      Effect.either(
+        bridge.handle(
+          request("friends", "DELETE"),
+          ["friends"],
+          identity(),
+          result.cookie?.value,
+        ),
+      ),
+    );
+    expect(Either.isLeft(denied) && denied.left.status).toBe(405);
+    expect(paths).toHaveLength(2);
+  });
+});

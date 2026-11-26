@@ -48,6 +48,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.118",
     "@ai-sdk/react": "^4.0.177",
+    "@blockstruggle/game-ui": "file:./vendor/blockstruggle/blockstruggle-game-ui-0.1.19.tgz",
     "@clerk/backend": "^3.29.0",
     "@clerk/mcp-tools": "^0.9.0",
     "@clerk/nextjs": "^7.10.0",
@@ -87,6 +88,7 @@
     "@upstash/ratelimit": "^2.2.1",
     "@upstash/redis": "^1.41.0",
     "@vercel/functions": "3.10.5",
+    "@vercel/oidc": "4.0.9",
     "@vercel/speed-insights": "^2.1.0",
     "ai": "^7.0.173",
     "alea": "1.0.1",
@@ -103,6 +105,7 @@
     "deep-object-diff": "^1.1.9",
     "drizzle-orm": "0.45.4",
     "drizzle-zod": "^0.8.3",
+    "effect": "3.22.2",
     "embla-carousel-auto-height": "8.6.0",
     "embla-carousel-react": "^8.6.0",
     "entities": "9.0.0",
@@ -184,6 +187,10 @@
     "@modelcontextprotocol/sdk": "1.32.2",
     "@types/react-cytoscapejs": {
       "cytoscape": "$cytoscape"
+    },
+    "effect": "3.22.2",
+    "@vercel/cli-config": {
+      "zod": "4.6.7"
     }
   },
   "patchedDependencies": {

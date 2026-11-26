@@ -408,11 +408,13 @@ it("returns from an emptied final page to the reconciled cached previous page wh
   fireEvent.click(
     within(replyText.closest("article")!).getByRole("button", { name: "Remove post" }),
   );
-  await waitFor(() => expect(view.container.querySelector("#post-reply")).toBeNull());
-  expect(view.getByText(`${FORUM_THREAD_POSTS_PER_PAGE} posts`)).toBeTruthy();
-  expect(view.getAllByText("opening content")).toHaveLength(
-    FORUM_THREAD_POSTS_PER_PAGE,
-  );
+  await waitFor(() => {
+    expect(view.container.querySelector("#post-reply")).toBeNull();
+    expect(view.getByText(`${FORUM_THREAD_POSTS_PER_PAGE} posts`)).toBeTruthy();
+    expect(view.getAllByText("opening content")).toHaveLength(
+      FORUM_THREAD_POSTS_PER_PAGE,
+    );
+  });
   await waitFor(() => expect(requestedPages.at(-1)).toBe(0));
   expect(view.queryByRole("button", { name: "Page 2" })).toBeNull();
 });
