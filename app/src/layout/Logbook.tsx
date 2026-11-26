@@ -714,9 +714,13 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         />
         <EventTimer quest={quest} />
       </div>
-      {!["tier", "daily"].includes(quest.questType) && quest.description && (
-        <QuestBriefing key={quest.id} description={quest.description} />
-      )}
+      <QuestStoryLinks
+        key={abandonIdentity}
+        briefing={
+          !["tier", "daily"].includes(quest.questType) ? quest.description : undefined
+        }
+        earlierDialogue={earlierDialogue}
+      />
     </>
   );
   // The finished quest's reward, named like the objective claims.
@@ -910,31 +914,63 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
 
         {objectiveCards((index) => !leadsWithObjectiveClaim || !isWaitingClaim(index))}
         {props.compact ? questSummary : questClaim}
-        <EarlierQuestDialogue
-          key={abandonIdentity}
-          entries={earlierDialogue}
-          compact={props.compact}
-        />
       </div>
     </Post>
   );
 };
 
-/** Quest story text, collapsed so the objectives stay near the quest name */
-const QuestBriefing: React.FC<{ description: string }> = ({ description }) => {
-  const [isOpen, setIsOpen] = useState(false);
+/**
+ * The quest's briefing and the dialogue before the latest one, each folded behind a link
+ * so the objectives stay near the quest name. Earlier dialogue reads oldest first, leading
+ * into the current dialogue below it.
+ */
+const QuestStoryLinks: React.FC<{
+  briefing?: string | null;
+  /** Dialogue before the latest, newest first. */
+  earlierDialogue: QuestDialogueEntry[];
+}> = ({ briefing, earlierDialogue }) => {
+  const [isBriefingOpen, setIsBriefingOpen] = useState(false);
+  const [isDialogueOpen, setIsDialogueOpen] = useState(false);
+  if (!briefing && earlierDialogue.length === 0) return null;
   return (
-    <div>
-      <Button
-        type="button"
-        variant="link"
-        className="h-auto p-0"
-        aria-expanded={isOpen}
-        onClick={() => setIsOpen((open) => !open)}
-      >
-        {isOpen ? "Hide briefing" : "Read briefing"}
-      </Button>
-      {isOpen && <div data-reading-text>{parseHtml(description)}</div>}
+    <div className="@container space-y-2">
+      <div className="flex flex-wrap gap-x-4">
+        {briefing && (
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0"
+            aria-expanded={isBriefingOpen}
+            onClick={() => setIsBriefingOpen((open) => !open)}
+          >
+            {isBriefingOpen ? "Hide briefing" : "Read briefing"}
+          </Button>
+        )}
+        {earlierDialogue.length > 0 && (
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0"
+            aria-expanded={isDialogueOpen}
+            onClick={() => setIsDialogueOpen((open) => !open)}
+          >
+            {isDialogueOpen
+              ? "Hide dialogue"
+              : `Show dialogue (${earlierDialogue.length})`}
+          </Button>
+        )}
+      </div>
+      {isBriefingOpen && briefing && <div data-reading-text>{parseHtml(briefing)}</div>}
+      {isDialogueOpen && (
+        <section aria-label="Earlier quest dialogue">
+          {/* One readable column in the classic 650px centre, two where a wide layout has 768px. */}
+          <div className="grid grid-cols-1 gap-3 @5xl:grid-cols-2">
+            {[...earlierDialogue].reverse().map((entry) => (
+              <QuestDialogueText key={entry.objectiveId} entry={entry} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };
@@ -974,55 +1010,6 @@ export const QuestObjectives: React.FC<{
       />
     );
   });
-};
-
-/**
- * The parts of a quest's dialogue before the latest one, newest first, at the foot of the entry.
- * They scroll within a capped height so a long quest keeps its card short; the narrow dock keeps
- * them folded.
- */
-const EarlierQuestDialogue: React.FC<{
-  entries: QuestDialogueEntry[];
-  compact?: boolean;
-}> = ({ entries, compact }) => {
-  const [isOpen, setIsOpen] = useState(!compact);
-  const headingId = useId();
-  const listId = useId();
-  if (entries.length === 0) return null;
-  return (
-    <div className="@container">
-      <div className="flex items-baseline gap-2">
-        <h3 id={headingId} className="font-bold">
-          Earlier dialogue ({entries.length})
-        </h3>
-        <Button
-          type="button"
-          variant="link"
-          className="h-auto p-0"
-          aria-expanded={isOpen}
-          aria-controls={listId}
-          onClick={() => setIsOpen((open) => !open)}
-        >
-          {isOpen ? "Hide" : "Show"}
-        </Button>
-      </div>
-      {isOpen && (
-        // Newest first, so the capped area opens on the most recent part.
-        // One readable column in the classic 650px centre, two where a wide layout has 768px.
-        <section
-          id={listId}
-          aria-labelledby={headingId}
-          // biome-ignore lint/a11y/noNoninteractiveTabindex: Browsers that leave scroll containers out of the tab order (Safari) would otherwise keep the clipped entries out of keyboard reach.
-          tabIndex={0}
-          className="mt-1 grid max-h-96 grid-cols-1 gap-3 overflow-y-auto overscroll-contain rounded-md border p-2 @5xl:grid-cols-2"
-        >
-          {entries.map((entry) => (
-            <QuestDialogueText key={entry.objectiveId} entry={entry} />
-          ))}
-        </section>
-      )}
-    </div>
-  );
 };
 
 /** One part of a quest's dialogue and the player's answer to it. */
