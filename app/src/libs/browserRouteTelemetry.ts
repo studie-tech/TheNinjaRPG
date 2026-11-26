@@ -105,6 +105,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/manual/jutsu/reskins/edit/[reskinId]",
   "/manual/jutsu/statistics/[jutsuid]",
   "/manual/kessen",
+  "/manual/kessen/balance",
   "/manual/logs",
   "/manual/opinions",
   "/manual/polls",
