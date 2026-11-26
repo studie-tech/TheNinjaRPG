@@ -28,8 +28,8 @@ import { catalogLookup, KESSEN_FACTION_INFO } from "./hubData";
 
 /**
  * The one-time starter choice after Lemu's lesson: six faction tiles, each with its
- * region, perk and starter leader, the chosen faction's starter deck in full (leader and
- * every card with its copies and rules text) and the confirm button below them. The
+ * region, perk and starter leader, followed by confirmation and the chosen faction's
+ * starter deck in full (leader and every card with its copies and rules text). The
  * player's village faction leads the grid and is preselected.
  */
 export const StarterChoice = ({
@@ -117,7 +117,6 @@ export const StarterChoice = ({
           );
         })}
       </fieldset>
-      {faction ? <StarterDeckList faction={faction} cards={cards} /> : null}
       <div className="kh-starter-confirm">
         {error ? (
           <FeedbackAlert feedback={{ success: false, message: error }} foreground />
@@ -147,6 +146,7 @@ export const StarterChoice = ({
           </Button>
         </div>
       </div>
+      {faction ? <StarterDeckList faction={faction} cards={cards} /> : null}
     </section>
   );
 };
