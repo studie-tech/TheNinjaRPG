@@ -5,6 +5,7 @@ import {
   KESSEN_PACK_RARE_SLOT_WEIGHTS,
   KESSEN_PACK_SLOT_WEIGHTS,
 } from "@/drizzle/constants";
+import { KessenPackRules } from "@/layout/ItemWithEffects";
 import { KessenPackContentsEditor } from "@/layout/KessenPackContentsEditor";
 import {
   buildKessenPackEffects,
@@ -12,7 +13,7 @@ import {
   kessenPackSlots,
 } from "@/libs/kessen/packContents";
 import { isWeightedCacheEffect } from "@/libs/weightedCache";
-import type { ZodAllTags } from "@/validators/combat";
+import { NonCombatConsumeRewardTag, type ZodAllTags } from "@/validators/combat";
 import { KESSEN_SEED_CATALOG } from "../libs/kessen/fixtures/catalog";
 import {
   flushRadixFocus,
@@ -123,6 +124,36 @@ describe("Kessen pack contents editor", () => {
       normal: 4,
       rareSlot: 0,
     });
+  });
+
+  it("keeps standard rewards when rebuilding the weighted caches", () => {
+    const reward = NonCombatConsumeRewardTag.parse({
+      type: "noncombatconsumereward",
+      rewardMode: "standard",
+      reward_money: 100,
+    });
+    const { onBuild } = renderEditor([...PAPER_EFFECTS, reward]);
+    fireEvent.click(rebuild());
+    const built = onBuild.mock.calls[0]![0];
+    expect(built.filter((effect) => !isWeightedCacheEffect(effect))).toEqual([reward]);
+    expect(kessenPackSlots(built)).toEqual({ normal: 4, rareSlot: 1 });
+  });
+
+  it("describes pity on the final card of a pack with multiple rare slots", () => {
+    const effects = buildKessenPackEffects(
+      {
+        name: "Frost Crate",
+        faction: null,
+        slots: { normal: 3, rareSlot: 2 },
+        normalWeights: KESSEN_PACK_SLOT_WEIGHTS,
+        rareSlotWeights: KESSEN_PACK_RARE_SLOT_WEIGHTS,
+      },
+      KESSEN_SEED_CATALOG,
+    );
+    render(
+      <KessenPackRules packItemId="kessen-pack-custom" effects={effects} inStall />,
+    );
+    expect(screen.getByText(/the next fifth card is Epic/)).toBeDefined();
   });
 
   it("blocks rare slots that cannot pay the advertised pity guarantees", () => {

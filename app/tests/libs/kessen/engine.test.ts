@@ -675,6 +675,18 @@ describe("power model", () => {
     expect(ids.map((id) => power(s, id))).toEqual([3, 3, 5, 5]);
   });
 
+  it("counts an unsealed set member without Bond toward a matching Bond", () => {
+    const s = scenario({
+      p0: { board: { CLOSE: ["Moonprowler"], RANGED: ["Kajioka"] } },
+    });
+    const mate = cid("Kajioka");
+    s.cards = { ...s.cards, [mate]: { ...s.cards[mate]!, sets: ["Moon Pack"] } };
+    const bonded = unitAt(s, 0, "CLOSE");
+    expect(power(s, bonded)).toBe(5);
+    s.board[0].RANGED[0]!.sealed = true;
+    expect(power(s, bonded)).toBe(3);
+  });
+
   it("Terrain shows -2 with a minimum of 1, after auras, and skips Unyielding", () => {
     const s = scenario({
       p0: {

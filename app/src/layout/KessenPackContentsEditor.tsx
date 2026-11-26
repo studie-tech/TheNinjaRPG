@@ -25,6 +25,7 @@ import {
 import { KESSEN_FACTION_NAMES, kessenPackSlotLabels } from "@/libs/kessen/packs";
 import type { KessenCard } from "@/libs/kessen/types";
 import { cn } from "@/libs/shadui";
+import { isWeightedCacheEffect } from "@/libs/weightedCache";
 import type { ZodAllTags } from "@/validators/combat";
 import type { KessenPackSlots } from "@/validators/kessen";
 
@@ -204,8 +205,8 @@ export function KessenPackContentsEditor({
           type="button"
           disabled={disabled || problem !== null}
           onClick={() =>
-            onBuild(
-              buildKessenPackEffects(
+            onBuild([
+              ...buildKessenPackEffects(
                 {
                   name,
                   faction: draft.faction === ALL ? null : draft.faction,
@@ -215,7 +216,8 @@ export function KessenPackContentsEditor({
                 },
                 cards,
               ),
-            )
+              ...effects.filter((effect) => !isWeightedCacheEffect(effect)),
+            ])
           }
         >
           <Hammer className="mr-2 h-5 w-5" aria-hidden />

@@ -334,6 +334,36 @@ describe("Kessen pack catalog", () => {
 });
 
 describe("Kessen pack opening plan", () => {
+  it("applies pity only to the actual final draw of a variable rare-slot group", () => {
+    for (const [rollDraw, rareCount] of [
+      [0, 1],
+      [0.75, 2],
+    ] as const) {
+      for (const minimum of ["EPIC", "LEGENDARY"] as const) {
+        const rareCache = cache(1, testPack()[1]!.tiers);
+        rareCache.rolls = [
+          { count: 1, probability: 5000 },
+          { count: 2, probability: 5000 },
+        ];
+        let draws = 0;
+        const result = plan({
+          caches: [cache(1, testPack()[0]!.tiers), rareCache],
+          counters: {
+            packsSinceEpic: 6,
+            packsSinceLegendary: minimum === "LEGENDARY" ? LAST_DRY_PACK : 0,
+          },
+          // The first cache consumes its count, tier and entry draws before this count.
+          random: () => (draws++ === 3 ? rollDraw : 0),
+        });
+        expect(result.reveal.cards.map((card) => card.rarity)).toEqual([
+          "COMMON",
+          ...Array.from({ length: rareCount - 1 }, () => "RARE" as const),
+          minimum,
+        ]);
+      }
+    }
+  });
+
   it("pays Epic and Legendary pity from staff-built rare-slot distributions", () => {
     const effects = buildKessenPackEffects(
       {

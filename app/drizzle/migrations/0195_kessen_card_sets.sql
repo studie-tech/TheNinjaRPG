@@ -1,9 +1,11 @@
 -- Kessen cards name their synergy in one `sets` list: a card's sets are its former summon
--- groups plus the groups its Bond abilities name, so every Bond count and Summon pool stays
--- the same. Card items and the card snapshots stored in matches (the engine's cards and the
--- NPC pool) move to the new field; JSON aggregation leaves element order undefined, so the
--- pool, whose order is stored, is rebuilt by index. JSON_TABLE reads only base-table and
--- earlier JSON_TABLE columns, never a CTE's, so the set rows unpack the match state itself.
+-- groups plus the groups its Bond abilities name, preserving every set membership and
+-- Summon pool. Bond counts set members under rules version 4; active matches on earlier
+-- rules retire through the engine-version guard. Card items and stored match snapshots
+-- (the engine's cards and NPC pool) move to the new field. JSON aggregation leaves element
+-- order undefined, so the pool, whose order is stored, is rebuilt by index. JSON_TABLE reads
+-- only base-table and earlier JSON_TABLE columns, never a CTE's, so the set rows unpack
+-- the match state itself.
 -- Binary collation preserves the case and accents the engine matches by exact set name.
 WITH `cardSet` AS (
   SELECT `card`.`id`, `summoned`.`name`

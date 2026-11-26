@@ -1654,7 +1654,7 @@ const CardDetails = ({ item, showHidden }: { item: Item; showHidden: boolean }) 
 
 /**
  * The guarantees of a Kessen card pack; what the pack holds is its description. Pity
- * raises the rare slot, the first card after the normal slots, so a pack without one has
+ * raises the final card of the rare group, so a pack without one has
  * no pity, and packs whose rare slot is already Epic or better skip the Epic pity.
  * Inside the Card Master stall the odds sit on the same Packs tab, so no link is needed.
  */
@@ -1672,7 +1672,7 @@ export const KessenPackRules = ({
 }) => {
   const hasEpicFloor = EPIC_FLOOR_PACK_IDS.has(packItemId);
   const slots = kessenPackSlots(effects);
-  const rareCard = `${ordinalWord(slots.normal + 1)} card`;
+  const rareCard = `${ordinalWord(slots.normal + slots.rareSlot)} card`;
   return (
     <div
       className={cn(

@@ -365,8 +365,8 @@ describe("deterministic replay", () => {
     // stored under the previous rules are recognised. It plays the frozen rules catalog,
     // so seed-catalog edits never move it.
     expect({ version: CARD_ENGINE_VERSION, fingerprint: rulesFingerprint() }).toEqual({
-      version: 3,
-      fingerprint: "26136956b8592c047a85a1436758445f02d2eb199778f987924be3ee7d5bb98c",
+      version: 4,
+      fingerprint: "534042f7ccbb647d4bb0d2fc49e5f8389c724aa580cabd34de76df80a13bb39d",
     });
   });
 
@@ -375,18 +375,19 @@ describe("deterministic replay", () => {
     // unconditional Draw, Seal and two Strikes); bump CARD_ENGINE_VERSION with it too.
     expect({ version: CARD_ENGINE_VERSION, fingerprint: revisedFingerprint() }).toEqual(
       {
-        version: 3,
-        fingerprint: "0ce3b5a5748e0037f090086ce15e6a4540aa5c9ce18059cd7945f7faf065fd87",
+        version: 4,
+        fingerprint: "db7fabd9080d3d2ae44ddd59e34920b134bbfb7d28412f0609d9605ef1c0b202",
       },
     );
   });
 
   it("pins the AI's decisions to KESSEN_AI_VERSION", () => {
     // Every tier plays one match on the frozen catalog with a shuffled pool. A decision
-    // change moves this fingerprint: bump KESSEN_AI_VERSION with it.
+    // change moves this fingerprint: bump KESSEN_AI_VERSION with it. The captured final
+    // state also changes when CARD_ENGINE_VERSION changes.
     expect({ version: KESSEN_AI_VERSION, fingerprint: aiFingerprint() }).toEqual({
       version: 2,
-      fingerprint: "ddd87aaf415e5f6830ed9b9a6c692db9fd82b5b32913261d418fc4a5dbbc23b9",
+      fingerprint: "e9409af9e35fae0f9ff659d7f86ab70b9a7cf2211e7ec18025a2a88ec095942e",
     });
   });
 

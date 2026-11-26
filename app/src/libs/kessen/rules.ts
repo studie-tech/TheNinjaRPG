@@ -5,7 +5,7 @@ import type { KessenKnobs, Row } from "./types";
  * Version of the match rules. Stored on every match; the pinned rules fingerprint in
  * `tests/libs/kessen/replay.test.ts` fails on any rule change until this is bumped.
  */
-export const CARD_ENGINE_VERSION = 3;
+export const CARD_ENGINE_VERSION = 4;
 
 /** Board rows from the centre line outward; also the canonical row order. */
 export const ROWS: readonly Row[] = ["CLOSE", "RANGED", "JUTSU"];

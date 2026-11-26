@@ -187,8 +187,9 @@ export const kessenRareSlotMinimum = (
 
 /**
  * Resolves a pack's caches with the card hooks:
- * - the fifth slot is raised to EPIC for the First Bundle and after `KESSEN_EPIC_PITY_PACKS`
- *   packs without an epic, and to LEGENDARY on the `KESSEN_LEGENDARY_PITY_PACKS`th pack
+ * - the last draw of the rare cache is raised to EPIC for the First Bundle and after
+ *   `KESSEN_EPIC_PITY_PACKS` packs without an epic, and to LEGENDARY on the
+ *   `KESSEN_LEGENDARY_PITY_PACKS`th pack
  *   without a legendary, picking a standard legendary missing from the collection
  *   whenever the tier holds one;
  * - a card at its copy limit (C 3, R 2, E 1, L 1 per item id, counting auction listings;
@@ -207,12 +208,12 @@ export const planKessenPackOpening = (input: KessenPackPlanInput): KessenPackPla
   const sold = new Map<string, number>();
   let soldRyo = 0;
   const results = input.caches.map((cache, cacheIndex) => {
-    const isFifthSlot =
+    const isRareGroup =
       input.caches.length > 1 && cacheIndex === input.caches.length - 1;
     const tierClasses = cache.tiers.map((tier) => kessenTierClassOf(tier, input.cards));
     const hooks: WeightedCacheHooks = {
-      tier: (drawn) => {
-        if (!isFifthSlot || !minimum) return drawn;
+      tier: (drawn, rollIndex, rollCount) => {
+        if (!isRareGroup || rollIndex !== rollCount - 1 || !minimum) return drawn;
         const drawnClass = tierClasses[drawn];
         if (drawnClass && tierRank(drawnClass) >= tierRank(minimum)) return drawn;
         const forced = cache.tiers.findIndex(
@@ -223,7 +224,7 @@ export const planKessenPackOpening = (input: KessenPackPlanInput): KessenPackPla
         );
         return forced === -1 ? drawn : forced;
       },
-      entry: (tierIndex, drawn) => {
+      entry: (tierIndex, drawn, rollIndex, rollCount) => {
         const tier = cache.tiers[tierIndex];
         if (!tier || !tierClasses[tierIndex]) return drawn;
         const cardAt = (index: number) =>
@@ -231,7 +232,10 @@ export const planKessenPackOpening = (input: KessenPackPlanInput): KessenPackPla
         const indices = tier.entries.map((_, index) => index);
         let chosen = drawn;
         const unowned =
-          isFifthSlot && legendaryPity && tierClasses[tierIndex] === "LEGENDARY"
+          isRareGroup &&
+          rollIndex === rollCount - 1 &&
+          legendaryPity &&
+          tierClasses[tierIndex] === "LEGENDARY"
             ? indices.filter(
                 (index) =>
                   cardAt(index).variant === "STANDARD" &&
