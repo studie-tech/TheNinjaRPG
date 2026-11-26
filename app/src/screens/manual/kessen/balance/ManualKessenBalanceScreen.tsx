@@ -22,6 +22,7 @@ import {
 import { FactionSigil } from "@/layout/kessen/FactionSigil";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { KESSEN_AI_VERSION } from "@/libs/kessen/ai";
 import {
   KESSEN_BALANCE,
   KESSEN_BALANCE_FACTIONS,
@@ -40,6 +41,7 @@ import {
 } from "@/libs/kessen/balanceSim";
 import { KESSEN_DECK_RULES } from "@/libs/kessen/deck";
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
+import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserDataSelector } from "@/utils/UserContext";
@@ -207,7 +209,8 @@ function Summary({
         </p>
       )}
       <p className="text-muted-foreground text-sm">
-        Catalog fingerprint <code>{report.fingerprint}</code>
+        Catalog fingerprint <code>{report.fingerprint}</code>, match rules v
+        {CARD_ENGINE_VERSION}, AI v{KESSEN_AI_VERSION}
       </p>
     </div>
   );

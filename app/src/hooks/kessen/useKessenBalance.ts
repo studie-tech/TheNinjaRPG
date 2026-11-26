@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { KESSEN_AI_VERSION } from "@/libs/kessen/ai";
 import { catalogBalance, type KessenCatalogBalance } from "@/libs/kessen/balance";
 import {
   KESSEN_BALANCE_SIM,
@@ -13,6 +14,7 @@ import {
 } from "@/libs/kessen/balanceSimClient";
 import { runGauntlet, runTrials } from "@/libs/kessen/balanceSimRunner";
 import { snapshotCatalog } from "@/libs/kessen/catalog";
+import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import type { KessenCard } from "@/libs/kessen/types";
 
 /** Simulated metrics of a catalog as they arrive: the gauntlet first, then the trials. */
@@ -109,8 +111,9 @@ const useKessenSims = (
   return state.key === fingerprint ? state.sims : IDLE;
 };
 
+/** Simulated numbers depend on the match rules and the AI as much as on the catalog. */
 const cacheKey = (fingerprint: string) =>
-  `kessenBalance:v${KESSEN_BALANCE_SIM.version}:${fingerprint}`;
+  `kessenBalance:v${KESSEN_BALANCE_SIM.version}:rules${CARD_ENGINE_VERSION}:ai${KESSEN_AI_VERSION}:${fingerprint}`;
 
 /** A finished sweep of this browser, or null; storage may be unavailable. */
 const readCache = (key: string): KessenSimState | null => {
