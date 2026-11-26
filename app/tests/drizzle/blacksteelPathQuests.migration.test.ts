@@ -11,7 +11,7 @@ import { GENIN_QUEST_OBJECTIVES, STARTER_QUEST_OBJECTIVES } from "@/libs/tutoria
 import { AllObjectives } from "@/validators/objectives";
 
 const migration = await readFile(
-  new URL("../../drizzle/migrations/0194_faithful_diamondback.sql", import.meta.url),
+  new URL("../../drizzle/migrations/0195_broken_squadron_supreme.sql", import.meta.url),
   "utf8",
 );
 
