@@ -65,6 +65,18 @@ describe("Kessen card art helpers", () => {
     expect(kessenPackArt("kessen-pack-paper")).toBe(IMG_KESSEN_PACKS.paper);
   });
 
+  it("shows a staff-created pack's item image and keeps the seed art", () => {
+    const staffArt = "https://uploadthing.b-cdn.net/f/staff-pack.webp";
+    expect(kessenPackArt("kessen-pack-abc123", staffArt)).toBe(staffArt);
+    expect(kessenPackArt("kessen-pack-abc123")).toBe(IMG_KESSEN_PACKS.paper);
+    expect(kessenPackArt(KESSEN_PACK_IDS.lacquer, staffArt)).toBe(
+      kessenPackArt(KESSEN_PACK_IDS.lacquer),
+    );
+    expect(kessenPackArt(KESSEN_PACK_IDS.village("HYORIN"), staffArt)).not.toBe(
+      staffArt,
+    );
+  });
+
   it("gives the Lacquer Case a cut-out distinct from its item icon", () => {
     const art = kessenPackArt(KESSEN_PACK_IDS.lacquer);
     expect(art).toStartWith("https://uploadthing.b-cdn.net/f/");

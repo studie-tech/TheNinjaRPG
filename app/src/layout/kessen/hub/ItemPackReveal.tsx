@@ -28,12 +28,16 @@ export const ItemPackReveal = ({
   const packName = reveal
     ? kessenItemName(reveal.packItemId, catalogLookup(cards), catalog.data?.packs)
     : undefined;
+  const packImage = catalog.data?.packs.find(
+    (pack) => pack.id === reveal?.packItemId,
+  )?.image;
   return (
     <PackOpening
       open={reveal !== null}
       reveal={reveal}
       cards={cards}
       packName={packName}
+      packImage={packImage}
       onClose={onClose}
       returnFocusTo={returnFocusTo}
       motion={motion}

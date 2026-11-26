@@ -47,6 +47,11 @@ import {
   npcVariant,
 } from "@/libs/kessen/npcs";
 import { createNpcMatch, runNpcReplies, tierOfMode } from "@/libs/kessen/npcTurns";
+import {
+  kessenPackFactions,
+  kessenPackOdds,
+  kessenPackSlots,
+} from "@/libs/kessen/packContents";
 import { countPlays, weeklyWinsFor } from "@/libs/kessen/rewards";
 import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import type { KessenEvent } from "@/libs/kessen/types";
@@ -84,11 +89,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { grantUserItems } from "@/server/utils/itemGrants";
-import {
-  kessenPackOdds,
-  kessenPackSlots,
-  kessenPityCountdown,
-} from "@/server/utils/kessenPacks";
+import { kessenPityCountdown } from "@/server/utils/kessenPacks";
 import {
   kessenObjectiveTrackers,
   kessenTrackerUser,
@@ -894,6 +895,7 @@ const buildCatalog = (
       description: row.description,
       odds: kessenPackOdds(row.effects, byId),
       slots: kessenPackSlots(row.effects),
+      factions: kessenPackFactions(row.effects, byId),
     }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return { fingerprint: catalogFingerprint(cards), cards: entries, packs };

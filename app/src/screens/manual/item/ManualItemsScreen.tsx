@@ -1,6 +1,12 @@
 "use client";
 
-import { ChartCandlestick, ChartPie, FilePlus, ListChecks } from "lucide-react";
+import {
+  ChartCandlestick,
+  ChartPie,
+  FilePlus,
+  ListChecks,
+  PackagePlus,
+} from "lucide-react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -124,6 +130,17 @@ export function ManualItemsScreen() {
                 >
                   <FilePlus className="mr-2 h-6 w-6" />
                   New
+                </Button>
+                {/* Kessen card packs are consumables the Card Hall and its stall list. */}
+                <Button
+                  id="create-kessen-pack"
+                  className="w-full"
+                  hoverText="New Kessen card pack"
+                  disabled={!state.cf.isReady || load1 || isOpeningCreated}
+                  onClick={() => create({ type: "CONSUMABLE", kessenPack: true })}
+                >
+                  <PackagePlus className="mr-2 h-6 w-6" />
+                  Pack
                 </Button>
                 <Link href="/manual/item/mass_edit">
                   <Button id="mass-edit-items" className="w-full">

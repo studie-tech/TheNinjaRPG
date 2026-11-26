@@ -21,7 +21,7 @@ import type {
   MatchView,
   Seat,
 } from "@/libs/kessen/types";
-import { KessenRows } from "@/validators/itemCard";
+import { type KessenFaction, KessenRows } from "@/validators/itemCard";
 import type { QuestChallengeRequest } from "@/validators/questChallenge";
 
 /** Factions a deck is built around (every faction but Neutral). */
@@ -185,6 +185,8 @@ export interface KessenPackEntry {
   odds: { normal: KessenPackOdds; rareSlot: KessenPackOdds };
   /** Cards the pack opens per slot kind; `kessenPackSlotLabels` words them. */
   slots: KessenPackSlots;
+  /** Factions of the cards the pack can grant. */
+  factions: KessenFaction[];
 }
 
 /** How many cards a pack's normal slots and its last (rare) slot hold. */

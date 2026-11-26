@@ -519,7 +519,7 @@ export const whereToFind = (card: KessenCatalogEntry, context: KessenFindContext
         pack.odds.normal[tier] ?? 0,
         pack.odds.rareSlot[tier] ?? 0,
       );
-      if (chance <= 0 || !packCovers(pack.id, card.faction)) continue;
+      if (chance <= 0 || !pack.factions.includes(card.faction)) continue;
       packs.push({
         name: pack.name,
         chance,
@@ -576,12 +576,6 @@ export const whereToFind = (card: KessenCatalogEntry, context: KessenFindContext
 };
 
 const ANY_VILLAGE_BUNDLE = "Any Village Bundle";
-
-/** Whether a pack's pool can hold a card of `faction` (Village Bundles: own + Neutral). */
-const packCovers = (packId: string, faction: KessenFaction) => {
-  const village = kessenVillagePackFaction(packId);
-  return !village || faction === "NEUTRAL" || faction === village;
-};
 
 /** The server's lock reason for a champion behind the player's home champion. */
 const HOME_CHAMPION_LOCK = /home champion/i;

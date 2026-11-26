@@ -18,13 +18,13 @@ import {
 import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { kessenCardToCardData } from "@/libs/kessen/catalog";
 import { starterDeck } from "@/libs/kessen/deck";
+import { buildKessenPackEffects } from "@/libs/kessen/packContents";
 import type { KessenCard } from "@/libs/kessen/types";
 import { listItemForGetAll } from "@/queries/item";
 import { itemDatabaseFilter, itemRouter } from "@/server/api/routers/item";
 import { kessenCollectionRouter } from "@/server/api/routers/kessenCollection";
 import type { DrizzleClient } from "@/server/db";
 import {
-  buildKessenPackEffects,
   KESSEN_PACKS,
   KessenPackRaceError,
   prepareKessenPackOpening,

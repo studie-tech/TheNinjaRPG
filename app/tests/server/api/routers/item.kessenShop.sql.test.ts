@@ -7,8 +7,10 @@ import {
   KESSEN_VILLAGE_BUNDLE_WEEKLY_LIMIT,
 } from "@/drizzle/constants";
 import {
+  actionLog,
   item,
   itemPurchaseCounter,
+  kessenProgress,
   userData,
   userItem,
   villageStructure,
@@ -17,9 +19,18 @@ import {
   DECK_COPIES_SALE_REASON,
   EARNED_PACK_BLOCK_REASON,
 } from "@/libs/kessen/cardSale";
-import { KESSEN_PACK_IDS, KESSEN_VILLAGE_BUNDLE_LIMIT_KEY } from "@/libs/kessen/packs";
-import { itemRouter } from "@/server/api/routers/item";
+import { kessenCardToCardData } from "@/libs/kessen/catalog";
+import {
+  isKessenPackId,
+  KESSEN_PACK_IDS,
+  KESSEN_VILLAGE_BUNDLE_LIMIT_KEY,
+} from "@/libs/kessen/packs";
+import { listItemForGetAll } from "@/queries/item";
+import { itemDatabaseFilter, itemRouter } from "@/server/api/routers/item";
+import { kessenCollectionRouter } from "@/server/api/routers/kessenCollection";
 import { getItemPurchasePeriodStart } from "@/utils/time";
+import { ItemValidator } from "@/validators/combat";
+import { KESSEN_SEED_CATALOG } from "../../../libs/kessen/fixtures/catalog";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { beforeTransaction } from "../../../setup/statements";
 import {
@@ -305,6 +316,103 @@ describeWithDatabase("item router and Kessen goods", () => {
         },
       ]);
       expect(await copiesOf(LACQUER)).toBe(2);
+    });
+  });
+
+  describe("staff-created packs", () => {
+    const STAFF = "pack-maker";
+
+    it("creates a hidden pack the stall sells and the Card Hall opens once released", async () => {
+      const db = await getTestDatabase();
+      await resetTables(kessenProgress, actionLog);
+      await insertUsers([
+        {
+          userId: STAFF,
+          username: "Pack Maker",
+          role: "CONTENT-ADMIN",
+          status: "AWAKE",
+        },
+      ]);
+      await insertItems(
+        KESSEN_SEED_CATALOG.map((card) => ({
+          id: card.id,
+          // Item names are unique; the catalog's boss leader shares its Forbidden variant's name.
+          name: `${card.name} ${card.id}`,
+          itemType: "CARD" as const,
+          rarity: card.rarity,
+          slot: "NONE" as const,
+          target: "SELF" as const,
+          inShop: false,
+          canStack: true,
+          stackSize: 99,
+          cardData: kessenCardToCardData(card),
+        })),
+      );
+      const staff = await callerFor(itemRouter, STAFF);
+      const created = await staff.create({ type: "CONSUMABLE", kessenPack: true });
+      expect(created.success).toBe(true);
+      const packId = created.message;
+      expect(isKessenPackId(packId)).toBe(true);
+      // The editor saves the new pack as created.
+      const saved = await db.query.item.findFirst({ where: eq(item.id, packId) });
+      expect(ItemValidator.safeParse(saved).error?.issues ?? []).toEqual([]);
+      const stall = async () =>
+        (
+          await listItemForGetAll(
+            db,
+            0,
+            { limit: 100 },
+            itemDatabaseFilter({
+              onlyInShop: true,
+              hidden: false,
+              itemType: "CONSUMABLE",
+              kessenGoods: "only",
+            }),
+          )
+        ).map((row) => row.id);
+      expect(await stall()).not.toContain(packId);
+
+      // The editor's shop fields release it at the stall with a daily limit.
+      await db
+        .update(item)
+        .set({
+          hidden: false,
+          inShop: true,
+          cost: PRICE,
+          purchaseLimit: 1,
+          purchaseLimitPeriod: "DAILY",
+        })
+        .where(eq(item.id, packId));
+      expect(await stall()).toContain(packId);
+      const api = await callerFor(itemRouter, USER);
+      expect(
+        (await api.buy({ itemId: packId, villageId: "home", stack: 1 })).success,
+      ).toBe(true);
+      expect(
+        (await api.buy({ itemId: packId, villageId: "home", stack: 1 })).success,
+      ).toBe(false);
+      expect(await copiesOf(packId)).toBe(1);
+
+      const [stack] = await db
+        .select({ id: userItem.id })
+        .from(userItem)
+        .where(and(eq(userItem.userId, USER), eq(userItem.itemId, packId)));
+      const opened = await callerForDatabase(kessenCollectionRouter, USER, db).openPack(
+        {
+          userItemId: stack?.id ?? "",
+          requestId: "staff-pack-open-1",
+        },
+      );
+      if (!opened.success || !("reveal" in opened)) throw new Error(opened.message);
+      expect(opened.reveal?.packItemId).toBe(packId);
+      expect(opened.reveal?.cards).toHaveLength(5);
+      expect(opened.reveal?.pity.epicIn).toBeGreaterThan(0);
+      expect(await copiesOf(packId)).toBe(0);
+
+      // A copy made in the item manual is a pack too.
+      const copy = await staff.clone({ id: packId });
+      expect(copy.success).toBe(true);
+      expect(isKessenPackId(copy.message)).toBe(true);
     });
   });
 });

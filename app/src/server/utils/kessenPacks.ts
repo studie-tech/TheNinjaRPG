@@ -1,21 +1,25 @@
 /**
- * Kessen card packs: the pack catalog and its weighted-cache effects, and the card-aware
- * hooks of a pack opening (First Bundle guarantee, epic and legendary pity, dupe
- * protection and auto-sold surplus). Packs are ordinary CONSUMABLE items with two
- * weighted-cache effects (four normal slots, then the Rare+ fifth slot); every opening,
- * from the Card Hall or the item page, runs through the item consume path, which calls
- * `prepareKessenPackOpening` for an item whose id is a Kessen pack id.
+ * Kessen card packs: the seed pack catalog, the template of staff-created packs, and the
+ * card-aware hooks of a pack opening (First Bundle guarantee, epic and legendary pity, dupe
+ * protection and auto-sold surplus). Packs are ordinary CONSUMABLE items whose id starts
+ * with `KESSEN_PACK_ID_PREFIX`, with weighted-cache effects for the normal slots and the
+ * last (rare) slot, four and one by default. Every opening, from the Card Hall or the
+ * item page, runs through the item consume path, which calls `prepareKessenPackOpening`
+ * for an item whose id is a Kessen pack id. Pack contents are built and read by
+ * `@/libs/kessen/packContents`.
  */
 import { randomUUID } from "node:crypto";
 import {
-  CACHE_PROBABILITY_TOTAL,
+  IMG_KESSEN_PACKS,
   type ItemPurchaseLimitPeriods,
   KESSEN_CARD_SELL_VALUES,
+  KESSEN_CARD_STACK_SIZE,
   KESSEN_COPY_LIMITS,
   KESSEN_EPIC_PITY_PACKS,
   KESSEN_FIRST_BUNDLE_ITEM_ID,
   KESSEN_LACQUER_RARE_SLOT_WEIGHTS,
   KESSEN_LEGENDARY_PITY_PACKS,
+  KESSEN_PACK_ID_PREFIX,
   KESSEN_PACK_NORMAL_SLOTS,
   KESSEN_PACK_RARE_SLOT_WEIGHTS,
   KESSEN_PACK_SLOT_WEIGHTS,
@@ -25,11 +29,18 @@ import {
   KESSEN_VILLAGE_BUNDLE_WEEKLY_LIMIT,
   type KessenPackTier,
 } from "@/drizzle/constants";
+import type { Item } from "@/drizzle/schema";
 import { kessenCatalogCards, ownedCardCounts } from "@/libs/kessen/catalog";
-import { type DeckFaction, KESSEN_DECK_FACTIONS } from "@/libs/kessen/deck";
+import { KESSEN_DECK_FACTIONS } from "@/libs/kessen/deck";
+import {
+  buildKessenPackEffects,
+  KESSEN_PACK_TIERS,
+  type KessenPackContents,
+  kessenTierClassOf,
+  ordinalWord,
+} from "@/libs/kessen/packContents";
 import {
   isKessenPackId,
-  KESSEN_DEFAULT_PACK_SLOTS,
   KESSEN_FACTION_NAMES,
   KESSEN_PACK_IDS,
   KESSEN_PACK_NAMES,
@@ -38,7 +49,6 @@ import { createRng, type Rng } from "@/libs/kessen/rng";
 import type { KessenCard } from "@/libs/kessen/types";
 import {
   cacheItemIds,
-  isWeightedCacheEffect,
   resolveWeightedCache,
   type WeightedCacheHooks,
 } from "@/libs/weightedCache";
@@ -52,36 +62,7 @@ import {
 import { incrementUserMoney } from "@/queries/profile";
 import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { NonCombatConsumeRewardTag, type ZodAllTags } from "@/validators/combat";
-import type {
-  KessenPackEntry,
-  KessenPackOdds,
-  KessenPackSlots,
-} from "@/validators/kessen";
-import {
-  type CardPackReveal,
-  maximumCacheItems,
-  type WeightedCache,
-  weightedCacheSchema,
-} from "@/validators/weightedCache";
-
-/** Pack slot tiers from worst to best; pity raises the fifth slot to a minimum tier. */
-export const KESSEN_PACK_TIERS: readonly KessenPackTier[] = [
-  "COMMON",
-  "RARE",
-  "EPIC",
-  "LEGENDARY",
-  "FORBIDDEN",
-];
-
-/** Display names of the tiers inside a pack's weighted caches. */
-const KESSEN_PACK_TIER_NAMES: Record<KessenPackTier, string> = {
-  COMMON: "Common",
-  RARE: "Rare",
-  EPIC: "Epic",
-  LEGENDARY: "Legendary",
-  FORBIDDEN: "Forbidden",
-};
+import type { CardPackReveal, WeightedCache } from "@/validators/weightedCache";
 
 /** Cards per pack in words ("Five") and the ordinal of its rare slot ("fifth"). */
 const PACK_CARDS = numberWord(KESSEN_PACK_NORMAL_SLOTS + 1);
@@ -144,114 +125,43 @@ export const KESSEN_PACKS: readonly KessenPackDefinition[] = [
   },
 ];
 
-/** A card's pack tier: its rarity, or FORBIDDEN for a Forbidden variant. */
-export const kessenPackTierOf = (card: Pick<KessenCard, "rarity" | "variant">) =>
-  card.variant === "FORBIDDEN" ? "FORBIDDEN" : card.rarity;
-
 /**
- * Cards a pack can grant: collectible deck cards (never leaders or tokens) of every
- * faction, or of one faction plus Neutral; Forbidden variants follow the same filter.
+ * Item fields of a pack staff create in the item manual: an unlisted, hidden consumable
+ * with the Paper Bundle's pool, odds and price until staff change its contents and stall
+ * listing, and valid for the item editor as created.
  */
-export const kessenPackPool = (
-  cards: Iterable<KessenCard>,
-  faction: DeckFaction | null,
-) =>
-  [...cards]
-    .filter(
-      (card) =>
-        card.kind !== "LEADER" &&
-        card.isCollectible &&
-        (faction === null || card.faction === faction || card.faction === "NEUTRAL"),
-    )
-    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-
-/**
- * The two weighted-cache effects of a pack built from the card catalog: four normal
- * slots, then the fifth slot. Each tier lists its pool cards as single-card entries;
- * zero-weight tiers and tiers without cards are left out.
- */
-export const buildKessenPackEffects = (
-  pack: KessenPackDefinition,
-  cards: Iterable<KessenCard>,
-): ZodAllTags[] => {
-  const pool = kessenPackPool(cards, pack.faction);
-  const cache = (
-    displayName: string,
-    count: number,
-    weights: Record<KessenPackTier, number>,
-  ): WeightedCache => {
-    const tiers = KESSEN_PACK_TIERS.flatMap((tier) => {
-      const entries = pool
-        .filter((card) => kessenPackTierOf(card) === tier)
-        .map((card) => ({ items: [{ itemId: card.id, quantity: 1 }] }));
-      return weights[tier] > 0 && entries.length > 0
-        ? [{ name: KESSEN_PACK_TIER_NAMES[tier], probability: weights[tier], entries }]
-        : [];
-    });
-    // A tier without pool cards gives its weight to the most likely tier, so the odds
-    // still total 100%.
-    const missing =
-      CACHE_PROBABILITY_TOTAL - tiers.reduce((sum, tier) => sum + tier.probability, 0);
-    const likeliest = tiers.reduce<(typeof tiers)[number] | undefined>(
-      (best, tier) => (!best || tier.probability > best.probability ? tier : best),
-      undefined,
-    );
-    if (likeliest && missing > 0) likeliest.probability += missing;
-    return {
-      version: 1,
-      displayName,
-      rolls: [{ count, probability: CACHE_PROBABILITY_TOTAL }],
-      tiers,
-    };
-  };
-  return [
-    cache(pack.name, KESSEN_PACK_NORMAL_SLOTS, pack.normalWeights),
-    cache(`${pack.name}: fifth card`, 1, pack.rareSlotWeights),
-  ].map((weightedCache) =>
-    NonCombatConsumeRewardTag.parse({
-      type: "noncombatconsumereward",
-      rewardMode: "weightedCache",
-      weightedCache,
-    }),
-  );
-};
-
-/**
- * A pack's published slot odds, read from its stored weighted caches (the first is a
- * normal slot, the last the fifth slot) so staff edits show up. Each cache tier counts
- * toward the pack tier of its cards; basis points of 10,000. Pity guarantees apply only
- * after a streak and are shown separately.
- */
-export const kessenPackOdds = (
-  effects: readonly ZodAllTags[],
-  cards: ReadonlyMap<string, KessenCard>,
-): KessenPackEntry["odds"] => {
-  const caches = effects.filter(isWeightedCacheEffect).flatMap((effect) => {
-    const parsed = weightedCacheSchema.safeParse(effect.weightedCache);
-    return parsed.success ? [parsed.data] : [];
-  });
+export const kessenNewPackItem = (id: string, cards: Iterable<KessenCard>) => {
+  const name = `New Kessen Pack - ${id.slice(KESSEN_PACK_ID_PREFIX.length)}`;
   return {
-    normal: cacheOdds(caches[0], cards),
-    rareSlot: cacheOdds(caches[caches.length - 1], cards),
-  };
-};
-
-/**
- * Cards a pack opens per slot kind, read from its stored caches like `kessenPackOdds`:
- * every cache before the last holds normal slots and the last one the rare slot. A pack
- * with one cache has only normal slots; one without caches reads as the built layout.
- */
-export const kessenPackSlots = (effects: readonly ZodAllTags[]): KessenPackSlots => {
-  const counts = effects.filter(isWeightedCacheEffect).flatMap((effect) => {
-    const parsed = weightedCacheSchema.safeParse(effect.weightedCache);
-    return parsed.success ? [maximumCacheItems(parsed.data)] : [];
-  });
-  if (counts.length === 0) return KESSEN_DEFAULT_PACK_SLOTS;
-  if (counts.length === 1) return { normal: counts[0] ?? 0, rareSlot: 0 };
-  return {
-    normal: counts.slice(0, -1).reduce((sum, count) => sum + count, 0),
-    rareSlot: counts.at(-1) ?? 0,
-  };
+    id,
+    name,
+    description: `${PACK_CARDS} Kessen cards from every faction. The ${LAST_CARD} card is rare or better.`,
+    image: IMG_KESSEN_PACKS.paper,
+    itemType: "CONSUMABLE",
+    rarity: "COMMON",
+    slot: "NONE",
+    target: "SELF",
+    effects: buildKessenPackEffects(
+      {
+        name,
+        faction: null,
+        normalWeights: KESSEN_PACK_SLOT_WEIGHTS,
+        rareSlotWeights: KESSEN_PACK_RARE_SLOT_WEIGHTS,
+      },
+      cards,
+    ),
+    destroyOnUse: true,
+    canStack: true,
+    stackSize: KESSEN_CARD_STACK_SIZE,
+    preventBattleUsage: true,
+    maxDurability: 100,
+    canBeTraded: false,
+    inShop: false,
+    hidden: true,
+    cost: KESSEN_PAPER_BUNDLE_PRICE,
+    repsCost: 0,
+    seichiSilverCost: 0,
+  } satisfies Partial<Item>;
 };
 
 /**
@@ -299,7 +209,7 @@ export const planKessenPackOpening = (input: KessenPackPlanInput): KessenPackPla
   const results = input.caches.map((cache, cacheIndex) => {
     const isFifthSlot =
       input.caches.length > 1 && cacheIndex === input.caches.length - 1;
-    const tierClasses = cache.tiers.map((tier) => tierClassOf(tier, input.cards));
+    const tierClasses = cache.tiers.map((tier) => kessenTierClassOf(tier, input.cards));
     const hooks: WeightedCacheHooks = {
       tier: (drawn) => {
         if (!isFifthSlot || !minimum) return drawn;
@@ -474,54 +384,6 @@ export const prepareKessenPackOpening = async ({
   };
 };
 
-/** Tier class of a cache tier whose entries are all single non-leader cards of one tier. */
-const tierClassOf = (
-  tier: WeightedCache["tiers"][number],
-  cards: ReadonlyMap<string, KessenCard>,
-): KessenPackTier | null => {
-  let found: KessenPackTier | null = null;
-  for (const entry of tier.entries) {
-    const reward = entry.items[0];
-    const card = reward ? cards.get(reward.itemId) : undefined;
-    if (entry.items.length !== 1 || reward?.quantity !== 1 || !card) return null;
-    if (card.kind === "LEADER") return null;
-    const tierClass = kessenPackTierOf(card);
-    if (found && found !== tierClass) return null;
-    found = tierClass;
-  }
-  return found;
-};
-
-/** Tier odds of one cache in basis points; rounding remainders go to the likeliest tier. */
-const cacheOdds = (
-  cache: WeightedCache | undefined,
-  cards: ReadonlyMap<string, KessenCard>,
-): KessenPackOdds => {
-  const odds: KessenPackOdds = {
-    COMMON: 0,
-    RARE: 0,
-    EPIC: 0,
-    LEGENDARY: 0,
-    FORBIDDEN: 0,
-  };
-  const total = cache?.tiers.reduce((sum, tier) => sum + tier.probability, 0) ?? 0;
-  if (!cache || total <= 0) return odds;
-  for (const tier of cache.tiers) {
-    const tierClass = tierClassOf(tier, cards);
-    if (tierClass) odds[tierClass] += tier.probability;
-  }
-  let used = 0;
-  for (const tier of KESSEN_PACK_TIERS) {
-    odds[tier] = Math.floor((odds[tier] * 10_000) / total);
-    used += odds[tier];
-  }
-  const likeliest = KESSEN_PACK_TIERS.reduce((best, tier) =>
-    odds[tier] > odds[best] ? tier : best,
-  );
-  if (odds[likeliest] > 0) odds[likeliest] += 10_000 - used;
-  return odds;
-};
-
 const tierRank = (tier: KessenPackTier) => KESSEN_PACK_TIERS.indexOf(tier);
 
 const pick = (rng: Rng, indices: readonly number[]) =>
@@ -557,33 +419,13 @@ function numberWord(count: number) {
   return words[count - 1] ?? String(count);
 }
 
-function ordinalWord(position: number) {
-  const words = [
-    "first",
-    "second",
-    "third",
-    "fourth",
-    "fifth",
-    "sixth",
-    "seventh",
-    "eighth",
-    "ninth",
-  ];
-  return words[position - 1] ?? `${position}th`;
-}
-
 export type KessenPackKind = "paper" | "village" | "lacquer" | "first";
 
 /** One pack item: its pool, slot weights and Card Master stall listing. */
-export interface KessenPackDefinition {
+export interface KessenPackDefinition extends KessenPackContents {
   id: string;
-  name: string;
   kind: KessenPackKind;
-  /** Village Bundles draw from this faction plus Neutral; null draws from every faction. */
-  faction: DeckFaction | null;
   description: string;
-  normalWeights: Record<KessenPackTier, number>;
-  rareSlotWeights: Record<KessenPackTier, number>;
   /** Stall listing; null packs are earned only. */
   listing: {
     cost: number;

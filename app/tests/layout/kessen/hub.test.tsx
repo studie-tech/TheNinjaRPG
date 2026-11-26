@@ -32,6 +32,7 @@ import { formatOdds, PacksPanel } from "@/layout/kessen/hub/PacksPanel";
 import { StarterChoice } from "@/layout/kessen/hub/StarterChoice";
 import { starterDeck } from "@/libs/kessen/deck";
 import { KESSEN_NPCS } from "@/libs/kessen/npcs";
+import { KessenFactions } from "@/validators/itemCard";
 import type {
   KessenCatalogEntry,
   KessenCircuitEntry,
@@ -68,6 +69,7 @@ const ODDS = {
   normal: { COMMON: 7600, RARE: 1940, EPIC: 400, LEGENDARY: 59, FORBIDDEN: 1 },
   rareSlot: { COMMON: 0, RARE: 8300, EPIC: 1500, LEGENDARY: 196, FORBIDDEN: 4 },
 };
+const ALL_FACTIONS: KessenPackEntry["factions"] = [...KessenFactions];
 const PACKS: KessenPackEntry[] = [
   {
     id: "kessen-pack-paper",
@@ -76,6 +78,7 @@ const PACKS: KessenPackEntry[] = [
     description: "",
     odds: ODDS,
     slots: { normal: 4, rareSlot: 1 },
+    factions: ALL_FACTIONS,
   },
   {
     id: "kessen-pack-village-hyorin",
@@ -84,6 +87,7 @@ const PACKS: KessenPackEntry[] = [
     description: "",
     odds: ODDS,
     slots: { normal: 4, rareSlot: 1 },
+    factions: ["HYORIN", "NEUTRAL"],
   },
 ];
 
@@ -343,6 +347,17 @@ describe("Card Hall data helpers", () => {
       "Hyorin Village Bundle",
     );
 
+    // A staff-created pack names a card by the factions its caches actually hold.
+    const frostCrate: KessenPackEntry = {
+      ...PACKS[0]!,
+      id: "kessen-pack-staff-made",
+      name: "Frost Crate",
+      factions: ["HYORIN", "NEUTRAL"],
+    };
+    const crate = { packs: [frostCrate], circuit: [] };
+    expect(whereToFind(cryverin, crate)).toContain("Frost Crate");
+    expect(whereToFind(moonprowler, crate)).not.toContain("Frost Crate");
+
     const altLeader = lookup["kessen-leader-frost-sovereign"];
     if (!altLeader) throw new Error("missing Frost Sovereign");
     const extra = { [altLeader.id]: ["Teahouse questline"] };
@@ -366,6 +381,7 @@ describe("Card Hall data helpers", () => {
       description: "",
       odds: ODDS,
       slots: { normal: 4, rareSlot: 1 },
+      factions: ALL_FACTIONS,
     };
     const packs = [...PACKS, first];
     expect(whereToFind(cryverin, { packs, circuit: [] })).not.toContain("First Bundle");

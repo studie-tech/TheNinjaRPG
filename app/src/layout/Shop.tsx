@@ -1072,7 +1072,7 @@ function StallCatalogCard({
           )}
         >
           <Image
-            src={kessenPackArt(item.id)}
+            src={kessenPackArt(item.id, item.image)}
             alt=""
             width={kessenRenditionWidth(140)}
             height={kessenRenditionWidth(140)}
@@ -1170,7 +1170,7 @@ function StallPurchaseDetails({
         ) : (
           <span className="block size-[160px] overflow-hidden rounded-lg shadow-md [@media(max-height:500px)]:size-[104px]">
             <Image
-              src={kessenPackArt(item.id)}
+              src={kessenPackArt(item.id, item.image)}
               alt=""
               width={kessenRenditionWidth(160)}
               height={kessenRenditionWidth(160)}

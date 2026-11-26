@@ -622,7 +622,11 @@ const RewardItem = ({
       {card ? (
         <CardFace card={card} renderSize={112} className="w-[96px]" />
       ) : isKessenPackId(itemId) ? (
-        <PackArt itemId={itemId} size={88} />
+        <PackArt
+          itemId={itemId}
+          image={packs.find((pack) => pack.id === itemId)?.image}
+          size={88}
+        />
       ) : null}
       {card ? null : (
         <span className={REWARD_NAME}>{kessenItemName(itemId, lookup, packs)}</span>
