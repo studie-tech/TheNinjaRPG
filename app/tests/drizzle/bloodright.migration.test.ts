@@ -7,7 +7,7 @@ describeWithDatabase("jutsu Bloodright migration", () => {
   it("refunds saved investments, retires passive Bloodright and preserves ordinary skills", async () => {
     await withMigrationSandbox(
       {
-        snapshot: "0194",
+        snapshot: "0195",
         baseline: ["UserData", "SkillTree", "UserSkill"],
         created: ["BloodrightOption"],
       },
@@ -27,7 +27,7 @@ describeWithDatabase("jutsu Bloodright migration", () => {
         await query(
           "INSERT INTO UserSkill (id, userId, skillId) VALUES ('passive-owned', 'owner', 'passive'), ('skill-owned', 'owner', 'ordinary')",
         );
-        await query(await readMigration("0195_familiar_greymalkin.sql"));
+        await query(await readMigration("0196_plain_prowler.sql"));
         const [users] = await query<RowDataPacket[]>(
           "SELECT userId, seichiSilver, bloodrightSpent, JSON_LENGTH(bloodright) AS count FROM UserData ORDER BY userId",
         );
