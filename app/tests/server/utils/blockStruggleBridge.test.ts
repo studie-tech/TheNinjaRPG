@@ -30,6 +30,122 @@ const issued = (token: string) =>
   });
 
 describe("TheNinjaRPG same-origin puzzle bridge", () => {
+  it("forwards canonical safety operations using the bound game session", async () => {
+    const calls: { path: string; method: string; body?: string }[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        const target = new URL(String(url));
+        if (target.pathname.endsWith("/exchange")) return issued("a".repeat(43));
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          `Bearer ${"a".repeat(43)}`,
+        );
+        calls.push({
+          path: target.pathname + target.search,
+          method: init?.method ?? "GET",
+          body: init?.body?.toString(),
+        });
+        return Response.json({ requestId: "11111111-1111-4111-8111-111111111111" });
+      }),
+    );
+    const report = JSON.stringify({
+      requestId: "11111111-1111-4111-8111-111111111111",
+      subjectId: "p_other",
+      reason: "offensive_name",
+      details: "",
+    });
+    const operations = [
+      ["safety/blocks?cursor=p_next", "GET", undefined],
+      ["safety/blocks/p_other", "PUT", undefined],
+      ["safety/blocks/p_other", "DELETE", undefined],
+      ["safety/reports", "POST", report],
+    ] as const;
+    let cookie: string | undefined;
+    for (const [path, method, body] of operations) {
+      const result = await Effect.runPromise(
+        bridge.handle(
+          new Request(`https://rpg.example/api/minigames/blockstruggle/${path}`, {
+            method,
+            headers: {
+              Origin: "https://rpg.example",
+              "Content-Type": "application/json",
+            },
+            body,
+          }),
+          path.split("?")[0]!.split("/"),
+          identity(),
+          cookie,
+        ),
+      );
+      cookie = result.cookie?.value ?? cookie;
+      expect(result.response.status).toBe(200);
+      expect(result.response.headers.get("cache-control")).toBe("private, no-store");
+      expect(result.response.headers.has("authorization")).toBe(false);
+    }
+    expect(calls).toEqual(
+      operations.map(([path, method, body]) => ({
+        path: `/api/ninja/${path}`,
+        method,
+        body,
+      })),
+    );
+  });
+
+  it("denies other safety methods, queries, bodies and cross-site actions before exchange", async () => {
+    let calls = 0;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async () => {
+        calls++;
+        return issued("a".repeat(43));
+      }),
+    );
+    for (const [path, method, body, origin, status] of [
+      ["safety/reports", "GET", undefined, "https://rpg.example", 405],
+      ["safety/blocks", "POST", "{}", "https://rpg.example", 405],
+      ["safety/reports/p_other", "POST", "{}", "https://rpg.example", 405],
+      ["safety/admin", "POST", "{}", "https://rpg.example", 405],
+      ["safety/blocks/p_other/extra", "PUT", undefined, "https://rpg.example", 405],
+      ["safety/blocks/__proto__", "PUT", undefined, "https://rpg.example", 405],
+      [
+        "safety/blocks?cursor=p_a&cursor=p_b",
+        "GET",
+        undefined,
+        "https://rpg.example",
+        400,
+      ],
+      ["safety/blocks?cursor=bad%2Fid", "GET", undefined, "https://rpg.example", 400],
+      ["safety/blocks?user=p_other", "GET", undefined, "https://rpg.example", 400],
+      ["safety/reports?user=p_other", "POST", "{}", "https://rpg.example", 400],
+      [
+        "safety/blocks/p_other?cursor=p_a",
+        "DELETE",
+        undefined,
+        "https://rpg.example",
+        400,
+      ],
+      ["safety/blocks/p_other", "PUT", "{}", "https://rpg.example", 400],
+      ["safety/blocks/p_other", "DELETE", "{}", "https://rpg.example", 400],
+      ["safety/reports", "POST", "x".repeat(2049), "https://rpg.example", 413],
+      ["safety/reports", "POST", "{}", "https://attacker.example", 403],
+      ["safety/blocks/p_other", "PUT", undefined, "https://attacker.example", 403],
+    ] as const) {
+      const result = await Effect.runPromise(
+        Effect.either(
+          bridge.handle(
+            new Request(`https://rpg.example/api/minigames/blockstruggle/${path}`, {
+              method,
+              headers: { Origin: origin, "Content-Type": "application/json" },
+              body,
+            }),
+            path.split("?")[0]!.split("/"),
+            identity(),
+          ),
+        ),
+      );
+      expect(Either.isLeft(result) && result.left.status).toBe(status);
+    }
+    expect(calls).toBe(0);
+  });
+
   it("reads shared ownership while denying purchase and claim forwarding", async () => {
     const paths: string[] = [];
     const bridge = await Effect.runPromise(

@@ -61,6 +61,17 @@ const allowedPath = (segments: readonly string[], method: string) => {
   if (segments.length < 1 || segments.some((part) => !segmentPattern.test(part)))
     return false;
   const [root, id, action] = segments;
+  if (root === "safety") {
+    if (segments.length === 2 && id === "blocks") return method === "GET";
+    if (segments.length === 2 && id === "reports") return method === "POST";
+    return (
+      segments.length === 3 &&
+      id === "blocks" &&
+      !!action &&
+      !Object.hasOwn(Object.prototype, action) &&
+      (method === "PUT" || method === "DELETE")
+    );
+  }
   if (root === "session" && segments.length === 1)
     return method === "GET" || method === "DELETE";
   if (root === "profile" && segments.length === 1)
@@ -84,7 +95,7 @@ const allowedPath = (segments: readonly string[], method: string) => {
   );
 };
 
-const readBody = (request: Request) =>
+const readBody = (request: Request, limit = MAX_BODY) =>
   Effect.tryPromise({
     try: async () => {
       if (!request.headers.get("content-type")?.startsWith("application/json"))
@@ -98,7 +109,7 @@ const readBody = (request: Request) =>
           const { done, value } = await reader.read();
           if (done) break;
           size += value.byteLength;
-          if (size > MAX_BODY) throw fail(413, "BodyTooLarge");
+          if (size > limit) throw fail(413, "BodyTooLarge");
           parts.push(value);
         }
       } catch (error) {
@@ -305,11 +316,30 @@ export const makeBlockStruggleBridge = (
             return yield* fail(403, "OriginDenied");
           if (method !== "GET" && request.headers.get("origin") !== origins.site)
             return yield* fail(403, "OriginDenied");
-          const search = new URL(request.url).search;
+          const url = new URL(request.url);
+          const search = url.search;
           if (search.length > MAX_QUERY) return yield* fail(400, "InvalidQuery");
+          const safety = segments[0] === "safety";
+          const safetyBlock = safety && segments.length === 3;
+          if (safety) {
+            const list = segments[1] === "blocks" && segments.length === 2;
+            const cursor = url.searchParams.get("cursor");
+            if (
+              list
+                ? [...url.searchParams.keys()].some((key) => key !== "cursor") ||
+                  url.searchParams.getAll("cursor").length > 1 ||
+                  (cursor !== null &&
+                    (!segmentPattern.test(cursor) ||
+                      Object.hasOwn(Object.prototype, cursor)))
+                : [...url.searchParams].length > 0
+            )
+              return yield* fail(400, "InvalidQuery");
+            if (safetyBlock && request.body !== null)
+              return yield* fail(400, "UnexpectedBody");
+          }
           const body =
-            method === "POST" || method === "PUT"
-              ? yield* readBody(request)
+            (method === "POST" || method === "PUT") && !safetyBlock
+              ? yield* readBody(request, safety ? 2048 : MAX_BODY)
               : undefined;
           if (segments[0] === "identity-link") {
             const proof = yield* Effect.tryPromise({
