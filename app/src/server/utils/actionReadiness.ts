@@ -57,11 +57,15 @@ export type ActionReadiness<T extends UserData = UserData> = ActionReadinessWrit
  * Hydrated profiles retain their accrued regeneration rate; loaded settings settle regeneration and queued training.
  * Use the complete action/profile snapshot: equipment and active skills affect Energy,
  * and queued training needs quest relations. Missing relations are not fetched here.
+ * `allowAsleep` lets an action that does not need the player awake (opening a Kessen card
+ * pack) run while ASLEEP: the actor stays asleep, nothing is settled, and the claim still
+ * guards on the ASLEEP status it read.
  */
 export const prepareActionReadiness = <T extends UserData>(
   initial: T,
   settings: GameSetting[],
   now = new Date(),
+  options: { allowAsleep?: boolean } = {},
 ): ActionReadiness<T> => {
   const related = initial as T &
     Parameters<typeof calcActiveUserRegen>[0] & {
@@ -77,6 +81,8 @@ export const prepareActionReadiness = <T extends UserData>(
   };
   if (initial.status === "AWAKE") return unchanged;
   if (initial.isBanned) return { ...unchanged, error: "You are banned." };
+  if (options.allowAsleep && initial.status === "ASLEEP" && !initial.battleId)
+    return unchanged;
   const wakes = initial.status === "ASLEEP" && initial.autoWakeUp;
   const checksOut =
     initial.status === "HOSPITALIZED" &&

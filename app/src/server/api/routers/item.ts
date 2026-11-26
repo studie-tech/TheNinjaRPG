@@ -142,6 +142,7 @@ import {
   isEarnedKessenPack,
   isKessenGood,
 } from "@/libs/kessen/cardSale";
+import { isKessenPackId } from "@/libs/kessen/packs";
 import {
   buildMissingLoadouts,
   decideRename,
@@ -2475,7 +2476,13 @@ export const itemRouter = createTRPCRouter({
         return readCacheReceipt(previousOpening.changes, input.userItemId);
       const { user: initialUser } = updatedUser;
       if (!initialUser) return errorResponse("User not found");
-      const recovery = prepareActionReadiness(initialUser, updatedUser.settings);
+      // Card packs open in bed: a sleeping player stays asleep, whatever autoWakeUp says.
+      const recovery = prepareActionReadiness(
+        initialUser,
+        updatedUser.settings,
+        undefined,
+        { allowAsleep: !!useritem && isKessenPackId(useritem.itemId) },
+      );
       if (recovery.error) return errorResponse(recovery.error);
 
       // Guard
