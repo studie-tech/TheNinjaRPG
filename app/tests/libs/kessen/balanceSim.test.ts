@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { KESSEN_COPY_LIMITS } from "@/drizzle/constants";
+import { aiRng, decide } from "@/libs/kessen/ai";
 import {
   cardBalance,
   catalogBalance,
@@ -7,6 +8,7 @@ import {
 } from "@/libs/kessen/balance";
 import {
   gauntletJobs,
+  KESSEN_BALANCE_SIM,
   type KessenSimOutcome,
   leaderSpreadFlags,
   playSimGame,
@@ -23,11 +25,77 @@ import {
   runTrials,
 } from "@/libs/kessen/balanceSimRunner";
 import { kessenCardToCardData, summonValueMilli } from "@/libs/kessen/catalog";
+import { actingSeats, applyAction, createMatch, viewFor } from "@/libs/kessen/engine";
 import type { KessenCard } from "@/libs/kessen/types";
 import { cardDataSchema } from "@/validators/itemCard";
 import { KESSEN_SEED_CATALOG, seedCardByName } from "./fixtures/catalog";
 
 describe("Kessen balance simulation coverage", () => {
+  it.each([
+    {
+      label: "a summoned row before round cleanup",
+      matchup: "champion-SHIROHANA:starter-HYORIN:4:1",
+      step: 31,
+      card: "Beta Sandworm",
+      maxRow: 35,
+      phase: "mulligan",
+    },
+    {
+      label: "Meditate on the retained final board",
+      matchup: "starter-SHIROHANA:starter-TSUKIMORI:0:0",
+      step: 32,
+      card: "Taiyo Kami Devotee",
+      maxRow: 32,
+      phase: "over",
+    },
+  ])("records $label", ({ matchup, step, card, maxRow, phase }) => {
+    const job = gauntletJobs(kessenReferenceDecks()).find(
+      (entry) => entry.id === `kessen-balance:v2:gauntlet:${matchup}`,
+    );
+    if (!job) throw new Error("No canonical matchup");
+    let state = createMatch({
+      seed: job.seed,
+      seats: job.seats,
+      cards: KESSEN_SEED_CATALOG,
+    });
+    while (state.step <= step) {
+      const seat = actingSeats(state)[0];
+      if (seat === undefined) throw new Error("Match ended before the target play");
+      const action = decide(
+        viewFor(state, seat),
+        seat,
+        { tier: KESSEN_BALANCE_SIM.tier },
+        aiRng(job.seed, seat, state.step),
+        { pool: KESSEN_SEED_CATALOG, deck: job.seats[seat].deck },
+      );
+      const result = applyAction(state, seat, action);
+      if (!result.ok) throw new Error(result.reason);
+      if (state.step === step) {
+        expect(action.t).toBe("play");
+        if (action.t !== "play") throw new Error("Expected a card play");
+        expect(state.cards[state.inst[action.card] ?? ""]?.name).toBe(card);
+        expect(result.events).toContainEqual(
+          expect.objectContaining({ t: "roundEnd", round: 2 }),
+        );
+        expect(result.state.phase).toBe(phase);
+        if (phase === "mulligan") {
+          expect(result.events).toContainEqual(
+            expect.objectContaining({ t: "roundEnd", totals: [25, 35] }),
+          );
+        } else {
+          expect(result.events).toContainEqual(
+            expect.objectContaining({ t: "boosted", cause: "meditate" }),
+          );
+        }
+      }
+      state = result.state;
+    }
+    expect(playSimGame(job, KESSEN_SEED_CATALOG)).toMatchObject({
+      finished: true,
+      maxRow,
+    });
+  });
+
   it.each(["RARE", "EPIC", "LEGENDARY"] as const)(
     "isolates the allowed %s copies when a starter card's rarity changes",
     (rarity) => {

@@ -27,7 +27,7 @@ import type { KessenAction, KessenCard, MatchState, Row, Seat } from "./types";
 
 /** Simulation settings; `version` keys cached results. */
 export const KESSEN_BALANCE_SIM = {
-  version: 3,
+  version: 4,
   /** Stable seed cohort, independent of summary and cache changes. */
   seedVersion: 2,
   tier: "CHUNIN" satisfies KessenAiTier,
@@ -105,7 +105,11 @@ export const playSimGame = (
       { pool, deck: job.seats[seat].deck },
     );
     if (action.t === "play" || action.t === "leader") {
-      if (job.metrics) outcome.swings.push(swingOf(state, seat, action));
+      if (job.metrics) {
+        const metrics = actionMetrics(state, seat, action);
+        outcome.swings.push(metrics.swing);
+        outcome.maxRow = Math.max(outcome.maxRow, metrics.maxRow);
+      }
       if (action.t === "leader" || !action.card.startsWith("t-")) outcome.plays += 1;
     }
     const result = applyAction(state, seat, action);
@@ -467,17 +471,25 @@ export const medianOf = (values: readonly number[]) => {
 /** Win rate as a whole percent: 0.5 is "50%". */
 export const percent = (rate: number) => `${Math.round(100 * rate)}%`;
 
-/** Board-total change of a play from the acting seat's side. */
-const swingOf = (state: MatchState, seat: Seat, action: KessenAction) => {
+/** Board swing and largest resulting row before turn advancement and round cleanup. */
+const actionMetrics = (state: MatchState, seat: Seat, action: KessenAction) => {
   const preview = previewState(state, seat, action);
-  if (!preview.ok) return 0;
+  if (!preview.ok) return { swing: 0, maxRow: 0 };
   const other = seat === 0 ? 1 : 0;
   const { before, after } = preview.totals;
-  return after[seat] - after[other] - (before[seat] - before[other]);
+  const rows = new Map<string, number>();
+  for (const unit of preview.units) {
+    if (unit.after === null) continue;
+    const key = `${unit.side}:${unit.row}`;
+    rows.set(key, (rows.get(key) ?? 0) + unit.after);
+  }
+  return {
+    swing: after[seat] - after[other] - (before[seat] - before[other]),
+    maxRow: Math.max(0, ...rows.values()),
+  };
 };
 
 const largestRow = (state: MatchState) => {
-  if (state.phase !== "play") return 0;
   let largest = 0;
   for (const side of [0, 1] as const) {
     for (const row of ROWS) largest = Math.max(largest, rowTotal(state, side, row));
