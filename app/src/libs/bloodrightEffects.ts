@@ -4,11 +4,16 @@ import type {
   BloodrightAppliedChange,
   BloodrightChange,
 } from "@/validators/bloodright";
-import { AllTags, type ZodAllTags } from "@/validators/combat";
+import { AllTags, getTagSchema, type ZodAllTags } from "@/validators/combat";
 
 /** Resolve schema defaults for historical tags before comparing or increasing their values. */
 export const normalizeBloodrightTag = (value: unknown): ZodAllTags | null => {
-  const parsed = AllTags.safeParse(value);
+  const type =
+    value && typeof value === "object" && "type" in value ? value.type : undefined;
+  const parsed =
+    typeof type === "string"
+      ? getTagSchema(type as ZodAllTags["type"]).safeParse(value)
+      : AllTags.safeParse(value);
   return parsed.success ? parsed.data : null;
 };
 
@@ -92,7 +97,7 @@ export const applyBloodrightChanges = (
     target[key] = value;
   }
   // Rounds, chance and other constrained values must retain the tag's contract.
-  return result.every((tag) => AllTags.safeParse(tag).success) ? result : null;
+  return result.every((tag) => normalizeBloodrightTag(tag)) ? result : null;
 };
 
 export type BloodrightJutsuIdentity = Pick<

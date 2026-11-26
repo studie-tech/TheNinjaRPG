@@ -39,6 +39,37 @@ const option = {
 } as BloodrightOption & { jutsu: Jutsu };
 
 describe("jutsu-specific Bloodright", () => {
+  it("preserves historical defaults when a source tag has no type", () => {
+    const raw = { power: 20 };
+    const tag = normalizeBloodrightTag(raw);
+    expect(tag).toMatchObject({ type: "increaseregeneration", power: 20 });
+    expect(normalizeBloodrightTag(undefined)?.type).toBe("increaseregeneration");
+    expect(
+      applyBloodrightChanges(
+        [raw as unknown as ZodAllTags],
+        [change({ tag: tag! })],
+      )?.[0],
+    ).toMatchObject({
+      type: "increaseregeneration",
+      power: 25,
+    });
+    expect(raw).toEqual({ power: 20 });
+  });
+  it("rejects unknown and malformed source tags before applying increases", () => {
+    for (const raw of [
+      null,
+      [],
+      { type: "unrecognized" },
+      { type: 1 },
+      { type: "damage", power: "invalid" },
+      { type: "stun", rounds: 1.5 },
+    ]) {
+      expect(normalizeBloodrightTag(raw)).toBeNull();
+      expect(
+        applyBloodrightChanges([raw as unknown as ZodAllTags], [change()]),
+      ).toBeNull();
+    }
+  });
   it("normalizes schema defaults in historical source and evolved tags", () => {
     const raw = { type: "damage", power: 20 } as unknown as ZodAllTags;
     const parsed = bloodrightOptionSchema.parse({
@@ -75,6 +106,19 @@ describe("jutsu-specific Bloodright", () => {
     );
     expect(effects?.[0]).toMatchObject({ power: 40 });
     expect(damage.power).toBe(20);
+  });
+  it("keeps nested shared tag values unchanged when applying an increase", () => {
+    const tag = DamageTag.parse({ power: 20, timeTracker: { originalDamage: 10 } });
+    const effects = applyBloodrightChanges(
+      [tag],
+      [change({ tag, field: "timeTracker.originalDamage" })],
+    );
+    expect(effects?.[0]).toMatchObject({
+      type: "damage",
+      power: 20,
+      timeTracker: { originalDamage: 15 },
+    });
+    expect(tag.timeTracker).toEqual({ originalDamage: 10 });
   });
   it("exposes every numeric field and rejects nonnumeric/prototype paths", () => {
     expect(
