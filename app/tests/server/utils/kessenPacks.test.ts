@@ -334,6 +334,35 @@ describe("Kessen pack catalog", () => {
 });
 
 describe("Kessen pack opening plan", () => {
+  it("pays Epic and Legendary pity from staff-built rare-slot distributions", () => {
+    const effects = buildKessenPackEffects(
+      {
+        name: "Staff Crate",
+        faction: null,
+        normalWeights: { COMMON: 10000, RARE: 0, EPIC: 0, LEGENDARY: 0, FORBIDDEN: 0 },
+        rareSlotWeights: { COMMON: 0, RARE: 9998, EPIC: 1, LEGENDARY: 1, FORBIDDEN: 0 },
+      },
+      CARDS,
+    );
+    const caches = effects.flatMap((effect) =>
+      isWeightedCacheEffect(effect) && effect.weightedCache
+        ? [effect.weightedCache]
+        : [],
+    );
+    const epic = plan({
+      caches,
+      counters: { packsSinceEpic: 6, packsSinceLegendary: 0 },
+    });
+    const legendary = plan({
+      caches,
+      counters: { packsSinceEpic: 0, packsSinceLegendary: LAST_DRY_PACK },
+    });
+    expect(epic.reveal.cards.at(-1)?.rarity).toBe("EPIC");
+    expect(epic.counters.packsSinceEpic).toBe(0);
+    expect(legendary.reveal.cards.at(-1)?.rarity).toBe("LEGENDARY");
+    expect(legendary.counters.packsSinceLegendary).toBe(0);
+  });
+
   it("grants the drawn cards and counts the pack toward both pity counters", () => {
     const result = plan();
     expect(result.reveal.cards.map((c) => c.itemId)).toEqual([

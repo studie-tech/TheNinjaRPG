@@ -22,6 +22,7 @@ import type {
 import {
   maximumCacheItems,
   type WeightedCache,
+  weightedCacheDraftSchema,
   weightedCacheSchema,
 } from "@/validators/weightedCache";
 
@@ -115,7 +116,10 @@ export const buildKessenPackEffects = (
     if (likeliest && missing > 0) likeliest.probability += missing;
     return {
       version: 1,
-      displayName,
+      // Item names can exceed the cache label's limit, especially with the slot suffix.
+      displayName: displayName
+        .trim()
+        .slice(0, weightedCacheDraftSchema.shape.displayName.maxLength ?? undefined),
       rolls: [{ count, probability: CACHE_PROBABILITY_TOTAL }],
       tiers,
     };

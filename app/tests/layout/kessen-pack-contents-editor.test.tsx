@@ -32,13 +32,17 @@ const PAPER_EFFECTS = buildKessenPackEffects(
   KESSEN_SEED_CATALOG,
 );
 
-const renderEditor = (effects: ZodAllTags[] = PAPER_EFFECTS) => {
+const renderEditor = (
+  effects: ZodAllTags[] = PAPER_EFFECTS,
+  name = "Frost Crate",
+  cards = KESSEN_SEED_CATALOG,
+) => {
   const onBuild = mock((_effects: ZodAllTags[]) => undefined);
   render(
     <KessenPackContentsEditor
-      name="Frost Crate"
+      name={name}
       effects={effects}
-      cards={KESSEN_SEED_CATALOG}
+      cards={cards}
       disabled={false}
       onBuild={onBuild}
     />,
@@ -119,5 +123,90 @@ describe("Kessen pack contents editor", () => {
       normal: 4,
       rareSlot: 0,
     });
+  });
+
+  it("blocks rare slots that cannot pay the advertised pity guarantees", () => {
+    const { onBuild } = renderEditor();
+    for (const rarity of ["Common", "Rare", "Epic", "Legendary", "Forbidden"]) {
+      fireEvent.input(
+        screen.getByRole("spinbutton", { name: `${rarity} odds, Slot 5` }),
+        {
+          target: { value: rarity === "Rare" ? "100" : "0" },
+        },
+      );
+    }
+    expect(rebuild()).toHaveProperty("disabled", true);
+    expect(screen.getByRole("alert").textContent).toContain("pity guarantees");
+    fireEvent.click(rebuild());
+    expect(onBuild).not.toHaveBeenCalled();
+
+    for (const rarity of ["Epic", "Legendary"]) {
+      fireEvent.input(
+        screen.getByRole("spinbutton", { name: `${rarity} odds, Slot 5` }),
+        {
+          target: { value: "0.001" },
+        },
+      );
+    }
+    expect(rebuild()).toHaveProperty("disabled", true);
+
+    for (const [rarity, odds] of [
+      ["Rare", "99.98"],
+      ["Epic", "0.01"],
+      ["Legendary", "0.01"],
+    ]) {
+      fireEvent.input(
+        screen.getByRole("spinbutton", { name: `${rarity} odds, Slot 5` }),
+        {
+          target: { value: odds },
+        },
+      );
+    }
+    fireEvent.click(rebuild());
+    expect(onBuild).toHaveBeenCalledTimes(1);
+
+    fireEvent.input(screen.getByLabelText("Rare slots"), { target: { value: "0" } });
+    expect(rebuild()).toHaveProperty("disabled", false);
+  });
+
+  it("blocks an empty pack name and builds long names within the cache label limit", () => {
+    const { onBuild } = renderEditor(PAPER_EFFECTS, "  ");
+    expect(rebuild()).toHaveProperty("disabled", true);
+    expect(screen.getByRole("alert").textContent).toBe("Enter a pack name.");
+    fireEvent.click(rebuild());
+    expect(onBuild).not.toHaveBeenCalled();
+    cleanup();
+
+    const long = renderEditor(PAPER_EFFECTS, "A".repeat(90));
+    fireEvent.click(rebuild());
+    expect(long.onBuild).toHaveBeenCalledTimes(1);
+    expect(
+      long.onBuild.mock.calls[0]![0].every(
+        (effect) =>
+          isWeightedCacheEffect(effect) &&
+          effect.weightedCache!.displayName.length <= 100,
+      ),
+    ).toBe(true);
+  });
+
+  it("blocks a nonempty pool with no cards at its weighted rarities", () => {
+    renderEditor(
+      PAPER_EFFECTS,
+      "Frost Crate",
+      KESSEN_SEED_CATALOG.filter((card) => card.rarity === "COMMON"),
+    );
+    fireEvent.input(screen.getByLabelText("Rare slots"), { target: { value: "0" } });
+    for (const rarity of ["Common", "Rare", "Epic", "Legendary", "Forbidden"]) {
+      fireEvent.input(
+        screen.getByRole("spinbutton", { name: `${rarity} odds, Slots 1–4` }),
+        {
+          target: { value: rarity === "Rare" ? "100" : "0" },
+        },
+      );
+    }
+    expect(rebuild()).toHaveProperty("disabled", true);
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Each slot kind needs positive odds for a rarity in its pool.",
+    );
   });
 });
