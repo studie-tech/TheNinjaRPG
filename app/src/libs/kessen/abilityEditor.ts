@@ -63,11 +63,11 @@ export const withAbilityField = (
 
 /**
  * A new ability of `kind`. Required fields keep the value `from` already has where the new
- * verb accepts it; the rest take the first option, the lowest amount or `group`.
+ * verb accepts it; the rest take the first option, the lowest amount or `set`.
  */
 export const draftAbility = (
   kind: KessenAbilityKind,
-  { from = {}, group = "" }: { from?: DraftAbility; group?: string } = {},
+  { from = {}, set = "" }: { from?: DraftAbility; set?: string } = {},
 ): DraftAbility => {
   const draft: DraftAbility = { k: kind };
   for (const field of abilityFields(kind)) {
@@ -77,7 +77,7 @@ export const draftAbility = (
       draft[field.name] = kept;
     else if (field.type === "amount") draft[field.name] = field.min;
     else if (field.type === "option") draft[field.name] = field.options[0]?.value;
-    else draft[field.name] = group;
+    else draft[field.name] = set;
   }
   return draft;
 };
@@ -106,8 +106,8 @@ const fieldMessage = (field: AbilityField) => {
   switch (field.type) {
     case "amount":
       return `Use ${field.min} to ${field.max}`;
-    case "group":
-      return `Enter a group name of up to ${field.maxLength} characters`;
+    case "set":
+      return `Enter a set name of up to ${field.maxLength} characters`;
     default:
       return "Choose an option";
   }
@@ -136,7 +136,7 @@ const FIELD_LABELS: Record<string, string> = {
   x: "Amount",
   mode: "Target",
   row: "Row",
-  group: "Group",
+  group: "Set",
   sameTarget: "Hit the unit just sealed",
   ifKilled: "Only if the strike destroys",
   times: "Revive a second unit",
@@ -172,7 +172,7 @@ const describeField = (
       max: schema.maxValue ?? Number.MAX_SAFE_INTEGER,
     };
   if (schema instanceof z.ZodString)
-    return { name, label, schema, type: "group", maxLength: schema.maxLength ?? 191 };
+    return { name, label, schema, type: "set", maxLength: schema.maxLength ?? 191 };
   throw new Error(`No control for ability field ${kind}.${name}`);
 };
 
@@ -193,7 +193,7 @@ export type DraftAbility = Record<string, unknown>;
 
 export type AbilityField = { name: string; label: string; schema: z.ZodType } & (
   | { type: "amount"; min: number; max: number }
-  | { type: "group"; maxLength: number }
+  | { type: "set"; maxLength: number }
   | { type: "option"; options: { value: string; label: string }[] }
   | { type: "flag"; value: unknown }
 );

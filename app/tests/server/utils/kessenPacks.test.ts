@@ -1,11 +1,23 @@
 import { describe, expect, it } from "bun:test";
 import {
+  CACHE_MAX_ENTRIES,
   CACHE_PROBABILITY_TOTAL,
   KESSEN_CARD_SELL_VALUES,
   KESSEN_FIRST_BUNDLE_ITEM_ID,
   KESSEN_LEGENDARY_PITY_PACKS,
+  KESSEN_PACK_ID_PREFIX,
   KESSEN_PACK_NORMAL_SLOTS,
+  KESSEN_PAPER_BUNDLE_PRICE,
 } from "@/drizzle/constants";
+import {
+  buildKessenPackEffects,
+  kessenPackFactions,
+  kessenPackOdds,
+  kessenPackPool,
+  kessenPackPoolProblem,
+  kessenPackSlots,
+  ordinalWord,
+} from "@/libs/kessen/packContents";
 import {
   isKessenPackId,
   KESSEN_PACK_IDS,
@@ -14,10 +26,8 @@ import {
 import type { KessenCard } from "@/libs/kessen/types";
 import { cacheItemIds, isWeightedCacheEffect } from "@/libs/weightedCache";
 import {
-  buildKessenPackEffects,
   KESSEN_PACKS,
-  kessenPackOdds,
-  kessenPackSlots,
+  kessenNewPackItem,
   kessenPityCountdown,
   kessenRareSlotMinimum,
   planKessenPackOpening,
@@ -43,7 +53,7 @@ const card = (
   power: 1,
   provision: 4,
   abilities: [],
-  summonGroups: [],
+  sets: [],
   leaderBonus: 0,
   variant: "STANDARD",
   baseCardId: null,
@@ -96,6 +106,20 @@ const plan = (overrides: Partial<Parameters<typeof planKessenPackOpening>[0]> = 
     random: zero,
     ...overrides,
   });
+
+describe("Kessen pack card positions", () => {
+  it("names a card position in words, then with its English ordinal suffix", () => {
+    expect([1, 5, 9].map(ordinalWord)).toEqual(["first", "fifth", "ninth"]);
+    expect([11, 12, 13, 21, 22, 23].map(ordinalWord)).toEqual([
+      "11th",
+      "12th",
+      "13th",
+      "21st",
+      "22nd",
+      "23rd",
+    ]);
+  });
+});
 
 describe("Kessen pack catalog", () => {
   it("builds two caches per pack from collectible non-leader cards with the design odds", () => {
@@ -207,6 +231,76 @@ describe("Kessen pack catalog", () => {
     });
   });
 
+  it("builds staff packs with their own pool and slot layout", () => {
+    const cards = new Map(KESSEN_SEED_CATALOG.map((entry) => [entry.id, entry]));
+    const crate = {
+      name: "Frost Crate",
+      faction: "HYORIN" as const,
+      slots: { normal: 3, rareSlot: 2 },
+      normalWeights: KESSEN_PACKS[0]!.normalWeights,
+      rareSlotWeights: KESSEN_PACKS[0]!.rareSlotWeights,
+    };
+    const effects = buildKessenPackEffects(crate, KESSEN_SEED_CATALOG);
+    const caches = effects.flatMap((effect) =>
+      isWeightedCacheEffect(effect) && effect.weightedCache
+        ? [effect.weightedCache]
+        : [],
+    );
+    expect(caches.map((entry) => [entry.displayName, entry.rolls[0]?.count])).toEqual([
+      ["Frost Crate", 3],
+      ["Frost Crate: last 2 cards", 2],
+    ]);
+    expect(kessenPackSlots(effects)).toEqual({ normal: 3, rareSlot: 2 });
+    expect(kessenPackFactions(effects, cards)).toEqual(["HYORIN", "NEUTRAL"]);
+    expect(
+      kessenPackFactions(
+        buildKessenPackEffects(KESSEN_PACKS[0]!, KESSEN_SEED_CATALOG),
+        cards,
+      ),
+    ).toEqual([...new Set(KESSEN_SEED_CATALOG.map((entry) => entry.faction))].sort());
+
+    // Without rare slots the pack is one cache of normal slots.
+    const plain = buildKessenPackEffects(
+      { ...crate, slots: { normal: 5, rareSlot: 0 } },
+      KESSEN_SEED_CATALOG,
+    );
+    expect(plain).toHaveLength(1);
+    expect(kessenPackSlots(plain)).toEqual({ normal: 5, rareSlot: 0 });
+  });
+
+  it("refuses pools a pack cannot list", () => {
+    expect(kessenPackPoolProblem([])).toBe("The card pool holds no collectible cards.");
+    expect(kessenPackPoolProblem(kessenPackPool(KESSEN_SEED_CATALOG, null))).toBeNull();
+    const crowded = Array.from({ length: CACHE_MAX_ENTRIES + 1 }, (_, index) =>
+      card(`common-${index}`, "COMMON"),
+    );
+    expect(kessenPackPoolProblem(crowded)).toContain("Common");
+  });
+
+  it("starts staff-created packs hidden and unlisted with the Paper Bundle odds", () => {
+    const id = `${KESSEN_PACK_ID_PREFIX}staff1`;
+    const row = kessenNewPackItem(id, KESSEN_SEED_CATALOG);
+    expect(isKessenPackId(row.id)).toBe(true);
+    expect(row).toMatchObject({
+      name: "New Kessen Pack - staff1",
+      itemType: "CONSUMABLE",
+      hidden: true,
+      inShop: false,
+      cost: KESSEN_PAPER_BUNDLE_PRICE,
+      destroyOnUse: true,
+      canBeTraded: false,
+    });
+    const paper = KESSEN_PACKS.find((pack) => pack.id === KESSEN_PACK_IDS.paper)!;
+    const cards = new Map(KESSEN_SEED_CATALOG.map((entry) => [entry.id, entry]));
+    expect(kessenPackOdds(row.effects, cards)).toEqual(
+      kessenPackOdds(buildKessenPackEffects(paper, KESSEN_SEED_CATALOG), cards),
+    );
+    expect(kessenPackSlots(row.effects)).toEqual({
+      normal: KESSEN_PACK_NORMAL_SLOTS,
+      rareSlot: 1,
+    });
+  });
+
   it("counts pity down to the guaranteed pack", () => {
     expect(kessenPityCountdown({ packsSinceEpic: 0, packsSinceLegendary: 0 })).toEqual({
       epicIn: 7,
@@ -240,6 +334,65 @@ describe("Kessen pack catalog", () => {
 });
 
 describe("Kessen pack opening plan", () => {
+  it("applies pity only to the actual final draw of a variable rare-slot group", () => {
+    for (const [rollDraw, rareCount] of [
+      [0, 1],
+      [0.75, 2],
+    ] as const) {
+      for (const minimum of ["EPIC", "LEGENDARY"] as const) {
+        const rareCache = cache(1, testPack()[1]!.tiers);
+        rareCache.rolls = [
+          { count: 1, probability: 5000 },
+          { count: 2, probability: 5000 },
+        ];
+        let draws = 0;
+        const result = plan({
+          caches: [cache(1, testPack()[0]!.tiers), rareCache],
+          counters: {
+            packsSinceEpic: 6,
+            packsSinceLegendary: minimum === "LEGENDARY" ? LAST_DRY_PACK : 0,
+          },
+          // The first cache consumes its count, tier and entry draws before this count.
+          random: () => (draws++ === 3 ? rollDraw : 0),
+        });
+        expect(result.reveal.cards.map((card) => card.rarity)).toEqual([
+          "COMMON",
+          ...Array.from({ length: rareCount - 1 }, () => "RARE" as const),
+          minimum,
+        ]);
+      }
+    }
+  });
+
+  it("pays Epic and Legendary pity from staff-built rare-slot distributions", () => {
+    const effects = buildKessenPackEffects(
+      {
+        name: "Staff Crate",
+        faction: null,
+        normalWeights: { COMMON: 10000, RARE: 0, EPIC: 0, LEGENDARY: 0, FORBIDDEN: 0 },
+        rareSlotWeights: { COMMON: 0, RARE: 9998, EPIC: 1, LEGENDARY: 1, FORBIDDEN: 0 },
+      },
+      CARDS,
+    );
+    const caches = effects.flatMap((effect) =>
+      isWeightedCacheEffect(effect) && effect.weightedCache
+        ? [effect.weightedCache]
+        : [],
+    );
+    const epic = plan({
+      caches,
+      counters: { packsSinceEpic: 6, packsSinceLegendary: 0 },
+    });
+    const legendary = plan({
+      caches,
+      counters: { packsSinceEpic: 0, packsSinceLegendary: LAST_DRY_PACK },
+    });
+    expect(epic.reveal.cards.at(-1)?.rarity).toBe("EPIC");
+    expect(epic.counters.packsSinceEpic).toBe(0);
+    expect(legendary.reveal.cards.at(-1)?.rarity).toBe("LEGENDARY");
+    expect(legendary.counters.packsSinceLegendary).toBe(0);
+  });
+
   it("grants the drawn cards and counts the pack toward both pity counters", () => {
     const result = plan();
     expect(result.reveal.cards.map((c) => c.itemId)).toEqual([

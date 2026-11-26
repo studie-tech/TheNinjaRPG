@@ -675,6 +675,18 @@ describe("power model", () => {
     expect(ids.map((id) => power(s, id))).toEqual([3, 3, 5, 5]);
   });
 
+  it("counts an unsealed set member without Bond toward a matching Bond", () => {
+    const s = scenario({
+      p0: { board: { CLOSE: ["Moonprowler"], RANGED: ["Kajioka"] } },
+    });
+    const mate = cid("Kajioka");
+    s.cards = { ...s.cards, [mate]: { ...s.cards[mate]!, sets: ["Moon Pack"] } };
+    const bonded = unitAt(s, 0, "CLOSE");
+    expect(power(s, bonded)).toBe(5);
+    s.board[0].RANGED[0]!.sealed = true;
+    expect(power(s, bonded)).toBe(3);
+  });
+
   it("Terrain shows -2 with a minimum of 1, after auras, and skips Unyielding", () => {
     const s = scenario({
       p0: {
@@ -1019,7 +1031,7 @@ describe("keywords", () => {
     const sailor: KessenCard = {
       ...CATALOG[cid("Arashima Stormcaller")]!,
       id: "test-any-crew",
-      summonGroups: ["Crew"],
+      sets: ["Crew"],
     };
     s.cards = { ...s.cards, [sailor.id]: sailor };
     s.inst["s0-50"] = sailor.id;
@@ -2404,8 +2416,8 @@ describe("action payloads, previews and the clone", () => {
       (card) =>
         card.kind === "UNIT" && card.isCollectible && card.variant === "STANDARD",
     ).map((card) => card.name);
-    const groupMembers = KESSEN_SEED_CATALOG.filter(
-      (card) => card.summonGroups.length > 0 && card.variant === "STANDARD",
+    const setMembers = KESSEN_SEED_CATALOG.filter(
+      (card) => card.sets.length > 0 && card.variant === "STANDARD",
     ).map((card) => card.name);
     for (const card of KESSEN_SEED_CATALOG) {
       // Forbidden variants print their base card's abilities.
@@ -2415,7 +2427,7 @@ describe("action payloads, previews and the clone", () => {
         p0: {
           leader: leader ? card.name : null,
           hand: leader ? [MUSASHI, "Cryverin"] : [card.name, MUSASHI, "Cryverin"],
-          deck: [...groupMembers, ...deckUnits.slice(0, 6)],
+          deck: [...setMembers, ...deckUnits.slice(0, 6)],
           discard: [TOTO, "Cryverin", MUSASHI],
           board: { CLOSE: [MUSASHI, MUSASHI, MUSASHI, MUSASHI], RANGED: ["Kajioka"] },
         },

@@ -29,7 +29,7 @@ interface CardInput {
   power: number;
   provision: number;
   abilities: KessenAbility[];
-  summonGroups: string[];
+  sets: string[];
   flavor: string;
 }
 
@@ -49,7 +49,7 @@ const card = (input: CardInput): KessenCard => {
     power: input.power,
     provision: input.provision,
     abilities: input.abilities,
-    summonGroups: input.summonGroups,
+    sets: input.sets,
     leaderBonus: 0,
     variant: "STANDARD",
     baseCardId: null,
@@ -79,7 +79,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 4,
     abilities: [{ k: "rally", x: 1 }],
-    summonGroups: [],
+    sets: [],
     flavor: '"Every dawn we kneel. Every noon we rise."',
   }),
   card({
@@ -92,7 +92,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 5,
     abilities: [{ k: "resilient" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The sand buried it once. It did not take.",
   }),
   card({
@@ -105,7 +105,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 4,
     abilities: [{ k: "summon", group: "Sandworm" }],
-    summonGroups: ["Sandworm"],
+    sets: ["Sandworm"],
     flavor: "Where one surfaces, the dune is already moving.",
   }),
   card({
@@ -118,7 +118,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 5,
     abilities: [empower(3, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "Strike like noon light: all at once.",
   }),
   card({
@@ -131,7 +131,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 5,
     abilities: [strike(5, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "The first jutsu every child of the dunes learns.",
   }),
   card({
@@ -144,7 +144,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 7,
     provision: 8,
     abilities: [{ k: "unyielding" }],
-    summonGroups: [],
+    sets: [],
     flavor: "It does not notice the weather. It does not notice you.",
   }),
   card({
@@ -157,7 +157,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 7,
     abilities: [{ k: "summon", group: "Sandworm" }],
-    summonGroups: ["Sandworm"],
+    sets: ["Sandworm"],
     flavor: "The mother of the brood answers its call.",
   }),
   card({
@@ -170,7 +170,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 6,
     abilities: [{ k: "bond", group: "Subaku" }],
-    summonGroups: [],
+    sets: ["Subaku"],
     flavor: "The family fights as one, or not at all.",
   }),
   card({
@@ -186,7 +186,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
       { k: "bond", group: "Subaku" },
       { k: "rally", x: 1 },
     ],
-    summonGroups: [],
+    sets: ["Subaku"],
     flavor: "From the sky she sees every grain of the battle.",
   }),
   card({
@@ -199,7 +199,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 9,
     abilities: [empower(3, "chosenRow")],
-    summonGroups: [],
+    sets: [],
     flavor: "The mirror does not reflect you. It reflects the sun.",
   }),
   card({
@@ -212,7 +212,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 9,
     provision: 14,
     abilities: [{ k: "unyielding" }, { k: "rally", x: 2 }],
-    summonGroups: [],
+    sets: [],
     flavor: "When the goddess walks, the noon never ends.",
   }),
   card({
@@ -225,7 +225,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 5,
     abilities: [{ k: "bond", group: "Moon Pack" }],
-    summonGroups: [],
+    sets: ["Moon Pack"],
     flavor: "Alone it hunts. Together they howl the moon red.",
   }),
   card({
@@ -238,7 +238,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 4,
     abilities: [{ k: "meditate", x: 1 }],
-    summonGroups: [],
+    sets: [],
     flavor: "Give it a season and the forest grows on its back.",
   }),
   card({
@@ -251,7 +251,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 4,
     abilities: [empower(3, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "Its petals close wounds that blades opened.",
   }),
   card({
@@ -264,7 +264,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 5,
     abilities: [{ k: "bond", group: "Moon Pack" }],
-    summonGroups: [],
+    sets: ["Moon Pack"],
     flavor: "It hunts with the pack. It just refuses to howl.",
   }),
   card({
@@ -277,7 +277,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 4,
     abilities: [strike(4, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "The forest keeps what it catches.",
   }),
   card({
@@ -290,7 +290,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 8,
     abilities: [{ k: "revive" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The old spirit remembers every fallen name.",
   }),
   card({
@@ -303,7 +303,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 6,
     provision: 8,
     abilities: [{ k: "resilient" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The shrine has stood a thousand nights. So has she.",
   }),
   card({
@@ -316,7 +316,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 7,
     abilities: [{ k: "meditate", x: 1 }],
-    summonGroups: [],
+    sets: [],
     flavor: "Carved from living cedar. Still growing.",
   }),
   card({
@@ -329,7 +329,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 8,
     abilities: [{ k: "resilient" }, { k: "meditate", x: 1 }],
-    summonGroups: [],
+    sets: [],
     flavor: "Seasons pass. The Elder stays.",
   }),
   card({
@@ -342,7 +342,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 6,
     provision: 10,
     abilities: [{ k: "purge", mode: "oppositeRow" }],
-    summonGroups: [],
+    sets: [],
     flavor: "It feeds where the moonlight is brightest.",
   }),
   card({
@@ -355,7 +355,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 7,
     provision: 14,
     abilities: [{ k: "unyielding" }, { k: "revive" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Nothing that dies in the Moonforest stays dead.",
   }),
   card({
@@ -368,7 +368,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 5,
     abilities: [strike(2, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "Its touch is the last cold you feel.",
   }),
   card({
@@ -381,7 +381,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 7,
     provision: 4,
     abilities: [],
-    summonGroups: [],
+    sets: [],
     flavor: "The Frostscale Ravine breeds nothing small.",
   }),
   card({
@@ -394,7 +394,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 5,
     abilities: [{ k: "seal", mode: "single" }],
-    summonGroups: [],
+    sets: [],
     flavor: "We endured the night of snowfall. You will endure us.",
   }),
   card({
@@ -407,7 +407,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 5,
     abilities: [{ k: "terrain", row: "CLOSE" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Frost settles on the front line first.",
   }),
   card({
@@ -420,7 +420,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 5,
     abilities: [{ k: "terrain", row: "RANGED" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Bowstrings snap in its wind.",
   }),
   card({
@@ -433,7 +433,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 8,
     abilities: [strike(3, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "It dives from the White Peaks without a sound.",
   }),
   card({
@@ -446,7 +446,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 7,
     abilities: [{ k: "meditate", x: 2 }],
-    summonGroups: [],
+    sets: [],
     flavor: "A snowflake. A snowball. An avalanche.",
   }),
   card({
@@ -459,7 +459,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 6,
     abilities: [{ k: "seal", mode: "chosenEnemyRow" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Inside the storm, every war cry freezes.",
   }),
   card({
@@ -472,7 +472,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 7,
     provision: 11,
     abilities: [{ k: "rally", x: 2 }],
-    summonGroups: [],
+    sets: [],
     flavor: "The Ancient Penguins chose Hyorin. Hyorin did not argue.",
   }),
   card({
@@ -488,7 +488,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
       { k: "seal", mode: "single" },
       { k: "strike", x: 3, mode: "single", sameTarget: true },
     ],
-    summonGroups: [],
+    sets: [],
     flavor: "She asks only for your warmth. All of it.",
   }),
   card({
@@ -501,7 +501,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 8,
     provision: 15,
     abilities: [{ k: "unyielding" }, { k: "terrain", row: "enemyMostUnits" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The kami breathed once, and the mountains turned white.",
   }),
   card({
@@ -514,7 +514,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 4,
     abilities: [{ k: "summon", group: "Crew" }],
-    summonGroups: ["Crew"],
+    sets: ["Crew"],
     flavor: "Dead men work cheap and never sleep.",
   }),
   card({
@@ -527,7 +527,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 4,
     abilities: [{ k: "summon", group: "Crew" }],
-    summonGroups: ["Crew"],
+    sets: ["Crew"],
     flavor: "The cannon is cold. The fuse is not.",
   }),
   card({
@@ -540,7 +540,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 6,
     abilities: [strike(3), strike(2)],
-    summonGroups: [],
+    sets: [],
     flavor: "Hit twice. Thunder does not apologise.",
   }),
   card({
@@ -553,7 +553,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 4,
     abilities: [],
-    summonGroups: [],
+    sets: [],
     flavor: "Susanoo cursed the clan with storms. They learned to ride them.",
   }),
   card({
@@ -566,7 +566,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 7,
     provision: 5,
     abilities: [],
-    summonGroups: [],
+    sets: [],
     flavor: "The Thunder Shrine's keeper does not take visitors.",
   }),
   card({
@@ -579,7 +579,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 8,
     abilities: [{ k: "purge", mode: "oppositeRow" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The tide takes the tallest first.",
   }),
   card({
@@ -592,7 +592,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 3,
     provision: 8,
     abilities: [{ k: "revive" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Nothing the sea takes is truly lost. Just misplaced.",
   }),
   card({
@@ -605,7 +605,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 7,
     abilities: [{ k: "rally", x: 1 }],
-    summonGroups: [],
+    sets: [],
     flavor: "Where the water spirit flows, the crew swims faster.",
   }),
   card({
@@ -618,7 +618,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 6,
     provision: 10,
     abilities: [strike(2, "oppositeRow")],
-    summonGroups: [],
+    sets: [],
     flavor: "It surfaced once. The swamp is still draining.",
   }),
   card({
@@ -631,7 +631,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 9,
     abilities: [strike(8, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "One bolt. One verdict.",
   }),
   card({
@@ -644,7 +644,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 10,
     provision: 14,
     abilities: [{ k: "unyielding" }, { k: "summon", group: "Crew" }],
-    summonGroups: [],
+    sets: [],
     flavor: "No crew is ever lost at its gate. Only delayed.",
   }),
   card({
@@ -657,7 +657,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 4,
     abilities: [{ k: "clearSkies" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Its bells ring, and the sky remembers blue.",
   }),
   card({
@@ -670,7 +670,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 6,
     provision: 5,
     abilities: [],
-    summonGroups: [],
+    sets: [],
     flavor: "Blossoms fall. Kajioka is already elsewhere.",
   }),
   card({
@@ -683,7 +683,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 5,
     abilities: [strike(2, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "Ash on the wind, fire on arrival.",
   }),
   card({
@@ -696,7 +696,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 6,
     provision: 6,
     abilities: [empower(2, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "First across the bridge, last to fall.",
   }),
   card({
@@ -709,7 +709,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 4,
     abilities: [empower(6, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "Let the gale carry you further than your legs can.",
   }),
   card({
@@ -722,7 +722,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 7,
     abilities: [empower(2, "ownRowOthers")],
-    summonGroups: [],
+    sets: [],
     flavor: "Speak in the canyon and the whole line answers.",
   }),
   card({
@@ -735,7 +735,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 6,
     provision: 8,
     abilities: [{ k: "infiltrator" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Delivers messages. Reads them first.",
   }),
   card({
@@ -748,7 +748,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 6,
     abilities: [{ k: "purge", mode: "chosenRow" }],
-    summonGroups: [],
+    sets: [],
     flavor: "A single tear of the typhoon drowns a regiment.",
   }),
   card({
@@ -762,7 +762,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 7,
     provision: 10,
     abilities: [strike(3, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "Wind gives the blade speed. Fire gives it purpose.",
   }),
   card({
@@ -776,7 +776,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 10,
     abilities: [{ k: "clearSkies" }, strike(3, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "They say she cut a storm in half. The storm agrees.",
   }),
   card({
@@ -789,7 +789,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 8,
     provision: 15,
     abilities: [{ k: "unyielding" }, strike(2), strike(2)],
-    summonGroups: [],
+    sets: [],
     flavor: "Fujin's own beast. It never strikes once.",
   }),
   card({
@@ -802,7 +802,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 5,
     abilities: [strike(2, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "You never see the first thorn.",
   }),
   card({
@@ -815,7 +815,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 5,
     abilities: [{ k: "seal", mode: "single" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The Maw teaches one prayer: silence.",
   }),
   card({
@@ -828,7 +828,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 7,
     provision: 5,
     abilities: [],
-    summonGroups: [],
+    sets: [],
     flavor: "Debts in the City of Mei are paid in full.",
   }),
   card({
@@ -841,7 +841,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 5,
     abilities: [strike(1, "oppositeRow")],
-    summonGroups: [],
+    sets: [],
     flavor: "A little from every pocket adds up.",
   }),
   card({
@@ -854,7 +854,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 4,
     abilities: [strike(2, "chosenRow")],
-    summonGroups: [],
+    sets: [],
     flavor: "Blood Release: one wound for every enemy.",
   }),
   card({
@@ -867,7 +867,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 6,
     provision: 8,
     abilities: [{ k: "infiltrator" }],
-    summonGroups: [],
+    sets: [],
     flavor: "It trades its own name to learn yours.",
   }),
   card({
@@ -880,7 +880,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 8,
     abilities: [{ k: "purge", mode: "oppositeRow" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Let them gather. Then spring the trap.",
   }),
   card({
@@ -893,7 +893,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 6,
     provision: 8,
     abilities: [strike(2, "single")],
-    summonGroups: [],
+    sets: [],
     flavor: "Everything burns. Veylan just helps.",
   }),
   card({
@@ -906,7 +906,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 10,
     abilities: [strike(2), strike(2)],
-    summonGroups: [],
+    sets: [],
     flavor: "It rides through your lines and leaves fewer of you.",
   }),
   card({
@@ -922,7 +922,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
       { k: "seal", mode: "single" },
       { k: "strike", x: 5, mode: "single", sameTarget: true },
     ],
-    summonGroups: [],
+    sets: [],
     flavor: "A rose that blooms only on the dying.",
   }),
   card({
@@ -935,7 +935,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 8,
     provision: 13,
     abilities: [{ k: "infiltrator" }, { k: "seal", mode: "joinRowOthers" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Locked away for what it knew. It still knows.",
   }),
   card({
@@ -948,7 +948,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 3,
     abilities: [{ k: "substitution" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Just a log. It was always just a log.",
   }),
   card({
@@ -961,7 +961,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 3,
     abilities: [{ k: "clearSkies" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Paper and ink against the sky itself.",
   }),
   card({
@@ -974,7 +974,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 4,
     abilities: [{ k: "terrain", row: "CLOSE" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Fists freeze before they land.",
   }),
   card({
@@ -987,7 +987,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 4,
     abilities: [{ k: "terrain", row: "RANGED" }],
-    summonGroups: [],
+    sets: [],
     flavor: "No arrow flies true in this wind.",
   }),
   card({
@@ -1000,7 +1000,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 4,
     abilities: [{ k: "terrain", row: "JUTSU" }],
-    summonGroups: [],
+    sets: [],
     flavor: "Ink runs. Seals smear. Jutsu fail.",
   }),
   card({
@@ -1013,7 +1013,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 7,
     provision: 5,
     abilities: [],
-    summonGroups: [],
+    sets: [],
     flavor: "Horizon's war youths learned the sword before their letters.",
   }),
   card({
@@ -1026,7 +1026,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 4,
     provision: 6,
     abilities: [{ k: "rally", x: 1 }],
-    summonGroups: [],
+    sets: [],
     flavor: '"Watch their hands, not their faces."',
   }),
   card({
@@ -1039,7 +1039,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 7,
     abilities: [{ k: "seal", mode: "single" }],
-    summonGroups: [],
+    sets: [],
     flavor: "A Horizon prodigy who unties other people's jutsu.",
   }),
   card({
@@ -1052,7 +1052,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 6,
     provision: 8,
     abilities: [{ k: "resilient" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The island always takes him back.",
   }),
   card({
@@ -1065,7 +1065,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 4,
     abilities: [{ k: "grantResilient" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The lotus closes, and what it holds endures.",
   }),
   card({
@@ -1078,7 +1078,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 2,
     provision: 6,
     abilities: [{ k: "meditate", x: 2 }],
-    summonGroups: [],
+    sets: [],
     flavor: "Feed it every turn. Fear it by the last.",
   }),
   card({
@@ -1091,7 +1091,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 8,
     provision: 10,
     abilities: [{ k: "seal", mode: "single" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The Global ANBU answer to no village. Only to the Chief.",
   }),
   card({
@@ -1104,7 +1104,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 12,
     provision: 11,
     abilities: [],
-    summonGroups: [],
+    sets: [],
     flavor: "Big enough to be a strategy on its own.",
   }),
   card({
@@ -1117,7 +1117,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 0,
     provision: 11,
     abilities: [{ k: "purge", mode: "eachEnemyRow" }],
-    summonGroups: [],
+    sets: [],
     flavor: "It does not choose. It finds the tallest, everywhere.",
   }),
   card({
@@ -1130,7 +1130,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 5,
     provision: 15,
     abilities: [{ k: "unyielding" }, { k: "purge", mode: "eachEnemyRow" }],
-    summonGroups: [],
+    sets: [],
     flavor: "The priest of bones collects the proudest first.",
   }),
   card({
@@ -1143,7 +1143,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 11,
     provision: 14,
     abilities: [{ k: "unyielding" }, { k: "rally", x: 1 }],
-    summonGroups: [],
+    sets: [],
     flavor: "The mountain does not move. The army moves around it.",
   }),
   card({
@@ -1156,7 +1156,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 11,
     provision: 14,
     abilities: [{ k: "unyielding" }, strike(1, "allEnemies")],
-    summonGroups: [],
+    sets: [],
     flavor: "A calamity has no allies, only bystanders.",
   }),
   card({
@@ -1169,7 +1169,7 @@ export const KESSEN_DECK_CARDS: KessenCard[] = [
     power: 8,
     provision: 13,
     abilities: [{ k: "unyielding" }, { k: "meditate", x: 2 }],
-    summonGroups: [],
+    sets: [],
     flavor: "The vault's treasure was never the gold.",
   }),
 ];
@@ -1202,7 +1202,7 @@ const leader = (input: LeaderInput): KessenCard => {
     power: 0,
     provision: 0,
     abilities: input.abilities,
-    summonGroups: [],
+    sets: [],
     leaderBonus: input.bonus,
     variant: "STANDARD",
     baseCardId: null,
@@ -1371,7 +1371,7 @@ export const KESSEN_TOKEN: KessenCard = {
   power: DEFAULT_KNOBS.gambitPower,
   provision: 0,
   abilities: [],
-  summonGroups: [],
+  sets: [],
   leaderBonus: 0,
   variant: "STANDARD",
   baseCardId: null,

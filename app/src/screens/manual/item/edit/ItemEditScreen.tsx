@@ -38,6 +38,7 @@ import { EffectTagListEditor } from "@/layout/EffectTagListEditor";
 import { FurnitureViewsEditor } from "@/layout/FurnitureViewsEditor";
 import Image from "@/layout/Image";
 import { itemCardDisplay } from "@/layout/items/cardDisplay";
+import { KessenPackContentsEditor } from "@/layout/KessenPackContentsEditor";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { LpcEquipmentFields } from "@/layout/LpcEquipmentFields";
@@ -46,7 +47,7 @@ import { isKessenPackId } from "@/libs/kessen/packs";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import type { ZodItemType } from "@/validators/combat";
+import type { ZodAllTags, ZodItemType } from "@/validators/combat";
 import { DamageTag, ItemValidatorRawSchema } from "@/validators/combat";
 import type { ZodItemVariantType } from "@/validators/item";
 import { displayCostType, ItemVariantValidator } from "@/validators/item";
@@ -248,7 +249,14 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
               </div>
             </div>
           )}
-          {isPack && <PackSummary effects={effects} />}
+          {isPack && (
+            <PackSummary
+              name={itemName}
+              effects={effects}
+              setEffects={setEffects}
+              disabled={isUpdating}
+            />
+          )}
         </EditContent>
         {isFurniture && (
           <Controller
@@ -338,21 +346,32 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   );
 };
 
-/** The card stats editor with the groups of the card catalog as suggestions. */
-function CardStats(props: Omit<React.ComponentProps<typeof CardDataEditor>, "groups">) {
+/** The card stats editor with the sets of the card catalog as options. */
+function CardStats(props: Omit<React.ComponentProps<typeof CardDataEditor>, "sets">) {
   const { data: catalog } = useKessenCatalog();
-  const groups = catalog?.cards.flatMap((card) => [
-    ...card.summonGroups,
+  const sets = catalog?.cards.flatMap((card) => [
+    ...card.sets,
     ...card.abilities.flatMap((ability) => ("group" in ability ? ability.group : [])),
   ]);
-  return <CardDataEditor {...props} groups={groups} />;
+  return <CardDataEditor {...props} sets={sets} />;
 }
 
 /**
  * What a Kessen card pack opens: its slots, each tier's odds and the cards by name, with
- * the pity rules and the Kessen manual for the rest.
+ * the pity rules and the Kessen manual for the rest, and the builder that rebuilds the
+ * contents from the card catalog.
  */
-function PackSummary({ effects }: { effects: readonly unknown[] }) {
+function PackSummary({
+  name,
+  effects,
+  setEffects,
+  disabled,
+}: {
+  name: string;
+  effects: readonly unknown[];
+  setEffects: (effects: ZodAllTags[]) => void;
+  disabled: boolean;
+}) {
   const { data: catalog } = useKessenCatalog();
   const names = new Map(catalog?.cards.map((card) => [card.id, card.name]));
   const caches = effects.flatMap((effect) => {
@@ -376,6 +395,17 @@ function PackSummary({ effects }: { effects: readonly unknown[] }) {
         </Link>
         .
       </p>
+      {catalog ? (
+        <KessenPackContentsEditor
+          name={name}
+          effects={effects as ZodAllTags[]}
+          cards={catalog.cards}
+          disabled={disabled}
+          onBuild={setEffects}
+        />
+      ) : (
+        <Loader explanation="Loading the card catalog" />
+      )}
       {caches.map((cache, index) => {
         const slots = cache.rolls
           .map(

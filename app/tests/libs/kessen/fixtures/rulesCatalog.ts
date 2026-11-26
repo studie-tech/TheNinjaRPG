@@ -6,18 +6,13 @@
 import type { KessenCard } from "@/libs/kessen/types";
 import type { KessenAbility } from "@/validators/itemCard";
 
-type CardDefaults =
-  | "summonGroups"
-  | "leaderBonus"
-  | "variant"
-  | "baseCardId"
-  | "isCollectible";
+type CardDefaults = "sets" | "leaderBonus" | "variant" | "baseCardId" | "isCollectible";
 
 /** A frozen card, defaulting the fields most entries share. */
 const card = (
   entry: Omit<KessenCard, CardDefaults> & Partial<Pick<KessenCard, CardDefaults>>,
 ): KessenCard => ({
-  summonGroups: [],
+  sets: [],
   leaderBonus: 0,
   variant: "STANDARD",
   baseCardId: null,
@@ -58,7 +53,7 @@ export const KESSEN_RULES_CATALOG: KessenCard[] = [
     power: 3,
     provision: 4,
     abilities: [{ k: "summon", group: "Sandworm" }],
-    summonGroups: ["Sandworm"],
+    sets: ["Sandworm"],
   }),
   card({
     id: "kessen-blazing-flash-adept",
@@ -103,7 +98,7 @@ export const KESSEN_RULES_CATALOG: KessenCard[] = [
     power: 5,
     provision: 7,
     abilities: [{ k: "summon", group: "Sandworm" }],
-    summonGroups: ["Sandworm"],
+    sets: ["Sandworm"],
   }),
   card({
     id: "kessen-subaku-princess",
@@ -115,6 +110,7 @@ export const KESSEN_RULES_CATALOG: KessenCard[] = [
     power: 4,
     provision: 6,
     abilities: [{ k: "bond", group: "Subaku" }],
+    sets: ["Subaku"],
   }),
   card({
     id: "kessen-subaku-winged-captain",
@@ -129,6 +125,7 @@ export const KESSEN_RULES_CATALOG: KessenCard[] = [
       { k: "bond", group: "Subaku" },
       { k: "rally", x: 1 },
     ],
+    sets: ["Subaku"],
   }),
   card({
     id: "kessen-amaterasus-holy-mirror",
@@ -162,6 +159,7 @@ export const KESSEN_RULES_CATALOG: KessenCard[] = [
     power: 3,
     provision: 5,
     abilities: [{ k: "bond", group: "Moon Pack" }],
+    sets: ["Moon Pack"],
   }),
   card({
     id: "kessen-mosswolf",
@@ -195,6 +193,7 @@ export const KESSEN_RULES_CATALOG: KessenCard[] = [
     power: 3,
     provision: 5,
     abilities: [{ k: "bond", group: "Moon Pack" }],
+    sets: ["Moon Pack"],
   }),
   card({
     id: "kessen-thorn-grasp",
@@ -407,7 +406,7 @@ export const KESSEN_RULES_CATALOG: KessenCard[] = [
     power: 2,
     provision: 4,
     abilities: [{ k: "summon", group: "Crew" }],
-    summonGroups: ["Crew"],
+    sets: ["Crew"],
   }),
   card({
     id: "kessen-ghost-ship-gunner",
@@ -419,7 +418,7 @@ export const KESSEN_RULES_CATALOG: KessenCard[] = [
     power: 2,
     provision: 4,
     abilities: [{ k: "summon", group: "Crew" }],
-    summonGroups: ["Crew"],
+    sets: ["Crew"],
   }),
   card({
     id: "kessen-fist-of-10000-volts",

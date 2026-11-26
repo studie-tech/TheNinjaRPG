@@ -58,6 +58,7 @@ export const PackOpening = ({
   reveal,
   cards,
   packName,
+  packImage,
   onClose,
   onOpenAnother,
   anotherLabel = "Open another",
@@ -71,6 +72,8 @@ export const PackOpening = ({
   /** Catalog cards, for the revealed faces. */
   cards: readonly KessenCatalogEntry[];
   packName?: string;
+  /** The pack item's image, which a staff-created pack shows as its art. */
+  packImage?: string;
   onClose: () => void;
   /** Shown once every card is face up, e.g. while more packs of the kind remain. */
   onOpenAnother?: () => void;
@@ -109,6 +112,7 @@ export const PackOpening = ({
       key={revealKey(reveal)}
       reveal={reveal}
       name={name}
+      image={packImage}
       cards={cards}
       onClose={onClose}
       onOpenAnother={onOpenAnother}
@@ -152,6 +156,7 @@ export const PackOpening = ({
 const PackCeremony = ({
   reveal,
   name,
+  image,
   cards,
   onClose,
   onOpenAnother,
@@ -160,6 +165,7 @@ const PackCeremony = ({
 }: {
   reveal: CardPackReveal;
   name: string;
+  image?: string;
   cards: readonly KessenCatalogEntry[];
   onClose: () => void;
   onOpenAnother?: () => void;
@@ -308,7 +314,7 @@ const PackCeremony = ({
               <span key={half} className="kh-pack-half" data-half={half}>
                 <span className="kh-pack-paper">
                   <Image
-                    src={kessenPackArt(reveal.packItemId)}
+                    src={kessenPackArt(reveal.packItemId, image)}
                     alt=""
                     width={768}
                     height={768}

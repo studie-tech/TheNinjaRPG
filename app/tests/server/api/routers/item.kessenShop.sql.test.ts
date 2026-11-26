@@ -2,13 +2,16 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { and, eq, gt } from "drizzle-orm";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
+  CACHE_PROBABILITY_TOTAL,
   KESSEN_CARD_SELL_VALUES,
   KESSEN_PACK_ID_PREFIX,
   KESSEN_VILLAGE_BUNDLE_WEEKLY_LIMIT,
 } from "@/drizzle/constants";
 import {
+  actionLog,
   item,
   itemPurchaseCounter,
+  kessenProgress,
   userData,
   userItem,
   villageStructure,
@@ -17,9 +20,19 @@ import {
   DECK_COPIES_SALE_REASON,
   EARNED_PACK_BLOCK_REASON,
 } from "@/libs/kessen/cardSale";
-import { KESSEN_PACK_IDS, KESSEN_VILLAGE_BUNDLE_LIMIT_KEY } from "@/libs/kessen/packs";
-import { itemRouter } from "@/server/api/routers/item";
+import { kessenCardToCardData } from "@/libs/kessen/catalog";
+import { buildKessenPackEffects } from "@/libs/kessen/packContents";
+import {
+  isKessenPackId,
+  KESSEN_PACK_IDS,
+  KESSEN_VILLAGE_BUNDLE_LIMIT_KEY,
+} from "@/libs/kessen/packs";
+import { listItemForGetAll } from "@/queries/item";
+import { itemDatabaseFilter, itemRouter } from "@/server/api/routers/item";
+import { kessenCollectionRouter } from "@/server/api/routers/kessenCollection";
 import { getItemPurchasePeriodStart } from "@/utils/time";
+import { ItemValidator } from "@/validators/combat";
+import { KESSEN_SEED_CATALOG } from "../../../libs/kessen/fixtures/catalog";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { beforeTransaction } from "../../../setup/statements";
 import {
@@ -39,6 +52,23 @@ const LACQUER = `${KESSEN_PACK_ID_PREFIX}lacquer`;
 const HYORIN_BUNDLE = KESSEN_PACK_IDS.village("HYORIN");
 const AKASUMI_BUNDLE = KESSEN_PACK_IDS.village("AKASUMI");
 const SHARED_LIMIT_MESSAGE = "You already bought this week's Village Bundle";
+const COMMON_ONLY = {
+  COMMON: CACHE_PROBABILITY_TOTAL,
+  RARE: 0,
+  EPIC: 0,
+  LEGENDARY: 0,
+  FORBIDDEN: 0,
+};
+const LEGENDARY_ONLY = {
+  ...COMMON_ONLY,
+  COMMON: 0,
+  LEGENDARY: CACHE_PROBABILITY_TOTAL,
+};
+const FORBIDDEN_ONLY = {
+  ...COMMON_ONLY,
+  COMMON: 0,
+  FORBIDDEN: CACHE_PROBABILITY_TOTAL,
+};
 
 const moneyOf = async () =>
   (
@@ -305,6 +335,201 @@ describeWithDatabase("item router and Kessen goods", () => {
         },
       ]);
       expect(await copiesOf(LACQUER)).toBe(2);
+    });
+  });
+
+  describe("staff-created packs", () => {
+    const STAFF = "pack-maker";
+
+    beforeEach(async () => {
+      await resetTables(kessenProgress, actionLog);
+      await insertUsers([
+        {
+          userId: STAFF,
+          username: "Pack Maker",
+          role: "CONTENT-ADMIN",
+          status: "AWAKE",
+        },
+      ]);
+      await insertItems(
+        KESSEN_SEED_CATALOG.map((card) => ({
+          id: card.id,
+          // Item names are unique; the catalog's boss leader shares its Forbidden variant's name.
+          name: `${card.name} ${card.id}`,
+          itemType: "CARD" as const,
+          rarity: card.rarity,
+          slot: "NONE" as const,
+          target: "SELF" as const,
+          inShop: false,
+          canStack: true,
+          stackSize: 99,
+          cardData: kessenCardToCardData(card),
+        })),
+      );
+    });
+
+    it.each(["EPIC", "LEGENDARY"] as const)(
+      "refuses creation without selectable %s pity rewards before inserting a pack",
+      async (rarity) => {
+        const db = await getTestDatabase();
+        await db.delete(item).where(eq(item.rarity, rarity));
+        const before = await db.select({ id: item.id }).from(item);
+        const staff = await callerFor(itemRouter, STAFF);
+        const result = await staff.create({ type: "CONSUMABLE", kessenPack: true });
+        expect(result.success).toBe(false);
+        expect(result.message).toContain("pity guarantees");
+        expect(await db.select({ id: item.id }).from(item)).toEqual(before);
+        expect(await db.select().from(actionLog)).toEqual([]);
+      },
+    );
+
+    it("refuses unpayable rare-slot saves without changing the pack or logging a save", async () => {
+      const db = await getTestDatabase();
+      const staff = await callerFor(itemRouter, STAFF);
+      const created = await staff.create({ type: "CONSUMABLE", kessenPack: true });
+      expect(created.success).toBe(true);
+      const saved = await db.query.item.findFirst({
+        where: eq(item.id, created.message),
+      });
+      if (!saved) throw new Error("Missing pack fixture");
+      for (const rareSlotWeights of [
+        FORBIDDEN_ONLY,
+        {
+          ...COMMON_ONLY,
+          COMMON: 0,
+          RARE: CACHE_PROBABILITY_TOTAL / 2,
+          LEGENDARY: CACHE_PROBABILITY_TOTAL / 2,
+        },
+      ]) {
+        const effects = buildKessenPackEffects(
+          {
+            name: saved.name,
+            faction: null,
+            normalWeights: COMMON_ONLY,
+            rareSlotWeights,
+          },
+          KESSEN_SEED_CATALOG,
+        );
+        const result = await staff.update({
+          id: saved.id,
+          data: ItemValidator.parse({ ...saved, hidden: false, inShop: true, effects }),
+        });
+        expect(result.success).toBe(false);
+        expect(result.message).toContain("pity guarantees");
+        expect(await db.query.item.findFirst({ where: eq(item.id, saved.id) })).toEqual(
+          saved,
+        );
+        expect(await db.select().from(actionLog)).toEqual([]);
+      }
+    });
+
+    it("saves Legendary-floor and no-pity Forbidden packs", async () => {
+      const db = await getTestDatabase();
+      const staff = await callerFor(itemRouter, STAFF);
+      const created = await staff.create({ type: "CONSUMABLE", kessenPack: true });
+      expect(created.success).toBe(true);
+      const saved = await db.query.item.findFirst({
+        where: eq(item.id, created.message),
+      });
+      if (!saved) throw new Error("Missing pack fixture");
+      for (const config of [
+        {
+          slots: { normal: 1, rareSlot: 1 },
+          normalWeights: COMMON_ONLY,
+          rareSlotWeights: LEGENDARY_ONLY,
+        },
+        {
+          slots: { normal: 1, rareSlot: 0 },
+          normalWeights: FORBIDDEN_ONLY,
+          rareSlotWeights: FORBIDDEN_ONLY,
+        },
+      ]) {
+        const effects = buildKessenPackEffects(
+          { name: saved.name, faction: null, ...config },
+          KESSEN_SEED_CATALOG,
+        );
+        const result = await staff.update({
+          id: saved.id,
+          data: ItemValidator.parse({ ...saved, hidden: false, inShop: true, effects }),
+        });
+        expect(result.success, result.message).toBe(true);
+        expect(
+          await db.query.item.findFirst({ where: eq(item.id, saved.id) }),
+        ).toMatchObject({
+          effects,
+          hidden: false,
+          inShop: true,
+        });
+      }
+    });
+
+    it("creates a hidden pack the stall sells and the Card Hall opens once released", async () => {
+      const db = await getTestDatabase();
+      const staff = await callerFor(itemRouter, STAFF);
+      const created = await staff.create({ type: "CONSUMABLE", kessenPack: true });
+      expect(created.success).toBe(true);
+      const packId = created.message;
+      expect(isKessenPackId(packId)).toBe(true);
+      // The editor saves the new pack as created.
+      const saved = await db.query.item.findFirst({ where: eq(item.id, packId) });
+      expect(ItemValidator.safeParse(saved).error?.issues ?? []).toEqual([]);
+      const stall = async () =>
+        (
+          await listItemForGetAll(
+            db,
+            0,
+            { limit: 100 },
+            itemDatabaseFilter({
+              onlyInShop: true,
+              hidden: false,
+              itemType: "CONSUMABLE",
+              kessenGoods: "only",
+            }),
+          )
+        ).map((row) => row.id);
+      expect(await stall()).not.toContain(packId);
+
+      // The editor's shop fields release it at the stall with a daily limit.
+      await db
+        .update(item)
+        .set({
+          hidden: false,
+          inShop: true,
+          cost: PRICE,
+          purchaseLimit: 1,
+          purchaseLimitPeriod: "DAILY",
+        })
+        .where(eq(item.id, packId));
+      expect(await stall()).toContain(packId);
+      const api = await callerFor(itemRouter, USER);
+      expect(
+        (await api.buy({ itemId: packId, villageId: "home", stack: 1 })).success,
+      ).toBe(true);
+      expect(
+        (await api.buy({ itemId: packId, villageId: "home", stack: 1 })).success,
+      ).toBe(false);
+      expect(await copiesOf(packId)).toBe(1);
+
+      const [stack] = await db
+        .select({ id: userItem.id })
+        .from(userItem)
+        .where(and(eq(userItem.userId, USER), eq(userItem.itemId, packId)));
+      const opened = await callerForDatabase(kessenCollectionRouter, USER, db).openPack(
+        {
+          userItemId: stack?.id ?? "",
+          requestId: "staff-pack-open-1",
+        },
+      );
+      if (!opened.success || !("reveal" in opened)) throw new Error(opened.message);
+      expect(opened.reveal?.packItemId).toBe(packId);
+      expect(opened.reveal?.cards).toHaveLength(5);
+      expect(opened.reveal?.pity.epicIn).toBeGreaterThan(0);
+      expect(await copiesOf(packId)).toBe(0);
+
+      // A copy made in the item manual is a pack too.
+      const copy = await staff.clone({ id: packId });
+      expect(copy.success).toBe(true);
+      expect(isKessenPackId(copy.message)).toBe(true);
     });
   });
 });

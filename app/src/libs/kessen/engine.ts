@@ -948,7 +948,7 @@ const SHADOW_CLONE: KessenCard = {
   power: DEFAULT_KNOBS.gambitPower,
   provision: 0,
   abilities: [],
-  summonGroups: [],
+  sets: [],
   leaderBonus: 0,
   variant: "STANDARD",
   baseCardId: null,

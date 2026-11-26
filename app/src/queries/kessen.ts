@@ -68,7 +68,10 @@ export const listKessenCards = (
       ),
     );
 
-/** Card pack items with the weighted caches their odds are read from. */
+/**
+ * Released card pack items with the weighted caches their odds are read from; packs staff
+ * still keep hidden stay out of the public catalog.
+ */
 export const listKessenPackItems = (client: Pick<DrizzleClient, "select">) =>
   client
     .select({
@@ -79,7 +82,7 @@ export const listKessenPackItems = (client: Pick<DrizzleClient, "select">) =>
       effects: item.effects,
     })
     .from(item)
-    .where(like(item.id, `${KESSEN_PACK_ID_PREFIX}%`));
+    .where(and(like(item.id, `${KESSEN_PACK_ID_PREFIX}%`), eq(item.hidden, false)));
 
 /** One NPC match of the player, with its stored state. */
 export const findKessenMatch = (

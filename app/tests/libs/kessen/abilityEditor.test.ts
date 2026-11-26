@@ -57,7 +57,7 @@ describe("Kessen ability editor fields", () => {
 
   it("starts every verb as a valid ability", () => {
     for (const kind of KESSEN_ABILITY_KINDS)
-      expect(parsedAbility(draftAbility(kind, { group: "Crew" }))).toMatchObject({
+      expect(parsedAbility(draftAbility(kind, { set: "Crew" }))).toMatchObject({
         k: kind,
       });
   });
@@ -91,9 +91,7 @@ describe("ability drafts", () => {
       fields: { x: "Use 1 to 20" },
       entry: [],
     });
-    expect(abilityIssues({ k: "bond", group: " " }).fields.group).toContain(
-      "group name",
-    );
+    expect(abilityIssues({ k: "bond", group: " " }).fields.group).toContain("set name");
     expect(abilityIssues({ k: "vanish" }).entry).toEqual(["Choose an ability"]);
     expect(abilityIssues({ k: "rally", x: 1, mode: "single" }).entry).toHaveLength(1);
   });

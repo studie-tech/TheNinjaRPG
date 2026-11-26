@@ -39,10 +39,10 @@ export const KESSEN_GLOSSARY: Record<KessenKeyword, string> = {
   Strike: "Deploy: reduce an enemy unit's power by X; at 0 it is destroyed.",
   Empower: "Deploy: add X power to another unit on your side.",
   Rally: "Every other unit in this unit's row on your side shows +X.",
-  Bond: `+${DEFAULT_KNOBS.bondStep} for each other unit on your side with the same Bond, up to +${DEFAULT_KNOBS.bondCap}.`,
+  Bond: `+${DEFAULT_KNOBS.bondStep} for each other unit on your side in the set it names, up to +${DEFAULT_KNOBS.bondCap}.`,
   Meditate: `At the start of each of your turns, gain X power, up to +${DEFAULT_KNOBS.meditateCap} in total.`,
   Summon:
-    "Deploy: the top-most card of your deck in this group joins the board, without its Deploy.",
+    "Deploy: the top-most unit of your deck in the set it names joins the board, without its Deploy.",
   Infiltrator: "Placed on the opponent's side, where it counts for them; you draw 1.",
   Revive:
     "Deploy: play a unit from your discard that is not Unyielding, an Infiltrator or a Revive card.",

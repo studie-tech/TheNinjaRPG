@@ -303,7 +303,7 @@ export const decideWithTrace = (
 };
 
 /**
- * Cards to mulligan: Summon copies beyond the first of a group, Terrains beyond
+ * Cards to mulligan: Summon copies beyond the first of a set, Terrains beyond
  * the first, Clear Skies against an opponent without Terrain, a Seal-only tactic against
  * a faction without engines, Infiltrators after Round 1, then every card at least
  * `margin` (default 1.5 points) below the deck's average value, lowest first, up to the
@@ -342,13 +342,13 @@ export const chooseMulligan = (
     );
   const opponentEngines = factionHasEngines(pool, view.seats[other(seat)].faction);
   const forced = new Set<string>();
-  const summonGroups = new Set<string>();
+  const summonSets = new Set<string>();
   let terrains = 0;
   for (const entry of entries) {
     for (const ability of entry.card.abilities) {
       if (ability.k !== "summon") continue;
-      if (summonGroups.has(ability.group)) forced.add(entry.id);
-      summonGroups.add(ability.group);
+      if (summonSets.has(ability.group)) forced.add(entry.id);
+      summonSets.add(ability.group);
     }
     if (entry.card.kind === "TACTIC" && hasAbility(entry.card, "terrain")) {
       terrains += 1;
@@ -378,7 +378,7 @@ export const chooseMulligan = (
 /**
  * Largest single-turn board gain (milli-points) the opponent of `view.me` could make now:
  * every card of their possible pool on every legal row with its best targets, Summon
- * pulling the strongest group member, plus their unused leader.
+ * pulling the strongest set member, plus their unused leader.
  */
 export const oppThreat = (view: MatchView, catalog: readonly KessenCard[]) => {
   const pool = canonicalPool(view, { pool: catalog });

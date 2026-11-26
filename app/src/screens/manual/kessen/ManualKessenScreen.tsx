@@ -34,6 +34,7 @@ import {
   KESSEN_AI_TIERS,
   KESSEN_AI_VERSION,
 } from "@/libs/kessen/ai";
+import { kessenSets } from "@/libs/kessen/catalog";
 import { KESSEN_DECK_RULES } from "@/libs/kessen/deck";
 import {
   KESSEN_NPCS,
@@ -69,10 +70,10 @@ import type {
 
 /**
  * The Kessen manual: the player reference (how a match plays, rows, deck rules, the
- * keyword glossary, factions and their perks, pack odds and pity, rewards and limits),
- * then for content staff the rules and AI versions, the Circuit roster with every deck,
- * reward and drop table, and the simulation targets the content is tuned to. Everything
- * is read from the shipped code data and the live card catalog.
+ * keyword glossary, factions and their perks, sets, pack odds and pity, rewards and
+ * limits), then for content staff the rules and AI versions, the Circuit roster with every
+ * deck, reward and drop table, and the simulation targets the content is tuned to.
+ * Everything is read from the shipped code data and the live card catalog.
  */
 export function ManualKessenScreen() {
   const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
@@ -265,6 +266,22 @@ export function ManualKessenScreen() {
       </ContentBox>
 
       <ContentBox
+        id="kessen-sets"
+        title="Sets"
+        subtitle="Cards that belong together, across factions"
+        initialBreak
+      >
+        <p>
+          A set ties cards together outside their faction. A Bond counts the other units
+          on your side in the set it names, and a Summon pulls the top-most unit of its
+          set from your deck. The Collection opens every set with the cards you own.
+        </p>
+        <CatalogPart catalog={catalog}>
+          {(data) => <SetList cards={data.cards} />}
+        </CatalogPart>
+      </ContentBox>
+
+      <ContentBox
         id="kessen-packs"
         title="Pack odds and pity"
         subtitle="Per slot, from the live pack items"
@@ -344,6 +361,52 @@ export function ManualKessenScreen() {
 }
 
 /** A part of the page drawn from the card catalog, with its loading and error states. */
+/**
+ * Every set of the collectible cards: what names it in play, its cards with their
+ * factions and the cards outside it whose Bond or Summon names it.
+ */
+const SetList = ({ cards }: { cards: KessenCatalog["cards"] }) => {
+  const sets = kessenSets(
+    cards.filter((card) => card.isCollectible && card.variant === "STANDARD"),
+  );
+  if (sets.length === 0) return <p className="mt-2">No card belongs to a set yet.</p>;
+  return (
+    <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+      {sets.map((set) => {
+        const verbs = [
+          ...new Set(
+            [...set.members, ...set.callers].flatMap((card) =>
+              card.abilities.flatMap((ability) =>
+                (ability.k === "bond" || ability.k === "summon") &&
+                ability.group === set.name
+                  ? [ability.k === "bond" ? "Bond" : "Summon"]
+                  : [],
+              ),
+            ),
+          ),
+        ];
+        return (
+          <li key={set.name} className="rounded-md border p-2">
+            <p className="font-bold">
+              {set.name}
+              {verbs.length > 0 ? ` · ${verbs.join(", ")}` : ""}
+            </p>
+            <p>{set.members.map(cardWithFaction).join(", ")}</p>
+            {set.callers.length > 0 ? (
+              <p className="text-muted-foreground">
+                Used by {set.callers.map(cardWithFaction).join(", ")}
+              </p>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+
+const cardWithFaction = (card: KessenCatalog["cards"][number]) =>
+  `${card.name} (${KESSEN_FACTION_NAMES[card.faction]})`;
+
 const CatalogPart = ({
   catalog,
   children,
@@ -880,6 +943,7 @@ const PLAYER_SECTIONS: readonly (readonly [string, string])[] = [
   ["kessen-decks", "Building a deck"],
   ["kessen-keywords", "Keywords"],
   ["kessen-factions", "Factions"],
+  ["kessen-sets", "Sets"],
   ["kessen-packs", "Pack odds"],
   ["kessen-rewards", "Rewards"],
 ];

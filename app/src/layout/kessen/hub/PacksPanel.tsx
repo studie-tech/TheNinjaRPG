@@ -36,7 +36,7 @@ import { RarityGem } from "../RarityGem";
 
 /**
  * The player's packs as item tiles with Open buttons in a fixed order (Paper, Village,
- * Lacquer, First), the pity counters, the auto-sell switch with what a sale pays, and a
+ * Lacquer, First, then staff-created packs by name), the pity counters, the auto-sell switch with what a sale pays, and a
  * slot for the Card Master stall (the page passes the shop in). Without packs an empty
  * state points to the stall.
  */
@@ -68,7 +68,9 @@ export const PacksPanel = ({
 }) => {
   const stallRef = useRef<HTMLElement>(null);
   const stallTitleId = useId();
-  const sorted = [...packs].sort((a, b) => packOrder(a.itemId) - packOrder(b.itemId));
+  const sorted = [...packs].sort(
+    (a, b) => packOrder(a.itemId) - packOrder(b.itemId) || a.name.localeCompare(b.name),
+  );
   return (
     // Closing a ceremony whose stack ran out returns focus to the first remaining control.
     <section className={cn("kh-packs", className)} aria-label="Packs" data-focus-group>
@@ -106,7 +108,12 @@ export const PacksPanel = ({
               const opening = openingUserItemId === pack.userItemId;
               return (
                 <li key={pack.userItemId} className="kh-pack">
-                  <PackArt itemId={pack.itemId} size={128} className="kh-pack-art" />
+                  <PackArt
+                    itemId={pack.itemId}
+                    image={odds?.image}
+                    size={128}
+                    className="kh-pack-art"
+                  />
                   <Badge variant="secondary" className="kh-pack-count">
                     ×{pack.quantity}
                     <span className="sr-only"> owned</span>
@@ -210,10 +217,13 @@ export const PityLine = ({
 /** Pack illustration. */
 export const PackArt = ({
   itemId,
+  image,
   size,
   className,
 }: {
   itemId: string;
+  /** The pack item's image, which a staff-created pack shows as its art. */
+  image?: string;
   /** CSS width it is shown at; picks the rendition. */
   size: number;
   className?: string;
@@ -226,7 +236,7 @@ export const PackArt = ({
       aria-hidden
     >
       <Image
-        src={kessenPackArt(itemId)}
+        src={kessenPackArt(itemId, image)}
         alt=""
         width={width}
         height={width}

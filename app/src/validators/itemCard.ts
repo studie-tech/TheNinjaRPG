@@ -25,7 +25,11 @@ export const KessenCardVariants = ["STANDARD", "FORBIDDEN"] as const;
 export type KessenCardVariant = (typeof KessenCardVariants)[number];
 
 const amount = z.coerce.number().int().min(1).max(20);
-const groupName = z.string().trim().min(1).max(40);
+/** Longest set name. */
+export const KESSEN_SET_NAME_MAX = 40;
+/** Memberships cover three summon affiliations and four independent Bond affiliations. */
+export const KESSEN_MAX_SETS = 7;
+const setName = z.string().trim().min(1).max(KESSEN_SET_NAME_MAX);
 
 /**
  * One ability of a card, in printed order. The same list drives the engine and the
@@ -45,9 +49,11 @@ export const kessenAbilitySchema = z.discriminatedUnion("k", [
     mode: z.enum(["single", "ownRowOthers", "chosenRow", "allMine"]),
   }),
   z.strictObject({ k: z.literal("rally"), x: amount }),
-  z.strictObject({ k: z.literal("bond"), group: groupName }),
+  /** `group` names the set whose other units on your side count for the Bond. */
+  z.strictObject({ k: z.literal("bond"), group: setName }),
   z.strictObject({ k: z.literal("meditate"), x: amount }),
-  z.strictObject({ k: z.literal("summon"), group: groupName }),
+  /** `group` names the set the Summon pulls from your deck. */
+  z.strictObject({ k: z.literal("summon"), group: setName }),
   z.strictObject({ k: z.literal("infiltrator") }),
   z.strictObject({ k: z.literal("revive"), times: z.literal(2).optional() }),
   z.strictObject({ k: z.literal("substitution") }),
@@ -107,8 +113,8 @@ export const cardDataSchema = z
     /** Deck-building cost; leaders carry 0 and grant `leaderBonus` instead. */
     provision: z.coerce.number().int().min(0).max(20),
     abilities: z.array(kessenAbilitySchema).max(KESSEN_MAX_ABILITIES),
-    /** Summon groups this card belongs to, e.g. ["Crew"]. */
-    summonGroups: z.array(groupName).max(3).prefault([]),
+    /** Sets this card belongs to, e.g. ["Crew"]: what Bond counts and Summon pulls. */
+    sets: z.array(setName).max(KESSEN_MAX_SETS).prefault([]),
     leaderBonus: z.coerce.number().int().min(0).max(40).prefault(0),
     flavor: z.string().trim().max(240).prefault(""),
     /** Portrait illustration (5:7); `Item.image` stays the square inventory icon. */
@@ -147,6 +153,9 @@ export const cardDataSchema = z
     const hiddenChoice = hiddenChoiceIssue(data.abilities);
     if (hiddenChoice) {
       ctx.addIssue({ code: "custom", message: hiddenChoice, path: ["abilities"] });
+    }
+    if (new Set(data.sets).size !== data.sets.length) {
+      ctx.addIssue({ code: "custom", message: "Sets must differ", path: ["sets"] });
     }
     if (data.variant === "FORBIDDEN" && !data.baseCardId) {
       ctx.addIssue({

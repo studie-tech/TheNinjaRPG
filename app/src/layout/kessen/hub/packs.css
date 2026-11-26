@@ -470,8 +470,108 @@
   font-size: 14px;
 }
 
+/* The chosen faction's starter deck: the leader plate, then one row per card with its
+   provision, name and rarity, row and power, rules text and copies. */
+.kh-starter-deck {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid hsl(var(--border));
+}
+.kh-starter-deck-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 8px;
+}
+.kh-starter-deck-title {
+  margin: 0;
+  font-family: var(--kessen-font-display);
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+.kh-starter-deck-size {
+  margin: 0;
+  color: var(--kh-quiet);
+  font-size: 13px;
+}
+.kh-starter-deck-leader {
+  margin-bottom: 10px;
+}
+.kh-starter-deck-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kh-starter-card {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.35);
+}
+.kh-starter-card-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.kh-starter-card-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.kh-starter-card-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--kh-quiet);
+  font-size: 12px;
+}
+.kh-starter-card-kind svg {
+  width: 13px;
+  height: 13px;
+}
+.kh-starter-card-text {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.kh-starter-card-flavor {
+  color: var(--kh-quiet);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.4;
+}
+/* Touch keywords carry a padded tap target that heightens their line; the margin takes
+   the padding back, so the row keeps its height and the target reaches into the gaps. */
+@media (pointer: coarse) {
+  .kh-starter-card-text:has(.kessen-kw-button) {
+    margin-block: calc(0.65em - 21px);
+  }
+}
+.kh-starter-card-count {
+  font-family: var(--kessen-font-num);
+  font-size: 16px;
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+
 @container kh-starter (min-width: 520px) {
   .kh-starter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kh-starter-deck-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -16,7 +16,12 @@ import {
 import { furnitureVariantDataSchema } from "@/validators/itemFurniture";
 import { lpcItemFields } from "@/validators/lpc";
 
-export const itemCreateSchema = z.object({ type: z.enum(ItemTypes) });
+/** A new item of one type; `kessenPack` makes the consumable a Kessen card pack. */
+export const itemCreateSchema = z
+  .object({ type: z.enum(ItemTypes), kessenPack: z.boolean().optional() })
+  .refine((input) => !input.kessenPack || input.type === "CONSUMABLE", {
+    message: "A Kessen card pack is a consumable",
+  });
 
 export const itemBuySchema = z.object({
   itemId: z.string(),

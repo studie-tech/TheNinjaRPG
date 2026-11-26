@@ -32,12 +32,13 @@ import { aiRng, decide } from "@/libs/kessen/ai";
 import { kessenCardToCardData, snapshotCatalog } from "@/libs/kessen/catalog";
 import { KESSEN_DECK_RULES, starterDeck } from "@/libs/kessen/deck";
 import { createMatch } from "@/libs/kessen/engine";
+import { buildKessenPackEffects } from "@/libs/kessen/packContents";
 import { KESSEN_PACK_IDS } from "@/libs/kessen/packs";
 import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import type { KessenAction } from "@/libs/kessen/types";
 import { kessenRouter } from "@/server/api/routers/kessen";
 import { kessenCollectionRouter } from "@/server/api/routers/kessenCollection";
-import { buildKessenPackEffects, KESSEN_PACKS } from "@/server/utils/kessenPacks";
+import { KESSEN_PACKS } from "@/server/utils/kessenPacks";
 import { getUtcDayKey, periodStart } from "@/utils/time";
 import { CARD_ITEM_DEFAULTS } from "@/validators/itemCard";
 import type { KessenMatchPayload, KessenStoredMatch } from "@/validators/kessen";
@@ -355,12 +356,26 @@ describeWithDatabase("kessen router", () => {
       .update(item)
       .set({ description: "Strike: a unit's description is not a title" })
       .where(eq(item.id, unit));
+    // A pack staff still keep hidden stays out of the public catalog.
+    await insertItems([
+      {
+        id: "kessen-pack-staff-draft",
+        name: "Draft Pack",
+        itemType: "CONSUMABLE",
+        hidden: true,
+        effects: buildKessenPackEffects(KESSEN_PACKS[0]!, KESSEN_SEED_CATALOG),
+      },
+    ]);
     const catalog = await resolverOf(kessenRouter.getCatalog)({
       ctx: { drizzle: await db(), userId: null },
       input: undefined,
     });
     expect(catalog.cards).toHaveLength(KESSEN_SEED_CATALOG.length);
     expect(catalog.packs.map((pack) => pack.id).sort()).toEqual([...PACKS].sort());
+    expect(
+      catalog.packs.find((pack) => pack.id === KESSEN_PACK_IDS.village("AKASUMI"))
+        ?.factions,
+    ).toEqual(["AKASUMI", "NEUTRAL"]);
     // The served odds are the stored caches': the First Bundle's fifth card is EPIC+.
     const first = catalog.packs.find((pack) => pack.id === KESSEN_PACK_IDS.first);
     expect(first?.odds.rareSlot).toEqual({ ...KESSEN_LACQUER_RARE_SLOT_WEIGHTS });

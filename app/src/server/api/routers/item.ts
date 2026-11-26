@@ -48,6 +48,7 @@ import {
   ITEM_LEVEL_CAP,
   type ItemSlot,
   ItemSlots,
+  KESSEN_PACK_ID_PREFIX,
   MAX_BULK_SELL_ITEMS,
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_EXTRA_RESKIN_SLOTS,
@@ -142,6 +143,12 @@ import {
   isEarnedKessenPack,
   isKessenGood,
 } from "@/libs/kessen/cardSale";
+import { kessenCatalogCards } from "@/libs/kessen/catalog";
+import {
+  kessenPackPityProblem,
+  kessenPackPool,
+  kessenPackPoolProblem,
+} from "@/libs/kessen/packContents";
 import { isKessenPackId } from "@/libs/kessen/packs";
 import {
   buildMissingLoadouts,
@@ -243,6 +250,7 @@ import {
   insertItemForCreate,
   insertItemLoadoutForInsertMissing,
   insertItemPurchaseCounterForBuy,
+  insertItemValues,
   insertItemVariantForUpsertItemVariant,
   insertUserItemForEvolveItem,
   insertUserItemForSplitItemStack,
@@ -322,7 +330,7 @@ import {
   userItemAvailableAt,
 } from "@/queries/item";
 import { fetchJutsuLoadouts } from "@/queries/jutsu";
-import { listOwnedKessenCardCounts } from "@/queries/kessen";
+import { listKessenCards, listOwnedKessenCardCounts } from "@/queries/kessen";
 import { findActionLogById } from "@/queries/logs";
 import { findLpcDesignForSelection } from "@/queries/lpc";
 import { insertUserPet, listVisiblePetJutsu } from "@/queries/pets";
@@ -383,6 +391,7 @@ import { grantUserItems } from "@/server/utils/itemGrants";
 import { joinFinishedCrafts } from "@/server/utils/itemStacks";
 import {
   KessenPackRaceError,
+  kessenNewPackItem,
   prepareKessenPackOpening,
 } from "@/server/utils/kessenPacks";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
@@ -690,11 +699,27 @@ export const itemRouter = createTRPCRouter({
     .input(itemCreateSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, cardRows] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        input.kessenPack ? listKessenCards(ctx.drizzle) : [],
+      ]);
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role)) {
         return errorResponse(`Not allowed to create item`);
+      }
+      if (input.kessenPack) {
+        // Pack identity is the id prefix, which the stall, the Card Hall and the
+        // opening flow all key on.
+        const id = `${KESSEN_PACK_ID_PREFIX}${nanoid()}`;
+        const cards = kessenCatalogCards(cardRows);
+        const poolProblem = kessenPackPoolProblem(kessenPackPool(cards, null));
+        if (poolProblem) return errorResponse(poolProblem);
+        const pack = kessenNewPackItem(id, cards);
+        const pityProblem = kessenPackPityProblem(pack.effects, cards);
+        if (pityProblem) return errorResponse(pityProblem);
+        await insertItemValues(ctx.drizzle, pack);
+        return { success: true, message: id };
       }
       const id = nanoid();
       await insertItemForCreate(ctx.drizzle, id, input);
@@ -716,8 +741,10 @@ export const itemRouter = createTRPCRouter({
       if (!itemData) return errorResponse("Item not found");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
 
-      // Create new item with copied data
-      const newItemId = nanoid();
+      // Create new item with copied data; a copied card pack stays a card pack.
+      const newItemId = isKessenPackId(itemData.id)
+        ? `${KESSEN_PACK_ID_PREFIX}${nanoid()}`
+        : nanoid();
       // Server-side enforcement: zero out reward_reputation when cloning if user lacks permission
       let clonedEffects = itemData.effects;
       if (!canAwardReputation(user.role)) {
@@ -853,6 +880,7 @@ export const itemRouter = createTRPCRouter({
         lpcDesign,
         warehouseVillage,
         requiredByVariants,
+        cardRows,
       ] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
@@ -883,6 +911,10 @@ export const itemRouter = createTRPCRouter({
           ? findWarehouseVillage(ctx.drizzle, input.data.villageId)
           : Promise.resolve(undefined),
         listItemVariantRequiringItemForUpdate(ctx.drizzle, input),
+        isKessenPackId(input.id) &&
+        input.data.effects.filter(isWeightedCacheEffect).length > 1
+          ? listKessenCards(ctx.drizzle)
+          : [],
       ]);
       if (titleError) return errorResponse(titleError);
       if (input.data.requiredSkillId && requiredSkill?.pathType !== "SKILL") {
@@ -897,6 +929,10 @@ export const itemRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to edit item");
       }
+      const pityProblem = isKessenPackId(entry.id)
+        ? kessenPackPityProblem(input.data.effects, kessenCatalogCards(cardRows))
+        : null;
+      if (pityProblem) return errorResponse(pityProblem);
       const spriteError = lpcSelectionError(
         input.data.lpcProfile,
         entry.lpcProfile,

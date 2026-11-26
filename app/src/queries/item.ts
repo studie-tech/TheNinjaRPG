@@ -409,6 +409,12 @@ export const listItemForGetBloodlineItemNames = (
     orderBy: (table, { asc }) => [asc(table.name)],
   });
 
+/** Build an `item` insert of complete item values, such as a new Kessen pack. */
+export const insertItemValues = (
+  client: Pick<DrizzleClient, "insert">,
+  values: typeof item.$inferInsert,
+) => client.insert(item).values(values);
+
 /** Build the `item` insert for `create`. */
 export const insertItemForCreate = (
   client: Pick<DrizzleClient, "insert">,

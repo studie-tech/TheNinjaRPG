@@ -550,6 +550,7 @@ function KessenHall() {
       packName={
         opened ? kessenItemName(opened.itemId, lookup, catalog.packs) : undefined
       }
+      packImage={catalog.packs.find((pack) => pack.id === opened?.itemId)?.image}
       motion={motion}
       onClose={() => setOpened(null)}
       onOpenAnother={

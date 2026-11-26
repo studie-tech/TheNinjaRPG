@@ -17,7 +17,7 @@ import {
   KESSEN_FIRST_BUNDLE_ITEM_ID,
 } from "@/drizzle/constants";
 import type { DeckFaction } from "@/libs/kessen/deck";
-import { kessenVillagePackFaction } from "@/libs/kessen/packs";
+import { KESSEN_PACK_IDS, kessenVillagePackFaction } from "@/libs/kessen/packs";
 import type { KessenCard } from "@/libs/kessen/types";
 import { bunnyImageUrl } from "@/utils/image";
 import type { KessenFaction } from "@/validators/itemCard";
@@ -64,11 +64,17 @@ export const kessenLandscapeUrl = (src: string, width: number) =>
 export const kessenEmblemUrl = (faction: KessenFaction) =>
   IMG_KESSEN_EMBLEMS[factionKey(faction)];
 
-/** Pack illustration for a pack item id (`kessen-pack-paper`, `kessen-pack-village-*`, ...). */
-export const kessenPackArt = (packItemId: string) => {
+/**
+ * Pack illustration for a pack item: the seed packs' own art for their ids
+ * (`kessen-pack-village-*`, the First Bundle, the Lacquer Case), else the item's image when
+ * the caller has it, which is how staff-created packs show their art.
+ */
+export const kessenPackArt = (packItemId: string, image?: string | null) => {
   const village = kessenVillagePackFaction(packItemId);
   if (village) return KESSEN_VILLAGE_PACK_ART[village];
   if (packItemId === KESSEN_FIRST_BUNDLE_ITEM_ID) return KESSEN_FIRST_BUNDLE_ART;
+  if (packItemId === KESSEN_PACK_IDS.lacquer) return KESSEN_LACQUER_CASE_ART;
+  if (image) return image;
   if (packItemId.includes("village")) return IMG_KESSEN_PACKS.village;
   if (packItemId.includes("lacquer")) return KESSEN_LACQUER_CASE_ART;
   if (packItemId.includes("forbidden")) return IMG_KESSEN_PACKS.forbidden;

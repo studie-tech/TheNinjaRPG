@@ -526,11 +526,7 @@ const summon = (ctx: Ctx, src: Source, group: string) => {
       ctx.hidden.push("summon");
       return;
     }
-    if (
-      card.kind !== "UNIT" ||
-      !card.summonGroups.includes(group) ||
-      isInfiltrator(card)
-    ) {
+    if (card.kind !== "UNIT" || !card.sets.includes(group) || isInfiltrator(card)) {
       continue;
     }
     const row =
