@@ -129,12 +129,13 @@ describeWithDatabase("Kessen card sets migration", () => {
     expect(await stateOf("current")).toEqual(current);
   });
 
-  it("preserves all three summon affiliations and four distinct Bond affiliations", async () => {
+  it("preserves seven affiliations including case and accent differences", async () => {
     const client = await getTestDatabase();
     const base = KESSEN_SEED_CATALOG[0];
     if (!base) throw new Error("No seed card");
-    const summonGroups = ["Summon A", "Summon B", "Summon C"];
-    const bonds = ["Bond A", "Bond B", "Bond C", "Bond D"];
+    // The engine matches set names exactly, even when MySQL's default collation does not.
+    const summonGroups = ["Crew", "crew", "Crëw"];
+    const bonds = ["CREW", "Crèw", "Bond C", "Bond D"];
     const sets = [...summonGroups, ...bonds];
     const card: KessenCard = {
       ...base,

@@ -4,17 +4,18 @@
 -- NPC pool) move to the new field; JSON aggregation leaves element order undefined, so the
 -- pool, whose order is stored, is rebuilt by index. JSON_TABLE reads only base-table and
 -- earlier JSON_TABLE columns, never a CTE's, so the set rows unpack the match state itself.
+-- Binary collation preserves the case and accents the engine matches by exact set name.
 WITH `cardSet` AS (
   SELECT `card`.`id`, `summoned`.`name`
   FROM `Item` AS `card`,
-    JSON_TABLE(`card`.`cardData`, '$.summonGroups[*]' COLUMNS (`name` VARCHAR(40) PATH '$')) AS `summoned`
+    JSON_TABLE(`card`.`cardData`, '$.summonGroups[*]' COLUMNS (`name` VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$')) AS `summoned`
   WHERE `card`.`itemType` = 'CARD'
   UNION
   SELECT `card`.`id`, `ability`.`name`
   FROM `Item` AS `card`,
     JSON_TABLE(`card`.`cardData`, '$.abilities[*]' COLUMNS (
       `kind` VARCHAR(32) PATH '$.k',
-      `name` VARCHAR(40) PATH '$.group'
+      `name` VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$.group'
     )) AS `ability`
   WHERE `card`.`itemType` = 'CARD' AND `ability`.`kind` = 'bond'
 ),
@@ -50,10 +51,10 @@ WITH `matchCard` AS (
     JSON_TABLE(
       JSON_EXTRACT(`kessen`.`state`, CONCAT('$.engine.cards."', `entry`.`cardId`, '"')),
       '$' COLUMNS (
-        NESTED PATH '$.summonGroups[*]' COLUMNS (`summoned` VARCHAR(40) PATH '$'),
+        NESTED PATH '$.summonGroups[*]' COLUMNS (`summoned` VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$'),
         NESTED PATH '$.abilities[*]' COLUMNS (
           `kind` VARCHAR(32) PATH '$.k',
-          `bond` VARCHAR(40) PATH '$.group'
+          `bond` VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$.group'
         )
       )
     ) AS `card`
@@ -97,10 +98,10 @@ WITH RECURSIVE `poolCard` AS (
   FROM `KessenMatch` AS `kessen`,
     JSON_TABLE(`kessen`.`state`, '$.pool[*]' COLUMNS (
       `n` FOR ORDINALITY,
-      NESTED PATH '$.summonGroups[*]' COLUMNS (`summoned` VARCHAR(40) PATH '$'),
+      NESTED PATH '$.summonGroups[*]' COLUMNS (`summoned` VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$'),
       NESTED PATH '$.abilities[*]' COLUMNS (
         `kind` VARCHAR(32) PATH '$.k',
-        `bond` VARCHAR(40) PATH '$.group'
+        `bond` VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$.group'
       )
     )) AS `card`
   WHERE JSON_CONTAINS_PATH(`kessen`.`state`, 'one', '$.pool[*].summonGroups')
