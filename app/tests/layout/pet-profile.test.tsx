@@ -1585,6 +1585,8 @@ it("associates a friendly blank-name error with the field and preserves backend 
 });
 
 it("offers a free gender setting before the cutoff and shows it read-only afterwards", async () => {
+  // Pin both sides of the cutoff so the test does not depend on today's date.
+  const editable = vi.spyOn(petGender, "isPetGenderEditable").mockReturnValue(true);
   const view = mount();
   await view.findByRole("tab", { name: "Settings" });
   selectTab(view, "Settings");
@@ -1595,11 +1597,11 @@ it("offers a free gender setting before the cutoff and shows it read-only afterw
   ).toBe(true);
   expect(
     view.getByText(
-      /Changeable until 26 Nov, without using an image attempt\. Regenerate to redraw with it\./,
+      `Changeable until ${petGender.PET_GENDER_EDIT_UNTIL_LABEL}, without using an image attempt. Regenerate to redraw with it.`,
     ),
   ).toBeDefined();
   cleanup();
-  vi.spyOn(petGender, "isPetGenderEditable").mockReturnValue(false);
+  editable.mockReturnValue(false);
   data = { ...data, pet: { ...data.pet!, gender: "FEMALE" } };
   const later = mount();
   await later.findByRole("tab", { name: "Settings" });
