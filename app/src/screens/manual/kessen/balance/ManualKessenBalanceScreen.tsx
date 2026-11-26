@@ -310,7 +310,7 @@ function FactionGrid({
                   Neutral cards join every deck; their match trials play from all six
                   factions.
                 </p>
-              ) : rate ? (
+              ) : rate && rate.rate.games > 0 ? (
                 <div className="grid gap-1">
                   <p className="flex items-baseline justify-between gap-2">
                     <span className="text-muted-foreground text-sm">
@@ -336,7 +336,9 @@ function FactionGrid({
                   />
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">Simulating…</p>
+                <p className="text-muted-foreground text-sm">
+                  {rate ? "Gauntlet win rate unavailable" : "Simulating…"}
+                </p>
               )}
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
                 {decks.map((deck) => {
@@ -345,7 +347,9 @@ function FactionGrid({
                   );
                   return (
                     <Fact key={deck.deck.key} label={deck.deck.label}>
-                      {deckRate ? `${percent(deckRate.rate.score)} · ` : ""}
+                      {deckRate
+                        ? `${deckRate.rate.games > 0 ? percent(deckRate.rate.score) : "Unavailable"} · `
+                        : ""}
                       {deck.stats.provision}/{deck.stats.budget} provision
                       {deck.errors.length > 0 ? " · illegal" : ""}
                     </Fact>
@@ -400,9 +404,12 @@ function HealthGrid({ gauntlet }: { gauntlet: KessenGauntletSummary | null }) {
     },
     {
       label: "Round 1 opener scores",
-      value: percent(health.opener),
+      value: health.games > health.unfinished ? percent(health.opener) : "Unavailable",
       limit: `${percent(limits.opener[0])}–${percent(limits.opener[1])}`,
-      ok: health.opener >= limits.opener[0] && health.opener <= limits.opener[1],
+      ok:
+        health.games > health.unfinished &&
+        health.opener >= limits.opener[0] &&
+        health.opener <= limits.opener[1],
     },
     {
       label: "Swing of the top 1% of plays",
@@ -668,6 +675,9 @@ function TrialCell({
       </div>
     );
   }
+  if (trial.games === 0) {
+    return <p className="text-muted-foreground text-sm">Match trial unavailable</p>;
+  }
   const limit = KESSEN_BALANCE.trialEdge;
   return (
     <div className="grid grid-cols-[11rem_1fr] items-center gap-x-2 text-sm @3xl:grid-cols-1">
@@ -710,8 +720,8 @@ function LeaderList({
         a.card.name.localeCompare(b.card.name),
     );
   const edges = leaders.flatMap((entry) => {
-    const edge = trials?.[entry.card.id]?.edge;
-    return edge === undefined ? [] : [edge];
+    const trial = trials?.[entry.card.id];
+    return trial && trial.games > 0 ? [trial.edge] : [];
   });
   const median = edges.length > 0 ? medianOf(edges) : null;
   const spread = KESSEN_BALANCE.leaderSpread;
@@ -750,7 +760,7 @@ function LeaderList({
                 {entry.card.leaderBonus} (limit {KESSEN_BALANCE.leaderBonus[0]}–
                 {KESSEN_BALANCE.leaderBonus[1]})
               </p>
-              {trial && median !== null ? (
+              {trial && trial.games > 0 && median !== null ? (
                 <div className="grid gap-1 text-sm">
                   <span>
                     <span className="text-muted-foreground">Adds </span>
@@ -777,7 +787,9 @@ function LeaderList({
                   />
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">Simulating…</p>
+                <p className="text-muted-foreground text-sm">
+                  {trial ? "Match trial unavailable" : "Simulating…"}
+                </p>
               )}
               <FlagList flags={flags} className="text-sm" />
             </li>

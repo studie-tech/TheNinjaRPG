@@ -27,7 +27,9 @@ import type { KessenAction, KessenCard, MatchState, Row, Seat } from "./types";
 
 /** Simulation settings; `version` keys cached results. */
 export const KESSEN_BALANCE_SIM = {
-  version: 2,
+  version: 3,
+  /** Stable seed cohort, independent of summary and cache changes. */
+  seedVersion: 2,
   tier: "CHUNIN" satisfies KessenAiTier,
   /** Games per pair of reference decks, half with each deck opening the seats. */
   gauntletGamesPerPair: 16,
@@ -139,7 +141,7 @@ export interface KessenGauntletJob extends KessenSimJob {
 export const gauntletJobs = (
   decks: readonly KessenReferenceDeck[],
   gamesPerPair: number = KESSEN_BALANCE_SIM.gauntletGamesPerPair,
-  prefix = `kessen-balance:v${KESSEN_BALANCE_SIM.version}:gauntlet`,
+  prefix = `kessen-balance:v${KESSEN_BALANCE_SIM.seedVersion}:gauntlet`,
 ): KessenGauntletJob[] => {
   const jobs: KessenGauntletJob[] = [];
   for (let i = 0; i < decks.length; i++) {
@@ -175,6 +177,7 @@ export interface KessenGauntletSummary {
   decks: { key: string; rate: KessenRate; flags: KessenBalanceFlag[] }[];
   health: {
     games: number;
+    skipped: number;
     unfinished: number;
     plays: number;
     tieRate: number;
@@ -200,6 +203,7 @@ export const summarizeGauntlet = (
     const outcome = outcomes.get(job.id);
     if (!outcome) continue;
     played.push(outcome);
+    if (!outcome.finished) continue;
     for (const seat of [0, 1] as const) {
       const key = job.decks[seat];
       const faction = factionOf.get(key);
@@ -238,7 +242,11 @@ export const summarizeGauntlet = (
         : [];
     return { key: deck.key, rate, flags };
   });
-  return { factions, decks: deckRates, health: healthOf(played) };
+  return {
+    factions,
+    decks: deckRates,
+    health: healthOf(played, jobs.length - played.length),
+  };
 };
 
 /* ----------------------------- Match trials ----------------------------- */
@@ -331,7 +339,7 @@ export const trialPairs = (
       : { leaderId: trialReference(card).id, deck };
     // Cards of one cost and row that fill the same slots share their reference games.
     const referenceKey = slots
-      ? `${trialReference(card).id}:${slots.slots.join(".")}`
+      ? `${trialReference(card).id}:${slots.slots.join(".")}:filler:${slots.surplus.join(".")}`
       : trialReference(card).id;
     for (const opponent of KESSEN_DECK_FACTIONS) {
       if (opponent === home) continue;
@@ -342,7 +350,7 @@ export const trialPairs = (
       };
       for (let game = 0; game < 2 * pairsPerMatchup; game++) {
         const seat: Seat = game % 2 === 0 ? 0 : 1;
-        const seed = `kessen-balance:v${KESSEN_BALANCE_SIM.version}:trial:${home}:${opponent}:${game >> 1}`;
+        const seed = `kessen-balance:v${KESSEN_BALANCE_SIM.seedVersion}:trial:${home}:${opponent}:${game >> 1}`;
         const seats = (own: KessenSimSeat): [KessenSimSeat, KessenSimSeat] =>
           seat === 0 ? [own, rival] : [rival, own];
         pairs.push({
@@ -374,6 +382,8 @@ export interface KessenTrialSummary {
   /** Standard error of `edge`. */
   se: number;
   games: number;
+  /** Pairs excluded because either game was unavailable or unfinished. */
+  discarded: number;
   flags: KessenBalanceFlag[];
 }
 
@@ -390,7 +400,7 @@ export const summarizeTrial = (
   for (const pair of pairs) {
     const subject = outcomes.get(pair.subject.id);
     const reference = outcomes.get(pair.reference.id);
-    if (!subject || !reference) continue;
+    if (!subject?.finished || !reference?.finished) continue;
     diffs.push(
       scoreOf(subject.winner, pair.seat) - scoreOf(reference.winner, pair.seat),
     );
@@ -402,6 +412,14 @@ export const summarizeTrial = (
   const edge = round1(100 * mean);
   const se = round1(n > 0 ? (100 * Math.sqrt(variance)) / Math.sqrt(n) : 0);
   const flags: KessenBalanceFlag[] = [];
+  const discarded = pairs.length - n;
+  if (discarded > 0) {
+    flags.push({
+      rule: "trial",
+      severity: "warn",
+      message: `${discarded} trial pairs excluded because a game was unavailable or unfinished; ${n} completed pairs remain`,
+    });
+  }
   if (card.kind !== "LEADER" && n > 0) {
     const clear = Math.abs(edge) - 2 * se > 0;
     if (Math.abs(edge) > KESSEN_BALANCE.trialEdge && clear) {
@@ -412,7 +430,7 @@ export const summarizeTrial = (
       });
     }
   }
-  return { cardId: card.id, edge, se, games: n, flags };
+  return { cardId: card.id, edge, se, games: n, discarded, flags };
 };
 
 /** Flags leaders whose trial edge sits far from the median leader's. */
@@ -420,9 +438,10 @@ export const leaderSpreadFlags = (
   leaders: readonly { card: KessenCard; trial: KessenTrialSummary }[],
 ): Map<string, KessenBalanceFlag[]> => {
   const out = new Map<string, KessenBalanceFlag[]>();
-  if (leaders.length === 0) return out;
-  const median = medianOf(leaders.map((entry) => entry.trial.edge));
-  for (const { card, trial } of leaders) {
+  const completed = leaders.filter((entry) => entry.trial.games > 0);
+  if (completed.length === 0) return out;
+  const median = medianOf(completed.map((entry) => entry.trial.edge));
+  for (const { card, trial } of completed) {
     const offset = trial.edge - median;
     if (Math.abs(offset) <= KESSEN_BALANCE.leaderSpread) continue;
     out.set(card.id, [
@@ -480,28 +499,37 @@ const slotDecks = (card: KessenCard, deck: readonly string[]) => {
     else if (id === TRIAL_FILLER_ID) filler.push(index);
   });
   const slots = [...own, ...filler].slice(0, KESSEN_COPY_LIMITS[card.rarity]);
+  const surplus = own.slice(KESSEN_COPY_LIMITS[card.rarity]);
   const reference = trialReference(card).id;
+  const baseline = card.id === TRIAL_FILLER_ID ? reference : TRIAL_FILLER_ID;
   const subject = [...deck];
   const control = [...deck];
+  for (const index of surplus) {
+    subject[index] = baseline;
+    control[index] = baseline;
+  }
   for (const index of slots) {
     subject[index] = card.id;
     control[index] = reference;
   }
-  return { slots, subject, reference: control };
+  return { slots, surplus, subject, reference: control };
 };
 
-const healthOf = (played: readonly KessenSimOutcome[]) => {
+const healthOf = (played: readonly KessenSimOutcome[], skipped: number) => {
   const games = played.length;
+  const completed = played.filter((game) => game.finished);
   const rounds = played.reduce((sum, game) => sum + game.rounds, 0);
   const swings = played.flatMap((game) => game.swings).sort((a, b) => a - b);
   const health = {
     games,
+    skipped,
     unfinished: played.filter((game) => !game.finished).length,
     plays: games > 0 ? round1(played.reduce((sum, g) => sum + g.plays, 0) / games) : 0,
     tieRate: rounds > 0 ? played.reduce((sum, g) => sum + g.ties, 0) / rounds : 0,
     opener:
-      games > 0
-        ? played.reduce((sum, g) => sum + scoreOf(g.winner, g.opener), 0) / games
+      completed.length > 0
+        ? completed.reduce((sum, g) => sum + scoreOf(g.winner, g.opener), 0) /
+          completed.length
         : 0,
     swingP99: swings[Math.floor(swings.length * 0.99)] ?? 0,
     swingMax: swings.at(-1) ?? 0,
@@ -509,6 +537,12 @@ const healthOf = (played: readonly KessenSimOutcome[]) => {
   };
   const limits = KESSEN_BALANCE.health;
   const flags: KessenBalanceFlag[] = [];
+  if (skipped > 0)
+    flags.push({
+      rule: "health",
+      severity: "warn",
+      message: `${skipped} gauntlet games skipped because a deck or leader was unavailable`,
+    });
   const add = (broken: boolean, message: string) => {
     if (games > 0 && broken) flags.push({ rule: "health", severity: "break", message });
   };
@@ -522,7 +556,8 @@ const healthOf = (played: readonly KessenSimOutcome[]) => {
     `${percent(health.tieRate)} of rounds end in a tie (limit ${percent(limits.tieRate)})`,
   );
   add(
-    health.opener < limits.opener[0] || health.opener > limits.opener[1],
+    completed.length > 0 &&
+      (health.opener < limits.opener[0] || health.opener > limits.opener[1]),
     `The Round 1 opener scores ${percent(health.opener)} (limit ${percent(limits.opener[0])}–${percent(limits.opener[1])})`,
   );
   add(

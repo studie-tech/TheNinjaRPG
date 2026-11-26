@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { KESSEN_COPY_LIMITS } from "@/drizzle/constants";
 import {
   cardBalance,
   cardBalanceChanges,
@@ -268,6 +269,13 @@ describe("Kessen match trials", () => {
           continue;
         }
         const reference = trialReference(card).id;
+        expect(own.deck.filter((id) => id === card.id)).toHaveLength(
+          KESSEN_COPY_LIMITS[card.rarity],
+        );
+        expect(control.deck.filter((id) => id === card.id)).toHaveLength(0);
+        expect(control.deck.filter((id) => id === reference)).toHaveLength(
+          KESSEN_COPY_LIMITS[card.rarity],
+        );
         own.deck.forEach((id, index) => {
           if (id !== control.deck[index]) {
             expect([id, control.deck[index]]).toEqual([card.id, reference]);
@@ -322,7 +330,7 @@ describe("Kessen match trials", () => {
   it("warns about leaders far from the median leader's edge", () => {
     const trial = (cardId: string, edge: number) => ({
       card: { ...seedCardByName("Ravena Bloodsilk"), id: cardId },
-      trial: { cardId, edge, se: 5, games: 60, flags: [] },
+      trial: { cardId, edge, se: 5, games: 60, discarded: 0, flags: [] },
     });
     const flags = leaderSpreadFlags([
       trial("a", 20),

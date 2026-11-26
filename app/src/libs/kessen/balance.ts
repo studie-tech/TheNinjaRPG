@@ -153,7 +153,7 @@ export interface KessenSetBalance {
   members: KessenCard[];
   /** Cards whose Bond or Summon names the set, members included. */
   callers: KessenCard[];
-  /** Largest power a Summon from the set can place; null when no Summon names it. */
+  /** Largest power an eligible Summon caller can pull; null without an eligible unit. */
   maxSummonPower: number | null;
 }
 
@@ -397,15 +397,24 @@ const setBalance = (name: string, catalog: readonly KessenCard[]): KessenSetBala
         (ability.k === "bond" || ability.k === "summon") && ability.group === name,
     ),
   );
-  const summoned = callers.some((card) =>
+  const summoners = callers.filter((card) =>
     card.abilities.some((ability) => ability.k === "summon" && ability.group === name),
   );
-  const pulled = members.filter(isSummonable).map((card) => card.power);
+  const pulled = members
+    .filter(
+      (member) =>
+        isSummonable(member) &&
+        summoners.some(
+          (caller) =>
+            caller.id !== member.id && sharesDeck(caller.faction, member.faction),
+        ),
+    )
+    .map((card) => card.power);
   return {
     name,
     members,
     callers,
-    maxSummonPower: summoned && pulled.length > 0 ? Math.max(...pulled) : null,
+    maxSummonPower: pulled.length > 0 ? Math.max(...pulled) : null,
   };
 };
 

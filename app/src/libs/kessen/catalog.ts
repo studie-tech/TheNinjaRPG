@@ -180,7 +180,8 @@ export const VALUE_PREMIUM_MILLI: Record<KessenRarity, number> = {
 const SUMMON_VALUE_MILLI: Record<string, number> = { Sandworm: 3500, Crew: 3000 };
 
 /** Curve value of a Summon from `set`, in milli-points. */
-export const summonValueMilli = (set: string) => SUMMON_VALUE_MILLI[set] ?? 3000;
+export const summonValueMilli = (set: string) =>
+  Object.hasOwn(SUMMON_VALUE_MILLI, set) ? (SUMMON_VALUE_MILLI[set] ?? 3000) : 3000;
 
 /**
  * Curve value (power + ability values) in milli-points; null for Infiltrators, whose

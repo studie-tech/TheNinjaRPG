@@ -327,10 +327,16 @@ function TrialResult({
     entry ? (
       <p key={label} className="flex flex-wrap items-center gap-x-1.5">
         <span className="text-muted-foreground w-12">{label}</span>
-        <span className="font-semibold">{signed(entry.edge)}</span>
-        <span className="text-muted-foreground">
-          ± {(2 * entry.se).toFixed(0)} points
-        </span>
+        {entry.games === 0 ? (
+          <span>Unavailable</span>
+        ) : (
+          <>
+            <span className="font-semibold">{signed(entry.edge)}</span>
+            <span className="text-muted-foreground">
+              ± {(2 * entry.se).toFixed(0)} points
+            </span>
+          </>
+        )}
         <StatusMark status={statusOf(entry.flags)} />
       </p>
     ) : null;
@@ -373,8 +379,13 @@ function GauntletResult({
             <li key={entry.faction} className="flex flex-wrap gap-x-1.5">
               <span className="w-20">{KESSEN_FACTION_NAMES[entry.faction]}</span>
               <span>
-                {before ? percent(before.rate.score) : "—"} →{" "}
-                <span className="font-semibold">{percent(entry.rate.score)}</span>
+                {before && before.rate.games > 0
+                  ? percent(before.rate.score)
+                  : "Unavailable"}{" "}
+                →{" "}
+                <span className="font-semibold">
+                  {entry.rate.games > 0 ? percent(entry.rate.score) : "Unavailable"}
+                </span>
               </span>
               <StatusMark status={statusOf(entry.flags)} />
             </li>

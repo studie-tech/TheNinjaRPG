@@ -18,6 +18,7 @@ import {
   trialCatalog,
   trialPairs,
 } from "./balanceSim";
+import { matchInputProblem } from "./engine";
 import type { KessenCard } from "./types";
 
 export type KessenSimRequest =
@@ -84,6 +85,7 @@ export const runKessenSims = async (
   createWorker: (() => KessenSimWorker) | null,
   workers = 1,
 ): Promise<Map<string, KessenSimOutcome>> => {
+  if (run.signal?.aborted) throw abortError();
   const unique = [...new Map(run.jobs.map((job) => [job.id, job])).values()];
   const batches: KessenSimJob[][] = [];
   for (let i = 0; i < unique.length; i += BATCH)
@@ -109,11 +111,11 @@ export const runKessenSims = async (
     return outcomes;
   }
   let next = 0;
-  const team = Array.from(
-    { length: Math.max(1, Math.min(workers, batches.length)) },
-    () => createWorker(),
-  );
+  const team: KessenSimWorker[] = [];
   try {
+    for (let i = 0; i < Math.max(1, Math.min(workers, batches.length)); i++) {
+      team.push(createWorker());
+    }
     await new Promise<void>((resolve, reject) => {
       let running = 0;
       const onAbort = () => reject(abortError());
@@ -162,15 +164,21 @@ export interface KessenSweepOptions {
   signal?: AbortSignal;
 }
 
-/** Plays the gauntlet of the reference decks on `catalog`. */
+/** Plays available reference-deck matchups; skipped setups remain visible in the summary. */
 export const runGauntlet = async (
   catalog: readonly KessenCard[],
   options: KessenSweepOptions,
 ): Promise<KessenGauntletSummary> => {
   const decks = kessenReferenceDecks();
   const jobs = gauntletJobs(decks);
+  const cards = [...catalog];
   const outcomes = await runKessenSims(
-    { cards: catalog, jobs, onProgress: options.onProgress, signal: options.signal },
+    {
+      cards,
+      jobs: jobs.filter((job) => !matchInputProblem({ ...job, cards })),
+      onProgress: options.onProgress,
+      signal: options.signal,
+    },
     options.createWorker,
     options.workers,
   );
@@ -179,7 +187,8 @@ export const runGauntlet = async (
 
 /**
  * Plays the match trials of `subjects` (by default every trial subject of `catalog`) at
- * `games` pairs each, with the leader spread flags of the leaders among them.
+ * `games` pairs each, skipping pairs with an unavailable setup and reporting their count.
+ * Includes the leader spread flags of the leaders among them.
  */
 export const runTrials = async (
   catalog: readonly KessenCard[],
@@ -188,12 +197,19 @@ export const runTrials = async (
   games: number = KESSEN_BALANCE_SIM.trialGames,
 ): Promise<Record<string, KessenTrialSummary>> => {
   const pairs = subjects.map((card) => ({ card, pairs: trialPairs(card, games) }));
+  const cards = trialCatalog(catalog);
   const outcomes = await runKessenSims(
     {
-      cards: trialCatalog(catalog),
+      cards,
       pool: catalog,
       jobs: pairs.flatMap((entry) =>
-        entry.pairs.flatMap((pair) => [pair.subject, pair.reference]),
+        entry.pairs
+          .filter(
+            (pair) =>
+              !matchInputProblem({ ...pair.subject, cards }) &&
+              !matchInputProblem({ ...pair.reference, cards }),
+          )
+          .flatMap((pair) => [pair.subject, pair.reference]),
       ),
       onProgress: options.onProgress,
       signal: options.signal,
