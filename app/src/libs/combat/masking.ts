@@ -179,6 +179,8 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
         const { bloodrightOptions: _options, ...bloodline } = line as typeof line & {
           bloodrightOptions?: unknown;
         };
+        // Frozen catalogs may include authoring relations that must stay server-only.
+        Reflect.deleteProperty(bloodline, "bloodrightTiers");
         return [id, bloodline];
       }),
     ),
