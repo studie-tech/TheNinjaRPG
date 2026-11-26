@@ -32,6 +32,7 @@ import {
   points,
 } from "@/libs/kessen/balance";
 import {
+  isTrialSubject,
   KESSEN_BALANCE_SIM,
   type KessenGauntletSummary,
   type KessenTrialSummary,
@@ -103,7 +104,7 @@ export function ManualKessenBalanceScreen() {
           <ContentBox
             id="kessen-balance-cards"
             title="Cards"
-            subtitle="Value curve and match trial of every collectible deck card"
+            subtitle="Value curve, variant parity and match trials of collectible deck cards"
             initialBreak
           >
             <CardList report={report} trials={sims.trials} canEdit={canEdit} />
@@ -111,7 +112,7 @@ export function ManualKessenBalanceScreen() {
           <ContentBox
             id="kessen-balance-leaders"
             title="Leaders"
-            subtitle="Leader bonus and what the ability adds over no leader"
+            subtitle="Leader bonus and what the ability adds with the same faction passive"
             initialBreak
           >
             <LeaderList report={report} trials={sims.trials} canEdit={canEdit} />
@@ -651,6 +652,9 @@ function TrialCell({
   card: KessenCardBalance["card"];
   trial: KessenTrialSummary | null;
 }) {
+  if (!isTrialSubject(card)) {
+    return <p className="text-muted-foreground text-sm">Parity check only</p>;
+  }
   if (!trial) {
     return (
       <div className="text-muted-foreground text-sm">
@@ -681,7 +685,7 @@ function TrialCell({
   );
 }
 
-/** Collectible leaders: bonus range and trial edge over no leader. */
+/** Collectible leaders: bonus range and ability trial edge with the faction passive. */
 function LeaderList({
   report,
   trials,
@@ -747,7 +751,8 @@ function LeaderList({
                     <span className="font-semibold">{signed(trial.edge)}</span>
                     <span className="text-muted-foreground">
                       {" "}
-                      ± {(2 * trial.se).toFixed(0)} win-rate points over no leader
+                      ± {(2 * trial.se).toFixed(0)} win-rate points over a leader
+                      without abilities
                     </span>
                   </span>
                   <BandMeter
@@ -915,9 +920,9 @@ function Guidelines() {
     [
       "Leaders",
       <>
-        A leader leads its faction&apos;s starter deck against the same deck with no
-        leader. It warns when its edge sits more than {g.leaderSpread} points from the
-        median leader&apos;s.
+        A leader leads its faction&apos;s starter deck against the same deck with a
+        leader without active abilities, preserving the faction passive. It warns when
+        its edge sits more than {g.leaderSpread} points from the median leader&apos;s.
       </>,
     ],
     [

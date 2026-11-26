@@ -273,7 +273,7 @@ function MatchTest({
       <p className="text-muted-foreground">
         Plays the saved and edited card on the same seeds
         {card.kind === "LEADER"
-          ? ", leading its faction's starter deck against no leader"
+          ? ", leading its faction's starter deck against a leader without abilities, with the same faction passive"
           : `, in its faction's starter deck against a vanilla ${trialReference(card).power}-power unit`}
         , and the faction gauntlet when a reference deck holds it.
       </p>

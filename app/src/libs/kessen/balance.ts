@@ -160,7 +160,7 @@ export interface KessenSetBalance {
 /** The whole catalog against the guidelines. */
 export interface KessenCatalogBalance {
   fingerprint: string;
-  /** Collectible standard deck cards and collectible leaders. */
+  /** Collectible cards, including Forbidden variants checked against their base. */
   cards: KessenCardBalance[];
   factions: KessenFactionBalance[];
   decks: KessenReferenceDeckBalance[];
@@ -173,7 +173,7 @@ export const KESSEN_BALANCE_FACTIONS: readonly KessenFaction[] = [
   "NEUTRAL",
 ];
 
-/** Collectible standard cards, the ones the guidelines cover. */
+/** Collectible standard cards counted in faction pools and sets. */
 export const isBalancedCard = (card: KessenCard) =>
   card.isCollectible && card.variant === "STANDARD";
 
@@ -255,7 +255,9 @@ export const catalogBalance = (
   catalog: readonly KessenCard[],
 ): KessenCatalogBalance => {
   const covered = catalog.filter(isBalancedCard);
-  const cards = covered.map((card) => cardBalance(card, catalog));
+  const cards = catalog
+    .filter((card) => card.isCollectible)
+    .map((card) => cardBalance(card, catalog));
   const lookup = catalogById(catalog);
   const decks = kessenReferenceDecks().map((deck) =>
     referenceDeckBalance(deck, lookup),
@@ -263,7 +265,9 @@ export const catalogBalance = (
   const factions = KESSEN_BALANCE_FACTIONS.map((faction) =>
     factionBalance(
       faction,
-      cards.filter((entry) => entry.card.faction === faction),
+      cards.filter(
+        (entry) => isBalancedCard(entry.card) && entry.card.faction === faction,
+      ),
     ),
   );
   return {
@@ -339,7 +343,8 @@ export interface KessenSubjectFlag {
 
 /**
  * Flags a catalog change raises and clears on everything but the edited card: other
- * cards whose sets it joins or leaves, its faction's bias and the reference decks.
+ * cards whose sets it joins or leaves, Forbidden variants, its faction's bias and the
+ * reference decks.
  */
 export const catalogBalanceDiff = (
   before: KessenCatalogBalance,

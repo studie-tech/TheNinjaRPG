@@ -27,7 +27,7 @@ import type { KessenAction, KessenCard, MatchState, Row, Seat } from "./types";
 
 /** Simulation settings; `version` keys cached results. */
 export const KESSEN_BALANCE_SIM = {
-  version: 1,
+  version: 2,
   tier: "CHUNIN" satisfies KessenAiTier,
   /** Games per pair of reference decks, half with each deck opening the seats. */
   gauntletGamesPerPair: 16,
@@ -256,10 +256,19 @@ export const isTrialSubject = (card: KessenCard) =>
   card.isCollectible && card.variant === "STANDARD";
 
 /**
- * The vanilla unit a deck card is measured against: power equal to its curve target,
- * on its row (Taijutsu for tactics and any-row units), with no abilities.
+ * A leader without active abilities preserves its faction passive. Deck cards use a
+ * vanilla unit at their curve target, on their row (Taijutsu for tactics and any-row units).
  */
 export const trialReference = (card: KessenCard): KessenCard => {
+  if (card.kind === "LEADER") {
+    return {
+      ...card,
+      id: `${TRIAL_REFERENCE_PREFIX}leader-${card.faction.toLowerCase()}`,
+      name: "Leader without abilities",
+      abilities: [],
+      isCollectible: false,
+    };
+  }
   const power = card.provision + Math.round(VALUE_PREMIUM_MILLI[card.rarity] / 1000);
   const row: Row =
     card.kind === "UNIT" && card.row !== "ANY" && card.row ? card.row : "CLOSE";
@@ -281,11 +290,11 @@ export const trialReference = (card: KessenCard): KessenCard => {
   };
 };
 
-/** The catalog plus every trial reference its deck cards need. */
+/** The catalog plus every trial reference its cards need. */
 export const trialCatalog = (catalog: readonly KessenCard[]): KessenCard[] => {
   const references = new Map<string, KessenCard>();
   for (const card of catalog) {
-    if (!isTrialSubject(card) || card.kind === "LEADER") continue;
+    if (!isTrialSubject(card)) continue;
     const reference = trialReference(card);
     references.set(reference.id, reference);
   }
@@ -296,7 +305,8 @@ export const trialCatalog = (catalog: readonly KessenCard[]): KessenCard[] => {
  * The paired games of one card's match trial. A deck card fills the slots of its own
  * copies in the home faction's starter deck, then those of the vanilla filler, up to its
  * copy limit; the reference takes the same slots. A leader leads the starter deck of its
- * faction against the same deck with no leader. Neutral cards play from every faction.
+ * faction against the same deck with a leader without active abilities, preserving the
+ * faction passive. Neutral cards play from every faction.
  */
 export const trialPairs = (
   card: KessenCard,
@@ -318,11 +328,11 @@ export const trialPairs = (
       : { leaderId: card.id, deck };
     const reference: KessenSimSeat = slots
       ? { leaderId: starter.leaderId, deck: slots.reference }
-      : { leaderId: null, deck };
+      : { leaderId: trialReference(card).id, deck };
     // Cards of one cost and row that fill the same slots share their reference games.
     const referenceKey = slots
       ? `${trialReference(card).id}:${slots.slots.join(".")}`
-      : "none";
+      : trialReference(card).id;
     for (const opponent of KESSEN_DECK_FACTIONS) {
       if (opponent === home) continue;
       const other = starterDeck(opponent);
@@ -419,7 +429,7 @@ export const leaderSpreadFlags = (
       {
         rule: "leaderTrial",
         severity: "warn",
-        message: `Adds ${trial.edge.toFixed(1)} win-rate points over no leader, ${Math.abs(offset).toFixed(1)} ${offset > 0 ? "above" : "below"} the median leader (limit ${KESSEN_BALANCE.leaderSpread})`,
+        message: `Adds ${trial.edge.toFixed(1)} win-rate points over a leader without abilities, ${Math.abs(offset).toFixed(1)} ${offset > 0 ? "above" : "below"} the median leader (limit ${KESSEN_BALANCE.leaderSpread})`,
       },
     ]);
   }
