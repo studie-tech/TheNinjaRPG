@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { randomBytes } from "node:crypto";
-import { Effect, Either } from "effect";
+import { Effect, Either, Fiber, TestClock, TestContext } from "effect";
 import {
   makeBlockStruggleBridge,
   type RpgIdentity,
@@ -30,6 +30,102 @@ const issued = (token: string) =>
   });
 
 describe("TheNinjaRPG same-origin puzzle bridge", () => {
+  it("cancels a rejected exchange body while preserving its retry status", async () => {
+    let cancelled = false;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(
+        config(),
+        async () =>
+          new Response(
+            new ReadableStream({
+              cancel() {
+                cancelled = true;
+              },
+            }),
+            { status: 429, headers: { "Retry-After": "9" } },
+          ),
+      ),
+    );
+    const result = await Effect.runPromise(
+      Effect.either(bridge.handle(request("session"), ["session"], identity())),
+    );
+    expect(Either.isLeft(result) && result.left.code).toBe("RateLimited");
+    expect(Either.isLeft(result) && result.left.retryAfter).toBe("9");
+    expect(cancelled).toBe(true);
+  });
+
+  it("keeps the upstream deadline through a stalled exchange body and aborts its read", async () => {
+    let aborted = false;
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.now());
+        const bridge = yield* makeBlockStruggleBridge(
+          config(),
+          async (_url, init) =>
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  init?.signal?.addEventListener("abort", () => {
+                    aborted = true;
+                    controller.error(new Error("Aborted"));
+                  });
+                },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            ),
+        );
+        const fiber = yield* Effect.fork(
+          Effect.either(bridge.handle(request("session"), ["session"], identity())),
+        );
+        yield* TestClock.adjust(10_001);
+        return yield* Fiber.join(fiber);
+      }).pipe(Effect.provide(TestContext.TestContext)),
+    );
+    expect(Either.isLeft(result) && result.left.code).toBe("UpstreamUnavailable");
+    expect(aborted).toBe(true);
+  });
+
+  it("revokes a live bearer inside the forwarding refresh margin and releases the logout body", async () => {
+    let cancelled = false;
+    let revocations = 0;
+    const logout = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.now());
+        const bridge = yield* makeBlockStruggleBridge(config(), async (url, init) => {
+          if (new URL(String(url)).pathname.endsWith("/exchange"))
+            return issued("a".repeat(43));
+          if (init?.method === "DELETE") {
+            expect(new Headers(init.headers).get("authorization")).toBe(
+              `Bearer ${"a".repeat(43)}`,
+            );
+            revocations++;
+            return new Response(
+              new ReadableStream({
+                cancel() {
+                  cancelled = true;
+                },
+              }),
+              { status: 200 },
+            );
+          }
+          return Response.json({ playerId: "p_player" });
+        });
+        const first = yield* bridge.handle(request("session"), ["session"], identity());
+        yield* TestClock.adjust(3_580_000);
+        return yield* bridge.handle(
+          request("session", "DELETE"),
+          ["session"],
+          identity(),
+          first.cookie?.value,
+        );
+      }).pipe(Effect.provide(TestContext.TestContext)),
+    );
+    expect(logout.response.status).toBe(204);
+    expect(logout.clearCookie).toBe(true);
+    expect(revocations).toBe(1);
+    expect(cancelled).toBe(true);
+  });
+
   it("forwards canonical safety operations using the bound game session", async () => {
     const calls: { path: string; method: string; body?: string }[] = [];
     const bridge = await Effect.runPromise(
@@ -419,6 +515,9 @@ describe("TheNinjaRPG same-origin puzzle bridge", () => {
         const path = new URL(String(url)).pathname;
         if (path.endsWith("/exchange")) return issued(String(++exchanges).repeat(43));
         if (init?.method === "DELETE") {
+          expect(new Headers(init.headers).get("authorization")).toBe(
+            `Bearer ${"2".repeat(43)}`,
+          );
           revokes++;
           return new Response(null, { status: 204 });
         }

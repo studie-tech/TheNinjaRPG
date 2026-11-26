@@ -225,10 +225,16 @@ export const makeBlockStruggleBridge = (
         catch: () => fail(503, "Unavailable"),
       });
 
-    const call = (path: string, method: string, bearer: string, body?: Uint8Array) =>
+    const call = <A = Response>(
+      path: string,
+      method: string,
+      bearer: string,
+      body?: Uint8Array,
+      consume?: (response: Response) => Promise<A>,
+    ) =>
       Effect.tryPromise({
-        try: (signal) =>
-          transport(`${origins.api}${path}`, {
+        try: async (signal) => {
+          const response = await transport(`${origins.api}${path}`, {
             method,
             headers: {
               Authorization: `Bearer ${bearer}`,
@@ -243,8 +249,13 @@ export const makeBlockStruggleBridge = (
             cache: "no-store",
             redirect: "error",
             signal,
-          }),
-        catch: () => fail(502, "UpstreamUnavailable"),
+          });
+          return consume ? await consume(response) : (response as A);
+        },
+        catch: (error) =>
+          error instanceof BlockStruggleBridgeError
+            ? error
+            : fail(502, "UpstreamUnavailable"),
       }).pipe(
         Effect.timeoutFail({
           duration: "10 seconds",
@@ -259,17 +270,29 @@ export const makeBlockStruggleBridge = (
           catch: () => fail(503, "ClerkUnavailable"),
         });
         if (!proof) return yield* fail(401, "Unauthorized");
-        const response = yield* call("/api/ninja/session/exchange", "POST", proof);
-        if (!response.ok)
-          return yield* fail(
-            response.status === 429 ? 429 : response.status === 401 ? 401 : 502,
-            response.status === 429 ? "RateLimited" : "ExchangeFailed",
-            response.headers.get("retry-after") ?? undefined,
-          );
-        const json = yield* Effect.tryPromise({
-          try: () => response.json() as Promise<unknown>,
-          catch: () => fail(502, "InvalidUpstream"),
-        });
+        // Keep the fetch signal and deadline active while consuming the proof response.
+        const json = yield* call(
+          "/api/ninja/session/exchange",
+          "POST",
+          proof,
+          undefined,
+          async (response): Promise<unknown> => {
+            if (!response.ok) {
+              const error = fail(
+                response.status === 429 ? 429 : response.status === 401 ? 401 : 502,
+                response.status === 429 ? "RateLimited" : "ExchangeFailed",
+                response.headers.get("retry-after") ?? undefined,
+              );
+              await response.body?.cancel().catch(() => {});
+              throw error;
+            }
+            try {
+              return await response.json();
+            } catch {
+              throw fail(502, "InvalidUpstream");
+            }
+          },
+        );
         const issued = yield* Schema.decodeUnknown(BlockStruggleSession, {
           onExcessProperty: "error",
         })(json).pipe(Effect.mapError(() => fail(502, "InvalidUpstream")));
@@ -367,18 +390,27 @@ export const makeBlockStruggleBridge = (
           }
           const now = yield* Clock.currentTimeMillis;
           const decoded = yield* decryptCookie(cookieValue);
-          const existing =
+          const liveSession =
             decoded?.userId === identity.userId &&
             decoded.sessionId === identity.sessionId &&
-            decoded.expiresAt > now + REFRESH_MARGIN_MS
+            decoded.expiresAt > now
               ? decoded
               : undefined;
+          const existing =
+            liveSession && liveSession.expiresAt > now + REFRESH_MARGIN_MS
+              ? liveSession
+              : undefined;
           if (method === "DELETE" && segments[0] === "session") {
-            if (existing) {
+            if (liveSession) {
               const revoked = yield* call(
                 "/api/ninja/session",
                 "DELETE",
-                existing.token,
+                liveSession.token,
+                undefined,
+                async (response) => {
+                  await response.body?.cancel().catch(() => {});
+                  return response;
+                },
               );
               if (!revoked.ok && revoked.status !== 401)
                 return yield* fail(
