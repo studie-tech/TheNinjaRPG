@@ -173,4 +173,42 @@ describeWithDatabase("Kessen card sets migration", () => {
       plays: [2, 1],
     });
   });
+
+  it("preserves current cards alongside legacy cards in a full ordered pool", async () => {
+    const client = await getTestDatabase();
+    const base = KESSEN_SEED_CATALOG[0];
+    if (!base) throw new Error("No seed card");
+    // Current memberships need not be derivable from Bond abilities; keep them intact.
+    const current: KessenCard = { ...base, id: 'quoted"\\card', sets: ["Current"] };
+    const cards = [...KESSEN_SEED_CATALOG].reverse();
+    cards.push(base);
+    const expected = [current, ...cards];
+    const state = legacyState(cards);
+    const mixed = {
+      ...state,
+      engine: {
+        ...state.engine,
+        cards: { ...state.engine.cards, [current.id]: current },
+      },
+      pool: [current, ...state.pool],
+    };
+    await client.insert(kessenMatch).values(matchRow("mixed", mixed));
+
+    await runRawSql(migration);
+    await runRawSql(migration);
+
+    const [match] = await client
+      .select()
+      .from(kessenMatch)
+      .where(eq(kessenMatch.id, "mixed"));
+    expect(match?.state).toEqual({
+      engine: {
+        step: 7,
+        cards: Object.fromEntries(expected.map((card) => [card.id, card])),
+      },
+      mode: "standard",
+      pool: expected,
+      plays: [2, 1],
+    });
+  });
 });
