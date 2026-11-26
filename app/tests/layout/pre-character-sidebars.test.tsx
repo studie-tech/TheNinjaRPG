@@ -71,7 +71,7 @@ describe("sidebars before character creation", () => {
       );
       expect(
         navigation.getAllByRole("link").map((link) => link.getAttribute("href")),
-      ).toEqual(["/news", "/guide", "/forum", "/manual", "/minigames", "/conceptart"]);
+      ).toEqual(["/news", "/guide", "/forum", "/manual", "/minigames"]);
       expect(view.queryByRole("button", { name: "Sign in" })).toBeNull();
       expect(view.queryByRole("link", { name: "Create character" })).toBeNull();
       expect(view.queryByText("Socials Login")).toBeNull();
