@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, OctagonAlert } from "lucide-react";
 import type { KessenBalanceFlag } from "@/libs/kessen/balance";
 import { cn } from "@/libs/shadui";
+import { clamp } from "@/utils/math";
 
 /** The worst severity among the flags, or "ok". */
 export type KessenBalanceStatus = "ok" | "warn" | "break";
@@ -167,6 +168,3 @@ export const signed = (value: number, digits = 1) => {
   if (Number(fixed) === 0) return (0).toFixed(digits);
   return `${value > 0 ? "+" : "−"}${fixed}`;
 };
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));

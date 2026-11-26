@@ -43,11 +43,16 @@ import {
   percent,
   trialReference,
 } from "@/libs/kessen/balanceSim";
-import { KESSEN_DECK_FACTIONS, KESSEN_DECK_RULES } from "@/libs/kessen/deck";
+import {
+  KESSEN_DECK_FACTIONS,
+  KESSEN_DECK_RULES,
+  KESSEN_RARITY_ORDER,
+} from "@/libs/kessen/deck";
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
 import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserDataSelector } from "@/utils/UserContext";
 import type { KessenFaction } from "@/validators/itemCard";
 
@@ -835,7 +840,7 @@ function CardRow({
           ) : null}
         </p>
         <p className="text-muted-foreground text-sm">
-          {KESSEN_FACTION_NAMES[card.faction]} · {capitalized(card.rarity)}{" "}
+          {KESSEN_FACTION_NAMES[card.faction]} · {capitalizeFirstLetter(card.rarity)}{" "}
           {card.kind === "TACTIC" ? "tactic" : "unit"} · {card.power} power ·{" "}
           {card.provision} provision
         </p>
@@ -1080,12 +1085,10 @@ function SetList({ report }: { report: KessenCatalogBalance }) {
 /** Every guideline with its limit, read from `KESSEN_BALANCE`. */
 function Guidelines() {
   const g = KESSEN_BALANCE;
-  const ranges = (["COMMON", "RARE", "EPIC", "LEGENDARY"] as const)
-    .map(
-      (rarity) =>
-        `${capitalized(rarity)} ${g.provision[rarity][0]}–${g.provision[rarity][1]}`,
-    )
-    .join(", ");
+  const ranges = KESSEN_RARITY_ORDER.map(
+    (rarity) =>
+      `${capitalizeFirstLetter(rarity)} ${g.provision[rarity][0]}–${g.provision[rarity][1]}`,
+  ).join(", ");
   const rules: [string, React.ReactNode][] = [
     [
       "Value curve",
@@ -1189,10 +1192,10 @@ function Guidelines() {
         ))}
       </dl>
       <p className="text-muted-foreground text-sm">
-        The matches are played by the {capitalized(KESSEN_BALANCE_SIM.tier)} AI on both
-        seats. Saving logs changes to individual card checks in the change log and the
-        content Discord channel. Catalog and match comparisons are report and editor
-        diagnostics.
+        The matches are played by the {capitalizeFirstLetter(KESSEN_BALANCE_SIM.tier)}{" "}
+        AI on both seats. Saving logs changes to individual card checks in the change
+        log and the content Discord channel. Catalog and match comparisons are report
+        and editor diagnostics.
       </p>
     </div>
   );
@@ -1285,5 +1288,3 @@ const groupIssues = (issues: readonly Issue[]) => {
   }
   return [...groups.values()];
 };
-
-const capitalized = (value: string) => value.charAt(0) + value.slice(1).toLowerCase();
