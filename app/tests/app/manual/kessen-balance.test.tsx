@@ -340,12 +340,109 @@ it("reveals an incoming later-page card hash after the catalog loads", () => {
   expect(view.queryByText(/Showing 1–10 of/)).toBeNull();
 });
 
+it("keeps an incoming card destination visible when completed trials reorder its page", () => {
+  const card = seedCardByName("Thorn Ambush Captain");
+  const balance = mockReport(KESSEN_SEED_CATALOG);
+  const targetId = `card-${card.id}`;
+  window.history.replaceState({}, "", `/manual/kessen/balance#${targetId}`);
+  const view = render(<ManualKessenBalanceScreen />);
+  expect(view.getByText("Showing 71–80 of 94 cards")).toBeTruthy();
+  expect(document.getElementById(targetId)).toBeTruthy();
+  const scrollCount = scrollTargets.length;
+  balance.mockReturnValue({
+    engine: KESSEN_SEED_CATALOG,
+    report: catalogBalance(KESSEN_SEED_CATALOG),
+    sims: completedCardTrial(card),
+  });
+  view.rerender(<ManualKessenBalanceScreen />);
+  expect(view.getByText("Showing 1–10 of 94 cards")).toBeTruthy();
+  expect(document.getElementById(targetId)).toBeTruthy();
+  expect(window.location.hash).toBe(`#${targetId}`);
+  expect(scrollTargets.length).toBe(scrollCount + 1);
+  expect(scrollTargets.at(-1)).toBe(targetId);
+});
+
+it.each(["page", "search", "faction", "flagged", "sort"])(
+  "lets a user %s choice revoke the card destination before trials complete",
+  (choice) => {
+    const card = seedCardByName("Thorn Ambush Captain");
+    const balance = mockReport(KESSEN_SEED_CATALOG);
+    const targetId = `card-${card.id}`;
+    window.history.replaceState({}, "", `/manual/kessen/balance#${targetId}`);
+    const view = render(<ManualKessenBalanceScreen />);
+    if (choice === "page") {
+      fireEvent.click(view.getByRole("button", { name: "Page 1" }));
+      fireEvent.click(view.getByRole("button", { name: "Next" }));
+    } else if (choice === "search") {
+      fireEvent.change(view.getByRole("searchbox"), { target: { value: "a" } });
+    } else if (choice === "faction") {
+      fireEvent.click(view.getByRole("button", { name: "Shirohana" }));
+    } else if (choice === "flagged") {
+      fireEvent.click(view.getByRole("switch", { name: "Flagged only" }));
+      fireEvent.click(view.getByRole("switch", { name: "Flagged only" }));
+    } else {
+      fireEvent.change(view.getByRole("combobox", { name: "Sort" }), {
+        target: { value: "name" },
+      });
+    }
+    const scrollCount = scrollTargets.length;
+    balance.mockReturnValue({
+      engine: KESSEN_SEED_CATALOG,
+      report: catalogBalance(KESSEN_SEED_CATALOG),
+      sims: completedCardTrial(card, false),
+    });
+    view.rerender(<ManualKessenBalanceScreen />);
+    expect(
+      view
+        .getByRole("button", { name: choice === "page" ? "Page 2" : "Page 1" })
+        .getAttribute("aria-current"),
+    ).toBe("page");
+    if (choice === "search")
+      expect((view.getByRole("searchbox") as HTMLInputElement).value).toBe("a");
+    if (choice === "faction")
+      expect(
+        view.getByRole("button", { name: "Shirohana" }).getAttribute("aria-pressed"),
+      ).toBe("true");
+    if (choice === "flagged")
+      expect(
+        view.getByRole("switch", { name: "Flagged only" }).getAttribute("aria-checked"),
+      ).toBe("false");
+    if (choice === "sort")
+      expect(
+        (view.getByRole("combobox", { name: "Sort" }) as HTMLSelectElement).value,
+      ).toBe("name");
+    expect(window.location.hash).toBe(`#${targetId}`);
+    expect(scrollTargets.length).toBe(scrollCount);
+  },
+);
+
 /** Provide computed catalog data while leaving the report's filters and navigation active. */
 const mockReport = (cards: KessenCard[], sims = IDLE) => {
   vi.spyOn(Hub, "useKessenCatalog").mockReturnValue({ data: { cards } } as never);
-  vi.spyOn(Balance, "useKessenBalance").mockReturnValue({
+  return vi.spyOn(Balance, "useKessenBalance").mockReturnValue({
     engine: cards,
     report: catalogBalance(cards),
     sims,
   });
 };
+
+/** Complete the pending trial without running matches in the UI test. */
+const completedCardTrial = (
+  card: KessenCard,
+  hasWarning = true,
+): Balance.KessenSimState => ({
+  ...IDLE,
+  status: "done",
+  trials: {
+    [card.id]: {
+      cardId: card.id,
+      edge: hasWarning ? 40 : 0,
+      se: 0,
+      games: 50,
+      discarded: 0,
+      flags: hasWarning
+        ? [{ rule: "trial", severity: "warn", message: "Trial edge exceeds guideline" }]
+        : [],
+    },
+  },
+});

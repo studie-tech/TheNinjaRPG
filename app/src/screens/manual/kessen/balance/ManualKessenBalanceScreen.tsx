@@ -116,9 +116,16 @@ export function ManualKessenBalanceScreen() {
     };
   }, [navigateToAnchor, report]);
   useEffect(() => {
+    // Match trials can move an active card destination within the sorted rows.
+    const cardIndex = rows.findIndex(
+      ({ entry }) => navigation?.anchor === `card-${entry.card.id}`,
+    );
+    if (cardIndex >= 0) setPage(Math.floor(cardIndex / CARD_PAGE_SIZE));
+  }, [navigation, rows]);
+  useEffect(() => {
     if (navigation)
       document.getElementById(navigation.anchor)?.scrollIntoView({ block: "start" });
-  }, [navigation]);
+  }, [navigation, page]);
   const navigateToIssue = (anchor: string) => {
     if (window.location.hash !== `#${anchor}`)
       window.history.pushState(null, "", `#${anchor}`);
@@ -210,16 +217,21 @@ export function ManualKessenBalanceScreen() {
                 canEdit={canEdit}
                 filters={filters}
                 onFiltersChange={(value) => {
+                  setNavigation(null);
                   setFilters(value);
                   setPage(0);
                 }}
                 sort={sort}
                 onSortChange={(value) => {
+                  setNavigation(null);
                   setSort(value);
                   setPage(0);
                 }}
                 page={page}
-                onPageChange={setPage}
+                onPageChange={(value) => {
+                  setNavigation(null);
+                  setPage(value);
+                }}
               />
             </ContentBox>
           ) : null}
