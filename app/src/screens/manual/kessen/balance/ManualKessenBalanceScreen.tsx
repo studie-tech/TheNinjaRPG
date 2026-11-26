@@ -480,10 +480,16 @@ function CardList({
     .sort((a, b) => {
       const byName = a.entry.card.name.localeCompare(b.entry.card.name);
       if (sort === "name") return byName;
-      if (sort === "gap")
-        return (b.entry.gap ?? -1e9) - (a.entry.gap ?? -1e9) || byName;
-      if (sort === "trial")
-        return (b.trial?.edge ?? -1e9) - (a.trial?.edge ?? -1e9) || byName;
+      if (sort === "gap") {
+        const aGap = a.entry.gap ?? -1e9;
+        const bGap = b.entry.gap ?? -1e9;
+        return bGap - aGap || byName;
+      }
+      if (sort === "trial") {
+        const aEdge = a.trial?.edge ?? -1e9;
+        const bEdge = b.trial?.edge ?? -1e9;
+        return bEdge - aEdge || byName;
+      }
       return RANK[a.status] - RANK[b.status] || byName;
     });
   return (

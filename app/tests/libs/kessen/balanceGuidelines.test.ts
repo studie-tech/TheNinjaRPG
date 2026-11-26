@@ -6,8 +6,10 @@ import {
   catalogBalanceDiff,
   KESSEN_BALANCE,
   type KessenBalanceFlag,
+  kessenReferenceDecks,
 } from "@/libs/kessen/balance";
 import {
+  gauntletJobs,
   KESSEN_BALANCE_SIM,
   leaderSpreadFlags,
   playSimGame,
@@ -189,6 +191,28 @@ describe("Kessen balance guidelines", () => {
 });
 
 describe("Kessen match trials", () => {
+  it("lets an off-deck catalog edit change the reference gauntlet through AI threat estimates", () => {
+    const card = seedCardByName("Colossus");
+    const decks = kessenReferenceDecks();
+    expect(
+      decks.some(
+        (deck) =>
+          deck.list.leaderId === card.id ||
+          deck.list.cards.some((entry) => entry.itemId === card.id),
+      ),
+    ).toBe(false);
+    const job = gauntletJobs(decks, 2).find(
+      (entry) =>
+        entry.id ===
+        "kessen-balance:v2:gauntlet:champion-HYORIN:champion-SYNDICATE:0:0",
+    );
+    if (!job) throw new Error("No champion gauntlet job");
+    const saved = playSimGame(job, KESSEN_SEED_CATALOG);
+    const draft = playSimGame(job, edited({ Colossus: { power: 20 } }));
+    expect(saved).toMatchObject({ finished: true, winner: 1, plays: 27, ties: 0 });
+    expect(draft).toMatchObject({ finished: true, winner: 0, plays: 30, ties: 1 });
+  });
+
   it.each(["Kimiko, Frost Warden", "Aerathiel Wind-Bearer"])(
     "gives %s without abilities zero edge while preserving its faction passive",
     async (name) => {

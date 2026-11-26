@@ -7,7 +7,6 @@ import {
   cardBalanceChanges,
   catalogBalance,
   catalogBalanceDiff,
-  kessenReferenceDecks,
 } from "@/libs/kessen/balance";
 import {
   isTrialSubject,
@@ -92,8 +91,6 @@ export interface CardMatchTest {
   draftKey: string | null;
   trial: { saved: KessenTrialSummary | null; draft: KessenTrialSummary | null } | null;
   gauntlet: { saved: KessenGauntletSummary; draft: KessenGauntletSummary } | null;
-  /** The card leads or sits in a reference deck, so the gauntlet ran. */
-  inReferenceDeck: boolean;
   error: string | null;
 }
 
@@ -107,13 +104,12 @@ const IDLE_TEST: CardMatchTest = {
   draftKey: null,
   trial: null,
   gauntlet: null,
-  inReferenceDeck: false,
   error: null,
 };
 
 /**
- * Plays a card's match trial for its saved and draft versions on the same seeds and,
- * when a reference deck holds it, the gauntlet on both catalogs.
+ * Plays a card's match trial and the reference-deck gauntlet on both catalogs with the
+ * same seeds. Cards outside the decks can affect the AI's catalog-based threat estimates.
  */
 export const useCardMatchTest = () => {
   const [test, setTest] = useState<CardMatchTest>(IDLE_TEST);
@@ -129,16 +125,11 @@ export const useCardMatchTest = () => {
     const current = new AbortController();
     controller.current = current;
     const { savedCatalog, draftCatalog, savedCard, draftCard } = input;
-    const inReferenceDeck = kessenReferenceDecks().some(
-      (deck) =>
-        deck.list.leaderId === draftCard.id ||
-        deck.list.cards.some((entry) => entry.itemId === draftCard.id),
-    );
     const phases = [
       isTrialSubject(draftCard),
       !!savedCard && isTrialSubject(savedCard),
-      inReferenceDeck,
-      inReferenceDeck,
+      true,
+      true,
     ];
     const totalPhases = phases.filter(Boolean).length;
     let finishedPhases = 0;
@@ -162,30 +153,33 @@ export const useCardMatchTest = () => {
       status: "running",
       total: totalPhases * 1000,
       draftKey: JSON.stringify(draftCard),
-      inReferenceDeck,
     });
     try {
-      const draftTrial = isTrialSubject(draftCard)
-        ? next(
-            (await runTrials(draftCatalog, options, [draftCard], TRIAL_GAMES))[
-              draftCard.id
-            ] ?? null,
-          )
-        : null;
-      const savedTrial =
-        savedCard && isTrialSubject(savedCard)
-          ? next(
-              (await runTrials(savedCatalog, options, [savedCard], TRIAL_GAMES))[
-                savedCard.id
-              ] ?? null,
-            )
-          : null;
-      const gauntlet = inReferenceDeck
-        ? {
-            saved: next(await runGauntlet(savedCatalog, options)),
-            draft: next(await runGauntlet(draftCatalog, options)),
-          }
-        : null;
+      let draftTrial: KessenTrialSummary | null = null;
+      if (isTrialSubject(draftCard)) {
+        const trials = await runTrials(draftCatalog, options, [draftCard], TRIAL_GAMES);
+        const trial = trials[draftCard.id];
+        if (trial) draftTrial = trial;
+        next(null);
+      }
+      let savedTrial: KessenTrialSummary | null = null;
+      if (savedCard) {
+        if (isTrialSubject(savedCard)) {
+          const trials = await runTrials(
+            savedCatalog,
+            options,
+            [savedCard],
+            TRIAL_GAMES,
+          );
+          const trial = trials[savedCard.id];
+          if (trial) savedTrial = trial;
+          next(null);
+        }
+      }
+      const gauntlet = {
+        saved: next(await runGauntlet(savedCatalog, options)),
+        draft: next(await runGauntlet(draftCatalog, options)),
+      };
       setTest((previous) => ({
         ...previous,
         status: "done",
@@ -195,10 +189,11 @@ export const useCardMatchTest = () => {
       }));
     } catch (error) {
       if (current.signal.aborted) return;
+      const message = error instanceof Error ? error.message : String(error);
       setTest((previous) => ({
         ...previous,
         status: "error",
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       }));
     }
   };

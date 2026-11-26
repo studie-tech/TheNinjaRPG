@@ -311,11 +311,7 @@ function MatchTest({
           {test.trial ? <TrialResult trial={test.trial} /> : null}
           {test.gauntlet ? (
             <GauntletResult card={card} gauntlet={test.gauntlet} />
-          ) : (
-            <p className="text-muted-foreground">
-              No reference deck holds this card, so the faction gauntlet is unchanged.
-            </p>
-          )}
+          ) : null}
         </div>
       ) : null}
     </div>
