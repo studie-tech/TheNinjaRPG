@@ -210,11 +210,8 @@ export const bloodrightRouter = createTRPCRouter({
           `Only ${MAX_BLOODRIGHT_OPTIONS} Bloodright options can be active`,
         );
       const selected = [
-        ...allOptions.filter(
-          (entry) =>
-            purchased.some((owned) => owned.optionId === entry.id) &&
-            entry.jutsu &&
-            isBloodrightCurrent(entry.changes, entry.jutsu.effects),
+        ...allOptions.filter((entry) =>
+          purchased.some((owned) => owned.optionId === entry.id),
         ),
         option,
       ];
