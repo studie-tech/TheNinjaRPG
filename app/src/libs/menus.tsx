@@ -2,6 +2,7 @@ import {
   BookOpenText,
   Bug,
   Database,
+  Gamepad2,
   MessagesSquare,
   Newspaper,
   Paintbrush,
@@ -54,6 +55,12 @@ export const getMainNavbarLinks = (notifications?: NavBarDropdownLink[]) => {
       href: "/manual",
       name: "Data",
       icon: <Database className="h-6 w-6" />,
+    },
+    {
+      id: "tutorial-minigames",
+      href: "/minigames",
+      name: "Minigames",
+      icon: <Gamepad2 className="h-6 w-6" />,
     },
     {
       id: "tutorial-art",
