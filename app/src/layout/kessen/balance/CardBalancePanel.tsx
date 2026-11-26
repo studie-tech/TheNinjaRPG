@@ -392,7 +392,9 @@ function GauntletResult({
                   {entry.rate.games > 0 ? percent(entry.rate.score) : "Unavailable"}
                 </span>
               </span>
-              <StatusMark status={statusOf(entry.flags)} />
+              {entry.rate.games > 0 ? (
+                <StatusMark status={statusOf(entry.flags)} />
+              ) : null}
             </li>
           );
         })}
