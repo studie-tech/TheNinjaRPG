@@ -5,7 +5,6 @@ import {
   Gamepad2,
   MessagesSquare,
   Newspaper,
-  Paintbrush,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -61,12 +60,6 @@ export const getMainNavbarLinks = (notifications?: NavBarDropdownLink[]) => {
       href: "/minigames",
       name: "Minigames",
       icon: <Gamepad2 className="h-6 w-6" />,
-    },
-    {
-      id: "tutorial-art",
-      href: "/conceptart",
-      name: "Art",
-      icon: <Paintbrush className="h-6 w-6" />,
     },
   ];
   return links;
