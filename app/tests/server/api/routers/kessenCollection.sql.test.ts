@@ -15,6 +15,7 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
+import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { kessenCardToCardData } from "@/libs/kessen/catalog";
 import { starterDeck } from "@/libs/kessen/deck";
 import type { KessenCard } from "@/libs/kessen/types";
@@ -28,7 +29,7 @@ import {
   KessenPackRaceError,
   prepareKessenPackOpening,
 } from "@/server/utils/kessenPacks";
-import { NonCombatConsumeRewardTag } from "@/validators/combat";
+import { HealTag, NonCombatConsumeRewardTag } from "@/validators/combat";
 import type { WeightedCache } from "@/validators/weightedCache";
 import { KESSEN_SEED_CATALOG } from "../../../libs/kessen/fixtures/catalog";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
@@ -314,6 +315,100 @@ describeWithDatabase("kessenCollection router", () => {
         KessenPackRaceError,
       );
       expect(await progressOf(db)).toMatchObject({ packsSinceEpic: 3 });
+    });
+
+    describe("while asleep", () => {
+      // An unsettled regeneration window: waking would settle it and move regenAt.
+      const regenAt = new Date(Date.now() - 10 * 60 * 1000);
+      regenAt.setMilliseconds(0);
+      const sleep = async (autoWakeUp: boolean) => {
+        const db = await getTestDatabase();
+        await db
+          .update(userData)
+          .set({ status: "ASLEEP", autoWakeUp, curHealth: 10, maxHealth: 100, regenAt })
+          .where(eq(userData.userId, USER));
+        return db;
+      };
+      const sleeper = async (db: DrizzleClient) =>
+        (await db.query.userData.findFirst({ where: eq(userData.userId, USER) }))!;
+
+      it.each([true, false])(
+        "opens a pack without waking the player (autoWakeUp %p)",
+        async (autoWakeUp) => {
+          const db = await sleep(autoWakeUp);
+          const opened = await callerForDatabase(
+            kessenCollectionRouter,
+            USER,
+            db,
+          ).openPack({
+            userItemId: "pack-stack",
+            requestId: `asleep-open-${autoWakeUp}`,
+          });
+          expect(opened.success).toBe(true);
+          if (!opened.success || !("reveal" in opened)) throw new Error(opened.message);
+          expect(opened.reveal?.cards).toHaveLength(5);
+          expect(opened).not.toHaveProperty("actionNotice");
+          expect(await quantityOf(db, "kessen-pack-test")).toBe(1);
+          // Still asleep, with the sleeping regeneration left for waking to settle.
+          expect(await sleeper(db)).toMatchObject({
+            status: "ASLEEP",
+            autoWakeUp,
+            curHealth: 10,
+            regenAt,
+          });
+          // The item page's use takes the same path.
+          const used = await callerForDatabase(itemRouter, USER, db).consume({
+            userItemId: "pack-stack",
+            requestId: `asleep-use-${autoWakeUp}`,
+          });
+          expect(used.success).toBe(true);
+          expect(await quantityOf(db, "kessen-pack-test")).toBe(0);
+          expect(await sleeper(db)).toMatchObject({ status: "ASLEEP", regenAt });
+        },
+      );
+
+      it("still wakes or refuses a sleeping player for other consumables", async () => {
+        await insertItems([
+          {
+            id: "tonic",
+            name: "Tonic",
+            itemType: "CONSUMABLE",
+            target: "SELF",
+            method: "SINGLE",
+            destroyOnUse: true,
+            preventBattleUsage: true,
+            canStack: true,
+            stackSize: 99,
+            effects: [
+              HealTag.parse({
+                power: 5,
+                calculation: "static",
+                poolsAffected: ["Health"],
+              }),
+            ],
+          },
+        ]);
+        await insertUserItems([
+          { id: "tonic-stack", userId: USER, itemId: "tonic", quantity: 2 },
+        ]);
+        const refused = await callerForDatabase(
+          itemRouter,
+          USER,
+          await sleep(false),
+        ).consume({ userItemId: "tonic-stack" });
+        expect(refused).toEqual({
+          success: false,
+          message: "You are asleep. Wake up before taking this action.",
+        });
+        const db = await sleep(true);
+        expect(await quantityOf(db, "tonic")).toBe(2);
+        const woken = await callerForDatabase(itemRouter, USER, db).consume({
+          userItemId: "tonic-stack",
+        });
+        expect(woken).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
+        expect(await quantityOf(db, "tonic")).toBe(1);
+        expect((await sleeper(db)).status).toBe("AWAKE");
+      });
     });
   });
 
