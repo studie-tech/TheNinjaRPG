@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { FullScreenDialog, FullScreenDialogTitle } from "@/layout/TutorialScreens";
+import { WideDialog, WideDialogTitle } from "@/layout/TutorialScreens";
 import {
   flushRadixFocus,
   installBrowserGlobals,
@@ -23,12 +23,12 @@ const Page = () => {
         Open screen
       </button>
       {isOpen && (
-        <FullScreenDialog>
-          <FullScreenDialogTitle>Tomorrow</FullScreenDialogTitle>
+        <WideDialog>
+          <WideDialogTitle>Tomorrow</WideDialogTitle>
           <button type="button" onClick={() => setIsOpen(false)}>
             Continue
           </button>
-        </FullScreenDialog>
+        </WideDialog>
       )}
     </>
   );

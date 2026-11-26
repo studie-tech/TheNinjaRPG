@@ -247,7 +247,7 @@ export const GuestGuidedLesson: React.FC = () => {
 /**
  * Catches up a player who graduated with the lesson collapsed, on the Quests tab or
  * behind chat: they are moved on to the graduation moments that close the trials,
- * which are full-screen and so are shown from here as well. The assistant only runs
+ * which are dialogs over the dock and so are shown from here as well. The assistant only runs
  * while the lesson is on screen, so without this they stay on a lesson that is done.
  */
 const TutorialCompletionSync: React.FC = () => {
@@ -357,7 +357,7 @@ const PlayerTutorialAssistant: React.FC<
     return () => window.removeEventListener("resize", handleResize);
   }, [sidebarBreakpoint]);
 
-  // The village choice opens as a full page; the player may close it to look around.
+  // The village choice opens in a wide dialog; the player may close it to look around.
   const [isVillageChooserHidden, setIsVillageChooserHidden] = useAtom(
     villageChoiceHiddenAtom,
   );

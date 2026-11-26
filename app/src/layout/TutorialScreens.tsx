@@ -20,32 +20,35 @@ import { getTimeLeftStr, nextUtcDayAt } from "@/utils/time";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { StreakDayRewardType } from "@/validators/activityStreak";
 
-/** Full-screen moments of the Academy Trials, drawn above the page and the dock. */
+/** Moments of the Academy Trials, shown in a wide dialog above the page and the dock. */
 export const TutorialScreen: React.FC<{
   kind: TutorialScreenKind;
   onContinue: () => void;
 }> = ({ kind, onContinue }) => (
-  <FullScreenDialog>
-    {/* max-w-7xl is 960px at the 12px root: two readable columns on desktop, one on phones. */}
-    <div className="@container mx-auto flex min-h-full w-full max-w-7xl flex-col justify-center px-4 py-8">
+  // 960px at the 12px root: two readable columns on desktop, one on phones.
+  <WideDialog className="md:max-w-7xl">
+    <div className="@container flex w-full flex-col justify-center px-4 py-8">
       {kind === "rankUp" ? (
         <RankUpContent onContinue={onContinue} />
       ) : (
         <TomorrowContent onContinue={onContinue} />
       )}
     </div>
-  </FullScreenDialog>
+  </WideDialog>
 );
 
 /**
- * A modal covering the whole viewport. Focus moves inside on open, Tab stays inside, the
- * page behind is hidden from assistive technology, and focus returns on close. Escape and
- * outside presses do nothing: each screen leaves through its own buttons.
+ * A modal nearly as wide as the screen, over the dimmed page and dock, scrolling within itself
+ * when its content is taller than the screen. Focus moves inside on open, Tab stays inside,
+ * the page behind is hidden from assistive technology, and focus returns on close. Escape
+ * and outside presses do nothing: each screen leaves through its own buttons.
  */
-export const FullScreenDialog: React.FC<{
+export const WideDialog: React.FC<{
   id?: string;
+  /** A narrower cap for content that reads best at a set width, such as `md:max-w-7xl`. */
+  className?: string;
   children: React.ReactNode;
-}> = ({ id, children }) => {
+}> = ({ id, className, children }) => {
   // Opened without a Radix trigger, so the control focused before it takes focus back.
   const [returnFocus] = useState(() =>
     typeof document === "undefined" ? null : document.activeElement,
@@ -64,7 +67,12 @@ export const FullScreenDialog: React.FC<{
             returnFocus.focus();
           }
         }}
-        className="inset-0 top-0 left-0 z-[70] block h-auto max-h-none w-auto max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0 shadow-none data-[state=open]:animate-none sm:rounded-none md:max-w-none"
+        // The page and the lesson dock (layer 61) dim together behind the dialog.
+        overlayClassName="z-[70]"
+        className={cn(
+          "z-[70] block max-h-[calc(100dvh-1rem)] w-[99%] max-w-[99%] rounded-lg p-0 md:max-w-[99%]",
+          className,
+        )}
       >
         {children}
       </DialogContent>
@@ -72,8 +80,8 @@ export const FullScreenDialog: React.FC<{
   );
 };
 
-/** The heading a full-screen dialog is announced by, in the page's heading style. */
-export const FullScreenDialogTitle: React.FC<{
+/** The heading a wide dialog is announced by, in the page's heading style. */
+export const WideDialogTitle: React.FC<{
   className?: string;
   children: React.ReactNode;
 }> = ({ className, children }) => (
@@ -123,9 +131,9 @@ const RankUpContent: React.FC<{ onContinue: () => void }> = ({ onContinue }) => 
           <p className="text-muted-foreground text-sm font-semibold tracking-widest uppercase">
             Promotion
           </p>
-          <FullScreenDialogTitle className="text-4xl font-bold @5xl:text-5xl">
+          <WideDialogTitle className="text-4xl font-bold @5xl:text-5xl">
             Genin of {village?.name ?? "your village"}
-          </FullScreenDialogTitle>
+          </WideDialogTitle>
           <p className="text-lg">
             {user?.username}, the proctor ties the headband of {village?.name} on your
             brow. You are a shinobi now.
@@ -178,9 +186,9 @@ const TomorrowContent: React.FC<{ onContinue: () => void }> = ({ onContinue }) =
         <p className="text-muted-foreground text-sm font-semibold tracking-widest uppercase">
           Before you rest
         </p>
-        <FullScreenDialogTitle className="text-4xl font-bold @5xl:text-5xl">
+        <WideDialogTitle className="text-4xl font-bold @5xl:text-5xl">
           Tomorrow
-        </FullScreenDialogTitle>
+        </WideDialogTitle>
         <p className="text-lg">
           A shinobi&apos;s day starts with a few small habits. Here is what will be
           waiting for you.
@@ -317,15 +325,15 @@ export const ExpressTrialsScreen: React.FC<{
     },
   });
   return (
-    <FullScreenDialog>
-      <div className="@container mx-auto flex min-h-full max-w-6xl flex-col justify-center gap-5 px-4 py-8">
+    <WideDialog className="md:max-w-6xl">
+      <div className="@container flex flex-col justify-center gap-5 px-4 py-8">
         <header className="flex flex-col gap-2 text-center">
           <p className="font-semibold text-muted-foreground text-sm uppercase tracking-widest">
             Welcome back
           </p>
-          <FullScreenDialogTitle className="text-3xl font-bold">
+          <WideDialogTitle className="text-3xl font-bold">
             Express Trials
-          </FullScreenDialogTitle>
+          </WideDialogTitle>
           <p className="mx-auto max-w-2xl text-base">
             You know the ropes. Skip the Academy Trials and pick up at graduation with
             the experience they pay and the jutsu and tools they teach.
@@ -382,7 +390,7 @@ export const ExpressTrialsScreen: React.FC<{
           </Button>
         </div>
       </div>
-    </FullScreenDialog>
+    </WideDialog>
   );
 };
 

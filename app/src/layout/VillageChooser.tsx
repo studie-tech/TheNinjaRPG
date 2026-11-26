@@ -6,18 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
-import { FullScreenDialog, FullScreenDialogTitle } from "@/layout/TutorialScreens";
+import { WideDialog, WideDialogTitle } from "@/layout/TutorialScreens";
 import { cn } from "@/libs/shadui";
 
 /** One answer of the proctor's village question: the village name and where it leads. */
 export type VillageChoiceOption = { text: string; nextObjectiveId?: string | null };
 
 /**
- * The Genin exam's village choice as a full page: each village's art, its deity and
+ * The Genin exam's village choice in a wide dialog: each village's art, its deity and
  * bloodline, and a "Needs shinobi" tag on the quietest one. Villages too busy to take new
  * Genin are left out and named below the cards, so new players fill the quieter villages.
  * Picking a village asks for confirmation first, since it is for good. It
- * stacks above the Activity dock, so the confirmation is part of the page rather than
+ * stacks above the Activity dock, so the confirmation is part of the dialog rather than
  * a modal that would open underneath it, and the lesson's words are shown here instead.
  */
 export const VillageChooser: React.FC<{
@@ -61,12 +61,12 @@ export const VillageChooser: React.FC<{
   };
 
   return (
-    <FullScreenDialog id="tutorial-village-chooser">
+    <WideDialog id="tutorial-village-chooser">
       <div className="@container mx-auto flex min-h-full max-w-[120rem] flex-col justify-center gap-4 px-4 py-6">
         <header className="flex flex-col gap-1 text-center">
-          <FullScreenDialogTitle className="text-2xl font-bold">
+          <WideDialogTitle className="text-2xl font-bold">
             Choose your village
-          </FullScreenDialogTitle>
+          </WideDialogTitle>
           <p className="text-muted-foreground">
             Your village is your home for good. It decides who fights beside you, the
             missions you are given and the village bloodline you can earn.
@@ -193,7 +193,7 @@ export const VillageChooser: React.FC<{
           </div>
         </div>
       )}
-    </FullScreenDialog>
+    </WideDialog>
   );
 };
 

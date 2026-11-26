@@ -145,7 +145,7 @@ export interface TutorialStepConfig {
   fightOpening?: { title: string; lead: string };
   /** The fight's opening words stay on screen beside a phone's battlefield. */
   keepsLeadInFight?: boolean;
-  /** A full-screen moment shown in place of the dock, with one Continue button. */
+  /** A moment shown in a wide dialog over the dock, with one Continue button. */
   screen?: TutorialScreenKind;
 }
 
@@ -164,7 +164,7 @@ export type TutorialMapScene = {
   says: string | { from: "lesson" | "objective" };
 };
 
-/** Full-screen moments of the Academy Trials: the promotion and the evening's close. */
+/** Wide-dialog moments of the Academy Trials: the promotion and the evening's close. */
 export type TutorialScreenKind = "rankUp" | "tomorrow";
 
 /** Shown in place of any step while the player is in the hospital. */
