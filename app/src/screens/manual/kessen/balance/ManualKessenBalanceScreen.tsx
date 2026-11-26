@@ -449,7 +449,7 @@ function HealthGrid({ gauntlet }: { gauntlet: KessenGauntletSummary | null }) {
   if (!gauntlet) return <p className="text-muted-foreground">Simulating…</p>;
   const { health } = gauntlet;
   const limits = KESSEN_BALANCE.health;
-  const tiles: { label: string; value: string; limit: string; ok: boolean }[] = [
+  const tiles: { label: string; value: string | null; limit: string; ok: boolean }[] = [
     {
       label: "Plays per match",
       value: health.plays.toFixed(1),
@@ -464,7 +464,7 @@ function HealthGrid({ gauntlet }: { gauntlet: KessenGauntletSummary | null }) {
     },
     {
       label: "Round 1 opener scores",
-      value: health.games > health.unfinished ? percent(health.opener) : "Unavailable",
+      value: health.games > health.unfinished ? percent(health.opener) : null,
       limit: `${percent(limits.opener[0])}–${percent(limits.opener[1])}`,
       ok:
         health.games > health.unfinished &&
@@ -497,8 +497,14 @@ function HealthGrid({ gauntlet }: { gauntlet: KessenGauntletSummary | null }) {
           <div key={tile.label} className="rounded-md border p-2">
             <dt className="text-muted-foreground text-sm">{tile.label}</dt>
             <dd className="flex items-center gap-1.5 text-xl font-bold">
-              <StatusMark status={tile.ok ? "ok" : "break"} />
-              {tile.value}
+              {health.games > 0 && tile.value !== null ? (
+                <>
+                  <StatusMark status={tile.ok ? "ok" : "break"} />
+                  {tile.value}
+                </>
+              ) : (
+                <span>Unavailable</span>
+              )}
             </dd>
             <dd className="text-muted-foreground text-sm">Limit {tile.limit}</dd>
           </div>
@@ -1039,8 +1045,9 @@ function Guidelines() {
       </dl>
       <p className="text-muted-foreground text-sm">
         The matches are played by the {capitalized(KESSEN_BALANCE_SIM.tier)} AI on both
-        seats. Saving a card that leaves a guideline records it in the change log and
-        the content Discord channel.
+        seats. Saving logs changes to individual card checks in the change log and the
+        content Discord channel. Catalog and match comparisons are report and editor
+        diagnostics.
       </p>
     </div>
   );

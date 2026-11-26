@@ -277,7 +277,10 @@ function MatchTest({
         {card.kind === "LEADER"
           ? ", leading its faction's starter deck against a leader without abilities, with the same faction passive"
           : `, in its faction's starter deck against a vanilla ${trialReference(card).power}-power unit`}
-        , and the faction gauntlet when a reference deck holds it.
+        {". Also runs the reference-deck gauntlet for both catalogs."}
+        {card.kind === "LEADER"
+          ? " Leader warnings compare each catalog's eligible leader cohort."
+          : null}
       </p>
       <Button
         type="button"

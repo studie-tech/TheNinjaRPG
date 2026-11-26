@@ -102,7 +102,7 @@ export interface CardMatchTest {
   error: string | null;
 }
 
-/** One card at a time affords a finer trial than the page's sweep of every card. */
+/** Editor trials use finer pairing than the page's sweep of every card. */
 const TRIAL_GAMES = KESSEN_BALANCE_SIM.editorTrialGames;
 
 const IDLE_TEST: CardMatchTest = {
@@ -148,12 +148,14 @@ export const useCardMatchTest = () => {
       createWorker: balanceWorkerFactory(),
       workers: balanceWorkerCount(),
       signal: current.signal,
-      onProgress: (done: number, total: number) =>
+      onProgress: (done: number, total: number) => {
+        if (current.signal.aborted) return;
         setTest((previous) => ({
           ...previous,
           done: finishedPhases * 1000 + Math.round((1000 * done) / Math.max(1, total)),
           total: totalPhases * 1000,
-        })),
+        }));
+      },
     };
     const next = <T>(value: T) => {
       finishedPhases += 1;
@@ -169,7 +171,12 @@ export const useCardMatchTest = () => {
     try {
       let draftTrial: KessenTrialSummary | null = null;
       if (isTrialSubject(draftCard)) {
-        const trials = await runTrials(draftCatalog, options, [draftCard], TRIAL_GAMES);
+        const trials = await runTrials(
+          draftCatalog,
+          options,
+          editorTrialSubjects(draftCatalog, draftCard),
+          TRIAL_GAMES,
+        );
         const trial = trials[draftCard.id];
         if (trial) draftTrial = trial;
         next(null);
@@ -180,7 +187,7 @@ export const useCardMatchTest = () => {
           const trials = await runTrials(
             savedCatalog,
             options,
-            [savedCard],
+            editorTrialSubjects(savedCatalog, savedCard),
             TRIAL_GAMES,
           );
           const trial = trials[savedCard.id];
@@ -192,6 +199,7 @@ export const useCardMatchTest = () => {
         saved: next(await runGauntlet(savedCatalog, options)),
         draft: next(await runGauntlet(draftCatalog, options)),
       };
+      if (current.signal.aborted) return;
       setTest((previous) => ({
         ...previous,
         status: "done",
@@ -221,3 +229,9 @@ const withCard = (
   const rest = catalog.filter((entry) => entry.id !== id);
   return card ? [...rest, card] : rest;
 };
+
+/** Leader warnings compare the edited leader with every eligible leader in its catalog. */
+const editorTrialSubjects = (catalog: readonly KessenCard[], card: KessenCard) =>
+  card.kind === "LEADER"
+    ? catalog.filter((entry) => entry.kind === "LEADER" && isTrialSubject(entry))
+    : [card];

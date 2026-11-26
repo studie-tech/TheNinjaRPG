@@ -7,10 +7,15 @@ import {
 import { CardBalancePanel } from "@/layout/kessen/balance/CardBalancePanel";
 import * as Link from "@/layout/Link";
 import { kessenReferenceDecks } from "@/libs/kessen/balance";
-import { summarizeGauntlet } from "@/libs/kessen/balanceSim";
+import {
+  isTrialSubject,
+  KESSEN_BALANCE_SIM,
+  summarizeGauntlet,
+} from "@/libs/kessen/balanceSim";
 import * as runner from "@/libs/kessen/balanceSimRunner";
 import { catalogFingerprint, kessenCardToCardData } from "@/libs/kessen/catalog";
 import type { KessenCard } from "@/libs/kessen/types";
+import { cardDataSchema } from "@/validators/itemCard";
 import { KESSEN_SEED_CATALOG, seedCardByName } from "../libs/kessen/fixtures/catalog";
 
 afterEach(() => {
@@ -57,6 +62,14 @@ it("compares both gauntlets for a card outside every reference deck", async () =
   expect(gauntlet.mock.calls[0]?.[0]).toBe(KESSEN_SEED_CATALOG);
   expect(gauntlet.mock.calls[1]?.[0]).toBe(draftCatalog);
   expect(trials).toHaveBeenCalledTimes(2);
+  expect(trials.mock.calls[0]?.slice(2)).toEqual([
+    [draftCard],
+    KESSEN_BALANCE_SIM.editorTrialGames,
+  ]);
+  expect(trials.mock.calls[1]?.slice(2)).toEqual([
+    [savedCard],
+    KESSEN_BALANCE_SIM.editorTrialGames,
+  ]);
   expect(result.current.test).toMatchObject({
     status: "done",
     done: 4000,
@@ -68,6 +81,52 @@ it("compares both gauntlets for a card outside every reference deck", async () =
     error: null,
   });
 });
+
+it("compares saved and draft leaders with their own full cohort at editor precision", async () => {
+  const savedCard = seedCardByName("Ravena Bloodsilk");
+  const draftCard: KessenCard = { ...savedCard, abilities: [{ k: "draw", x: 20 }] };
+  expect(cardDataSchema.safeParse(kessenCardToCardData(draftCard)).success).toBe(true);
+  const draftCatalog = KESSEN_SEED_CATALOG.map((card) =>
+    card.id === draftCard.id ? draftCard : card,
+  );
+  const runTrials = runner.runTrials;
+  const trials = vi.spyOn(runner, "runTrials").mockImplementation(runTrials);
+  vi.spyOn(runner, "runGauntlet").mockResolvedValue(
+    summarizeGauntlet(kessenReferenceDecks(), [], new Map()),
+  );
+  const { result } = renderHook(useCardMatchTest);
+  await act(async () => {
+    await result.current.run({
+      savedCatalog: KESSEN_SEED_CATALOG,
+      draftCatalog,
+      savedCard,
+      draftCard,
+      savedFingerprint: catalogFingerprint(KESSEN_SEED_CATALOG),
+      draftFingerprint: catalogFingerprint(draftCatalog),
+    });
+  });
+  expect(trials).toHaveBeenCalledTimes(2);
+  for (const [call, catalog] of [
+    [trials.mock.calls[0], draftCatalog],
+    [trials.mock.calls[1], KESSEN_SEED_CATALOG],
+  ] as const) {
+    expect(call?.[0]).toBe(catalog);
+    expect(call?.slice(2)).toEqual([
+      catalog.filter((card) => card.kind === "LEADER" && isTrialSubject(card)),
+      KESSEN_BALANCE_SIM.editorTrialGames,
+    ]);
+  }
+  expect(result.current.test).toMatchObject({
+    status: "done",
+    done: 4000,
+    total: 4000,
+  });
+  const { saved, draft } = result.current.test.trial!;
+  expect(saved?.games).toBe(KESSEN_BALANCE_SIM.editorTrialGames);
+  expect(draft?.games).toBe(KESSEN_BALANCE_SIM.editorTrialGames);
+  expect(saved?.flags.some((flag) => flag.rule === "leaderTrial")).toBe(false);
+  expect(draft?.flags.some((flag) => flag.rule === "leaderTrial")).toBe(true);
+}, 180_000);
 
 it("reports simulation failures and clears the running state", async () => {
   vi.spyOn(runner, "runTrials").mockRejectedValue(new Error("Worker failed"));

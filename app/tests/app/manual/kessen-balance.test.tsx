@@ -4,7 +4,12 @@ import * as Balance from "@/hooks/kessen/useKessenBalance";
 import * as Hub from "@/hooks/kessen/useKessenHub";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Link from "@/layout/Link";
-import { catalogBalance } from "@/libs/kessen/balance";
+import { catalogBalance, kessenReferenceDecks } from "@/libs/kessen/balance";
+import {
+  gauntletJobs,
+  type KessenSimOutcome,
+  summarizeGauntlet,
+} from "@/libs/kessen/balanceSim";
 import { runGauntlet } from "@/libs/kessen/balanceSimRunner";
 import type { KessenCard } from "@/libs/kessen/types";
 import { ManualKessenBalanceScreen } from "@/screens/manual/kessen/balance/ManualKessenBalanceScreen";
@@ -178,6 +183,40 @@ it("reports zero-game factions as unavailable instead of in band", async () => {
   expect(summary.textContent).toContain("0/6 · 6 unavailable");
   expect(within(summary).queryByText("In guidelines")).toBeNull();
   expect(view.getAllByText("Gauntlet win rate unavailable")).toHaveLength(6);
+  const health = within(document.getElementById("kessen-balance-health")!);
+  expect(gauntlet.health).toMatchObject({ games: 0, skipped: 960, unfinished: 0 });
+  expect(health.getAllByText("Unavailable")).toHaveLength(6);
+  expect(health.queryByText("In guidelines")).toBeNull();
+  expect(health.queryByText("Breaks a guideline")).toBeNull();
+});
+
+it("keeps observed health metrics when all games are unfinished and leaves the opener unavailable", () => {
+  const decks = kessenReferenceDecks();
+  const jobs = gauntletJobs(decks, 1);
+  const job = jobs[0]!;
+  const outcome: KessenSimOutcome = {
+    id: job.id,
+    finished: false,
+    winner: null,
+    opener: 0,
+    plays: 35,
+    rounds: 1,
+    ties: 0,
+    swings: [3],
+    maxRow: 12,
+  };
+  const gauntlet = summarizeGauntlet(decks, jobs, new Map([[job.id, outcome]]));
+  expect(gauntlet.health).toMatchObject({ games: 1, unfinished: 1 });
+  mockReport(KESSEN_SEED_CATALOG, { ...IDLE, status: "done", gauntlet, trials: {} });
+  render(<ManualKessenBalanceScreen />);
+  const health = within(document.getElementById("kessen-balance-health")!);
+  expect(health.getAllByText("Unavailable")).toHaveLength(1);
+  const opener = within(health.getByText("Round 1 opener scores").parentElement!);
+  expect(opener.getByText("Unavailable")).toBeTruthy();
+  expect(opener.queryByText("In guidelines")).toBeNull();
+  expect(opener.queryByText("Breaks a guideline")).toBeNull();
+  expect(health.getAllByText("In guidelines")).toHaveLength(4);
+  expect(health.getAllByText("Breaks a guideline")).toHaveLength(1);
 });
 
 /** Provide computed catalog data while leaving the report's filters and navigation active. */
