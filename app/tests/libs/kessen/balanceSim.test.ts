@@ -266,6 +266,37 @@ describe("Kessen balance simulation coverage", () => {
     expect(trials[other.id]?.games).toBeGreaterThan(0);
     expect(trials[other.id]?.discarded).toBeGreaterThan(0);
   }, 30_000);
+
+  it("flags a simulated leader outlier against its cohort but not against itself", async () => {
+    const leader: KessenCard = {
+      ...seedCardByName("Ravena Bloodsilk"),
+      abilities: [{ k: "draw", x: 20 }],
+    };
+    expect(cardDataSchema.safeParse(kessenCardToCardData(leader)).success).toBe(true);
+    const catalog = KESSEN_SEED_CATALOG.map((card) =>
+      card.id === leader.id ? leader : card,
+    );
+    const subjects = [
+      seedCardByName("Junko, Moon Warden"),
+      seedCardByName("Amir, the Hoarder"),
+      leader,
+    ];
+    const trials = await runTrials(
+      catalog,
+      { createWorker: null, workers: 1 },
+      subjects,
+      10,
+    );
+    for (const card of subjects) {
+      expect(trials[card.id]).toMatchObject({ games: 10, discarded: 0 });
+    }
+    const trial = trials[leader.id];
+    if (!trial) throw new Error("No leader trial");
+    expect(trial.flags).toContainEqual(
+      expect.objectContaining({ rule: "leaderTrial", severity: "warn" }),
+    );
+    expect(leaderSpreadFlags([{ card: leader, trial }]).size).toBe(0);
+  });
 });
 
 describe("Kessen balance Summon diagnostics", () => {

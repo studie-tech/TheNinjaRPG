@@ -10,6 +10,7 @@ import { kessenReferenceDecks } from "@/libs/kessen/balance";
 import {
   isTrialSubject,
   KESSEN_BALANCE_SIM,
+  type KessenTrialSummary,
   summarizeGauntlet,
 } from "@/libs/kessen/balanceSim";
 import * as runner from "@/libs/kessen/balanceSimRunner";
@@ -89,8 +90,23 @@ it("compares saved and draft leaders with their own full cohort at editor precis
   const draftCatalog = KESSEN_SEED_CATALOG.map((card) =>
     card.id === draftCard.id ? draftCard : card,
   );
-  const runTrials = runner.runTrials;
-  const trials = vi.spyOn(runner, "runTrials").mockImplementation(runTrials);
+  const savedTrial: KessenTrialSummary = {
+    cardId: savedCard.id,
+    edge: 0,
+    se: 0,
+    games: KESSEN_BALANCE_SIM.editorTrialGames,
+    discarded: 0,
+    flags: [],
+  };
+  const draftTrial: KessenTrialSummary = {
+    ...savedTrial,
+    edge: 80,
+    flags: [{ rule: "leaderTrial", severity: "warn", message: "Draft cohort warning" }],
+  };
+  const trials = vi
+    .spyOn(runner, "runTrials")
+    .mockResolvedValueOnce({ [draftCard.id]: draftTrial })
+    .mockResolvedValueOnce({ [savedCard.id]: savedTrial });
   vi.spyOn(runner, "runGauntlet").mockResolvedValue(
     summarizeGauntlet(kessenReferenceDecks(), [], new Map()),
   );
@@ -122,11 +138,9 @@ it("compares saved and draft leaders with their own full cohort at editor precis
     total: 4000,
   });
   const { saved, draft } = result.current.test.trial!;
-  expect(saved?.games).toBe(KESSEN_BALANCE_SIM.editorTrialGames);
-  expect(draft?.games).toBe(KESSEN_BALANCE_SIM.editorTrialGames);
-  expect(saved?.flags.some((flag) => flag.rule === "leaderTrial")).toBe(false);
-  expect(draft?.flags.some((flag) => flag.rule === "leaderTrial")).toBe(true);
-}, 180_000);
+  expect(saved).toBe(savedTrial);
+  expect(draft).toBe(draftTrial);
+});
 
 it("reports simulation failures and clears the running state", async () => {
   vi.spyOn(runner, "runTrials").mockRejectedValue(new Error("Worker failed"));
