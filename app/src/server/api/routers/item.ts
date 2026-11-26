@@ -136,6 +136,7 @@ import {
   countHeldInventorySlots,
 } from "@/libs/itemsPage";
 import { getJutsuSlotIncreaseError } from "@/libs/jutsuSlots";
+import { itemBalanceChanges } from "@/libs/kessen/balance";
 import {
   DECK_COPIES_SALE_REASON,
   deckCopySaleRefusals,
@@ -1011,6 +1012,15 @@ export const itemRouter = createTRPCRouter({
         createdAt: entry.createdAt,
         ...input.data,
       });
+      // Kessen balance guidelines the card newly breaks or clears join the log and post.
+      diff.push(
+        ...itemBalanceChanges(entry, {
+          id: entry.id,
+          name: input.data.name,
+          rarity: input.data.rarity,
+          cardData: input.data.cardData,
+        }),
+      );
       // Write-time parent existence + sibling-cap guards when setting an evolution parent.
       // The subquery aliases materialize derived tables, avoiding MySQL errno 1093
       // (an UPDATE cannot otherwise read its own target table in a subquery).
