@@ -21,9 +21,11 @@ import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { staffRouter } from "@/server/api/routers/staff";
 import { DamageTag, StunTag, type ZodAllTags } from "@/validators/combat";
+import { deferred } from "../../../setup/deferred";
 import { insertJutsus } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
+import { aroundStatements, overrideQuery } from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -331,6 +333,100 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     expect((await invoke("purchase", { optionId: "root" })).success).toBe(true);
     expect((await invoke("purchase", { optionId: "child" })).success).toBe(false);
     expect((await read()).seichiSilver).toBe(900);
+  });
+  it("rejects a purchase when its jutsu snapshot predates a staff move to another bloodline", async () => {
+    const db = await getTestDatabase();
+    const stun = StunTag.parse({ rounds: 80 });
+    const changes = [
+      { tagIndex: 0, tag: stun, field: "rounds", mode: "FLAT" as const, value: 15 },
+    ];
+    await db.insert(bloodline).values({
+      id: "other-line",
+      name: "Other Bloodright Line",
+      rank: "D",
+      image: "",
+      description: "Fixture",
+      effects: [],
+    });
+    await insertJutsus([
+      { id: "other-source", bloodlineId: "other-line", effects: [stun] },
+      {
+        id: "other-evolved",
+        bloodlineId: "other-line",
+        parentJutsuId: "other-source",
+        effects: [stun],
+      },
+    ]);
+    await db
+      .update(bloodrightOption)
+      .set({ bloodlineId: "other-line", jutsuId: "other-evolved", changes })
+      .where(eq(bloodrightOption.id, "child"));
+    await db
+      .update(userData)
+      .set({
+        role: "OWNER",
+        bloodlineId: "other-line",
+        seichiSilver: 900,
+        bloodrightSpent: 100,
+        bloodright: [{ optionId: "child", cost: 100 }],
+      })
+      .where(eq(userData.userId, userId));
+    const source = await db.query.bloodrightOption.findFirst({
+      where: eq(bloodrightOption.id, "root"),
+    });
+    if (!source) throw new Error("Missing option");
+    const moved = deferred();
+    const staff = callerForDatabase(bloodrightRouter, userId, db);
+    const client = overrideQuery(
+      aroundStatements(
+        db,
+        bloodrightOption,
+        async (run) => {
+          const result = await run();
+          try {
+            expect(
+              (
+                await staff.save({
+                  id: source.id,
+                  updatedAt: source.updatedAt,
+                  data: {
+                    ...source,
+                    bloodlineId: "other-line",
+                    jutsuId: "other-source",
+                    changes,
+                  },
+                })
+              ).success,
+            ).toBe(true);
+          } finally {
+            moved.resolve();
+          }
+          return result;
+        },
+        { operations: ["select"] },
+      ),
+      "bloodrightOption",
+      {
+        findFirst: async (read, ...args) => {
+          await moved.promise;
+          return read(...args);
+        },
+      },
+    );
+    const result = await callerForDatabase(bloodrightRouter, userId, client).purchase({
+      optionId: "root",
+    });
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Refresh");
+    expect(await read()).toMatchObject({
+      seichiSilver: 900,
+      bloodrightSpent: 100,
+      bloodright: [{ optionId: "child", cost: 100 }],
+    });
+    // A fresh snapshot must also reject the combined 110-round stun.
+    const refreshed = await staff.purchase({ optionId: "root" });
+    expect(refreshed.success).toBe(false);
+    expect(refreshed.message).toContain("tag limits");
   });
   it("charges once for concurrent duplicate purchases and refunds once", async () => {
     const purchases = await Promise.all([

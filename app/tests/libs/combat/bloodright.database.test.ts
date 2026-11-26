@@ -232,7 +232,11 @@ describeWithDatabase("Bloodright battle snapshots", () => {
           (action) => action.id === "target",
         )?.effects[0],
       ).toMatchObject({ power: 25 });
-      expect(stored.extraState.bloodrightChanges?.opponent).toBeUndefined();
+      const opponent = stored.usersState.find(
+        (user) => user.controllerId === "opponent" && !user.isSummon,
+      );
+      if (!opponent) throw new Error("Missing opponent actor");
+      expect(stored.extraState.bloodrightChanges?.[opponent.userId]).toBeUndefined();
     });
   }
 });

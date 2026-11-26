@@ -198,6 +198,9 @@ export const bloodrightRouter = createTRPCRouter({
           (option.hidden || option.jutsu.hidden))
       )
         return errorResponse("Bloodright option not found for your bloodline");
+      // Parallel reads must validate the jutsu family selected by this option revision.
+      if (purchaseJutsus[0]?.optionUpdatedAt.getTime() !== option.updatedAt.getTime())
+        return errorResponse("This option changed. Refresh and try again");
       if (!isBloodrightCurrent(option.changes, option.jutsu.effects))
         return errorResponse(
           "This option needs a content update before it can be activated",
@@ -215,7 +218,13 @@ export const bloodrightRouter = createTRPCRouter({
         ),
         option,
       ];
-      if (!validateBloodrightSelection(purchaseJutsus, selected, identities))
+      if (
+        !validateBloodrightSelection(
+          purchaseJutsus.map((entry) => entry.jutsu),
+          selected,
+          identities,
+        )
+      )
         return errorResponse(
           "These options exceed the jutsu tag limits. Refund another option first",
         );

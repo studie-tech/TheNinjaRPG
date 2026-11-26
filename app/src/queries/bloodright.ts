@@ -60,20 +60,19 @@ export const listBloodrightJutsus = (
     orderBy: [jutsu.name],
   });
 
-/** Load the option's bloodline jutsu so inherited combinations are checked before payment. */
+/** Load bloodline jutsu with the option revision that selected them for purchase validation. */
 export const listBloodrightPurchaseJutsus = (
-  client: Pick<DrizzleClient, "query" | "select">,
+  client: Pick<DrizzleClient, "select">,
   optionId: string,
 ) =>
-  client.query.jutsu.findMany({
-    where: inArray(
-      jutsu.bloodlineId,
-      client
-        .select({ bloodlineId: bloodrightOption.bloodlineId })
-        .from(bloodrightOption)
-        .where(eq(bloodrightOption.id, optionId)),
-    ),
-  });
+  client
+    .select({
+      optionUpdatedAt: bloodrightOption.updatedAt,
+      jutsu: { id: jutsu.id, effects: jutsu.effects },
+    })
+    .from(bloodrightOption)
+    .innerJoin(jutsu, eq(jutsu.bloodlineId, bloodrightOption.bloodlineId))
+    .where(eq(bloodrightOption.id, optionId));
 
 /** Debit Silver and claim an option against both account and content snapshots. */
 export const updateUserDataForPurchase = (
