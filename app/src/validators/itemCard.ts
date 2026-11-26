@@ -25,9 +25,10 @@ export const KessenCardVariants = ["STANDARD", "FORBIDDEN"] as const;
 export type KessenCardVariant = (typeof KessenCardVariants)[number];
 
 const amount = z.coerce.number().int().min(1).max(20);
-/** Longest set name, and the most sets one card can belong to. */
+/** Longest set name. */
 export const KESSEN_SET_NAME_MAX = 40;
-export const KESSEN_MAX_SETS = 3;
+/** Memberships cover three summon affiliations and four independent Bond affiliations. */
+export const KESSEN_MAX_SETS = 7;
 const setName = z.string().trim().min(1).max(KESSEN_SET_NAME_MAX);
 
 /**

@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
-import { eq, like } from "drizzle-orm";
+import { eq, like, sql } from "drizzle-orm";
 import { item, kessenMatch } from "@/drizzle/schema";
-import { itemToKessenCard } from "@/libs/kessen/catalog";
+import { itemToKessenCard, kessenCardToCardData } from "@/libs/kessen/catalog";
 import type { KessenCard } from "@/libs/kessen/types";
 import { cardDataSchema } from "@/validators/itemCard";
 import { KESSEN_SEED_CATALOG } from "../libs/kessen/fixtures/catalog";
@@ -127,5 +127,49 @@ describeWithDatabase("Kessen card sets migration", () => {
       });
     }
     expect(await stateOf("current")).toEqual(current);
+  });
+
+  it("preserves all three summon affiliations and four distinct Bond affiliations", async () => {
+    const client = await getTestDatabase();
+    const base = KESSEN_SEED_CATALOG[0];
+    if (!base) throw new Error("No seed card");
+    const summonGroups = ["Summon A", "Summon B", "Summon C"];
+    const bonds = ["Bond A", "Bond B", "Bond C", "Bond D"];
+    const sets = [...summonGroups, ...bonds];
+    const card: KessenCard = {
+      ...base,
+      abilities: bonds.map((group) => ({ k: "bond", group })),
+      sets,
+    };
+    const { sets: _sets, ...data } = kessenCardToCardData(card);
+    await client
+      .update(item)
+      .set({
+        cardData: sql`CAST(${JSON.stringify({ ...data, summonGroups })} AS JSON)`,
+      })
+      .where(eq(item.id, card.id));
+    await client
+      .insert(kessenMatch)
+      .values(matchRow("custom-sets", legacyState([card])));
+
+    await runRawSql(migration);
+
+    const [saved] = await client.select().from(item).where(eq(item.id, card.id));
+    expect(saved).toBeDefined();
+    if (!saved) throw new Error("Missing migrated card");
+    const migrated = itemToKessenCard(saved);
+    expect(migrated?.sets.toSorted()).toEqual(sets.toSorted());
+    expect(migrated?.abilities).toEqual(card.abilities);
+    const [match] = await client
+      .select()
+      .from(kessenMatch)
+      .where(eq(kessenMatch.id, "custom-sets"));
+    const expected = { ...card, sets: expect.arrayContaining(sets) };
+    expect(match?.state).toEqual({
+      engine: { step: 7, cards: { [card.id]: expected } },
+      mode: "standard",
+      pool: [expected],
+      plays: [2, 1],
+    });
   });
 });
