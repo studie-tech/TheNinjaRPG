@@ -265,7 +265,7 @@ function KessenHall() {
   if (tab === "Rules" && (!isClerkLoaded || !userId || !hub || !catalog)) {
     return <KessenRules tabs={introTabs} onPlay={() => selectTab("Play")} />;
   }
-  if (!isClerkLoaded) {
+  if (!isClerkLoaded || (!userId && profileStatus === "pending")) {
     return (
       <HallBox tabs={introTabs}>
         <Loader explanation="Loading user data" />
@@ -275,13 +275,6 @@ function KessenHall() {
   if (!userId) {
     // A signed-in player whose profile did not load gets the reason and a retry; the
     // profile query does not retry on its own, so its error state is stable.
-    if (profileStatus === "pending") {
-      return (
-        <HallBox tabs={introTabs}>
-          <Loader explanation="Loading user data" />
-        </HallBox>
-      );
-    }
     if (profileStatus !== "error") return <NoCharacter tabs={introTabs} />;
     return (
       <HallError
