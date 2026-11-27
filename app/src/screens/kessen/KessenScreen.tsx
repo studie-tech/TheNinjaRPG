@@ -785,7 +785,7 @@ function KessenHall() {
       onFocused={() => setLeftTable(false)}
     />
   );
-  if (tab === "Rules") {
+  if (tab === "Rules" && !scene) {
     return <KessenRules tabs={tabs} onPlay={() => selectTab("Play")} />;
   }
 
