@@ -1,6 +1,6 @@
 import { Loader2, Sparkles, X } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -912,38 +912,50 @@ export const QuestObjectives: React.FC<{
 
 /**
  * The parts of a quest's dialogue before the latest one, newest first, at the foot of the entry.
- * The narrow dock keeps them folded.
+ * They scroll within a capped height so a long quest keeps its card short; the narrow dock keeps
+ * them folded.
  */
 const EarlierQuestDialogue: React.FC<{
   entries: QuestDialogueEntry[];
   compact?: boolean;
 }> = ({ entries, compact }) => {
   const [isOpen, setIsOpen] = useState(!compact);
+  const headingId = useId();
+  const listId = useId();
   if (entries.length === 0) return null;
   return (
-    <section className="@container" aria-label="Earlier quest dialogue">
-      {compact ? (
+    <div className="@container">
+      <div className="flex items-baseline gap-2">
+        <h3 id={headingId} className="font-bold">
+          Earlier dialogue ({entries.length})
+        </h3>
         <Button
           type="button"
           variant="link"
           className="h-auto p-0"
           aria-expanded={isOpen}
+          aria-controls={listId}
           onClick={() => setIsOpen((open) => !open)}
         >
-          {isOpen ? "Hide" : "Read"} earlier dialogue ({entries.length})
+          {isOpen ? "Hide" : "Show"}
         </Button>
-      ) : (
-        <h3 className="font-bold">Earlier dialogue</h3>
-      )}
+      </div>
       {isOpen && (
+        // Newest first, so the capped area opens on the most recent part.
         // One readable column in the classic 650px centre, two where a wide layout has 768px.
-        <div className="grid grid-cols-1 gap-3 @5xl:grid-cols-2">
+        <section
+          id={listId}
+          aria-labelledby={headingId}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Browsers that leave scroll containers out of the tab order (Safari) would otherwise keep the clipped entries out of keyboard reach.
+          tabIndex={0}
+          className="mt-1 grid max-h-96 grid-cols-1 gap-3 overflow-y-auto overscroll-contain rounded-md border p-2 @5xl:grid-cols-2"
+        >
           {entries.map((entry) => (
             <QuestDialogueText key={entry.objectiveId} entry={entry} />
           ))}
-        </div>
+        </section>
       )}
-    </section>
+    </div>
   );
 };
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import * as logbook from "@/layout/Logbook";
@@ -117,5 +117,84 @@ describe("logbook dialog steps", () => {
     renderDialogStep("larry-placement");
     expect(screen.queryByRole("button", { name: "Tell me more" })).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("continues in person");
+  });
+});
+
+/** Render a quest whose player has answered three dialogs and reached a fourth. */
+const renderLongConversation = (compact?: boolean) => {
+  mockUserContextValue({
+    data: { userId: "viewer", role: "USER", status: "AWAKE", dailyMissions: 0 },
+    prepareUserUpdate: () => 1,
+    updateUser: vi.fn(),
+  } as never);
+  const steps = ["first", "second", "third", "fourth"];
+  const quest = {
+    id: "saga",
+    name: "Saga",
+    questType: "event",
+    description: "",
+    consecutiveObjectives: true,
+    content: {
+      objectives: steps.map((id, i) => ({
+        id,
+        task: "dialog",
+        description: `${id} words`,
+        nextObjectiveId: [{ text: `After ${id}`, nextObjectiveId: steps[i + 1] }],
+      })),
+      reward: {},
+    },
+  };
+  const goals = steps.slice(0, 3).map((id, i) => ({
+    id,
+    done: true,
+    selectedNextObjectiveId: steps[i + 1],
+  }));
+  return render(
+    <logbook.LogbookEntry
+      userQuest={
+        {
+          id: "saga",
+          questId: "saga",
+          quest,
+          startedAt: new Date(0),
+          completed: 0,
+        } as never
+      }
+      tracker={{ id: "saga", goals } as never}
+      compact={compact}
+      hideTitle
+    />,
+  );
+};
+
+describe("logbook earlier dialogue", () => {
+  it("keeps earlier dialogue in a capped scroll area, newest first", () => {
+    renderLongConversation();
+    const region = screen.getByRole("region", { name: "Earlier dialogue (3)" });
+    const toggle = screen.getByRole("button", { name: "Hide" });
+    expect(toggle.getAttribute("aria-controls")).toBe(region.id);
+    expect(region.getAttribute("tabindex")).toBe("0");
+    expect(region.className).toContain("max-h-96");
+    expect(region.className).toContain("overflow-y-auto");
+    expect(region.textContent).toMatch(/third words.*second words.*first words/);
+    expect(
+      screen.getByRole("region", { name: "Quest dialogue" }).textContent,
+    ).toContain("fourth words");
+  });
+
+  it("lets the player fold earlier dialogue away and open it again", () => {
+    renderLongConversation();
+    fireEvent.click(screen.getByRole("button", { name: "Hide" }));
+    expect(screen.queryByText("first words")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+    expect(screen.getByText("first words")).toBeTruthy();
+  });
+
+  it("starts folded in the compact dock", () => {
+    renderLongConversation(true);
+    expect(
+      screen.getByRole("button", { name: "Show" }).getAttribute("aria-expanded"),
+    ).toBe("false");
+    expect(screen.queryByText("first words")).toBeNull();
   });
 });
