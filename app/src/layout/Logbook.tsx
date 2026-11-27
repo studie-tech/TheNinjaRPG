@@ -924,7 +924,7 @@ const EarlierQuestDialogue: React.FC<{
   const listId = useId();
   if (entries.length === 0) return null;
   return (
-    <section className="@container" aria-labelledby={headingId}>
+    <div className="@container">
       <div className="flex items-baseline gap-2">
         <h3 id={headingId} className="font-bold">
           Earlier dialogue ({entries.length})
@@ -943,8 +943,9 @@ const EarlierQuestDialogue: React.FC<{
       {isOpen && (
         // Newest first, so the capped area opens on the most recent part.
         // One readable column in the classic 650px centre, two where a wide layout has 768px.
-        <div
+        <section
           id={listId}
+          aria-labelledby={headingId}
           // biome-ignore lint/a11y/noNoninteractiveTabindex: Browsers that leave scroll containers out of the tab order (Safari) would otherwise keep the clipped entries out of keyboard reach.
           tabIndex={0}
           className="mt-1 grid max-h-96 grid-cols-1 gap-3 overflow-y-auto overscroll-contain rounded-md border p-2 @5xl:grid-cols-2"
@@ -952,9 +953,9 @@ const EarlierQuestDialogue: React.FC<{
           {entries.map((entry) => (
             <QuestDialogueText key={entry.objectiveId} entry={entry} />
           ))}
-        </div>
+        </section>
       )}
-    </section>
+    </div>
   );
 };
 

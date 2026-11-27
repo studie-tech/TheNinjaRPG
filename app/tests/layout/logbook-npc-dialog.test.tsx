@@ -172,12 +172,11 @@ describe("logbook earlier dialogue", () => {
     renderLongConversation();
     const region = screen.getByRole("region", { name: "Earlier dialogue (3)" });
     const toggle = screen.getByRole("button", { name: "Hide" });
-    const list = document.getElementById(toggle.getAttribute("aria-controls") ?? "");
-    expect(region.contains(list)).toBe(true);
-    expect(list?.getAttribute("tabindex")).toBe("0");
-    expect(list?.className).toContain("max-h-96");
-    expect(list?.className).toContain("overflow-y-auto");
-    expect(list?.textContent).toMatch(/third words.*second words.*first words/);
+    expect(toggle.getAttribute("aria-controls")).toBe(region.id);
+    expect(region.getAttribute("tabindex")).toBe("0");
+    expect(region.className).toContain("max-h-96");
+    expect(region.className).toContain("overflow-y-auto");
+    expect(region.textContent).toMatch(/third words.*second words.*first words/);
     expect(
       screen.getByRole("region", { name: "Quest dialogue" }).textContent,
     ).toContain("fourth words");
