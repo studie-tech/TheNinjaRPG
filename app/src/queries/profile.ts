@@ -203,6 +203,32 @@ const VOTE_POSTBACK_SITES: Record<string, (typeof ACTIVE_VOTING_SITES)[number]> 
 };
 
 /**
+ * Record a verified TopRankinGames vote once per daily vote set. Keep its id across daily
+ * resets; callbacks also reject votes from earlier UTC days, so a retry cannot fill a new
+ * day's vote set. Signed callbacks stay separate from the unsigned legacy postback map.
+ */
+export const updateUserVoteForTopRankinGames = (
+  client: Pick<DrizzleClient, "update">,
+  secret: string,
+  voteId: string,
+  now: Date,
+) =>
+  client
+    .update(userVote)
+    .set({ topRankinGames: true, topRankinGamesVoteId: voteId, lastVoteAt: now })
+    .where(
+      and(
+        eq(userVote.secret, secret),
+        eq(userVote.claimed, false),
+        eq(userVote.topRankinGames, false),
+        or(
+          isNull(userVote.topRankinGamesVoteId),
+          ne(userVote.topRankinGamesVoteId, voteId),
+        ),
+      ),
+    );
+
+/**
  * Fetch a user by id
  * @param client - The database client
  * @param userId - The id of the user

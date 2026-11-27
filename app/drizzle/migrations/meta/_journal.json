@@ -1373,6 +1373,13 @@
       "when": 1795711831662,
       "tag": "0196_plain_prowler",
       "breakpoints": false
+    },
+    {
+      "idx": 197,
+      "version": "5",
+      "when": 1795782332464,
+      "tag": "0197_tough_mesmero",
+      "breakpoints": false
     }
   ]
 }
