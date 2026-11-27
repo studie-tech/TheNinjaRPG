@@ -5,6 +5,7 @@ import "@/layout/kessen/hub/hub.css";
 import "@/screens/kessen/hall.css";
 import {
   BookOpen,
+  BookText,
   Gift,
   GraduationCap,
   Layers,
@@ -99,7 +100,7 @@ import type { CardPackReveal } from "@/validators/weightedCache";
  * pack ceremony take the hall's place inside its content box while they are open. An
  * unfinished match or duel reopens on arrival, and a duel that begins (an accepted
  * challenge, a ranked match) opens its table; `?tab=packs` (or `play`, `duels`, `decks`,
- * `collection`) opens that section, also when the table closes over it. Visitors
+ * `collection`, `rules`) opens that section, also when the table closes over it. Visitors
  * without an account get the guest hall (`KessenGuestHall`) instead.
  */
 export function KessenScreen() {
@@ -107,7 +108,7 @@ export function KessenScreen() {
   // Visitors who look signed out get the guest hall at once, which also puts it in the
   // prerendered page; its tables wait until sign-in is confirmed, so a signed-in player
   // never starts a guest match. A signed-in player waits for the profile in the hall.
-  if (!isSignedIn) return <KessenGuestHall ready={isClerkLoaded} />;
+  if (!isSignedIn) return <KessenGuestEntry ready={isClerkLoaded} />;
   // Search params need a Suspense boundary on a prerendered page; the hall then renders
   // in the browser only, so its remembered section never differs between the two sides.
   return (
@@ -115,6 +116,48 @@ export function KessenScreen() {
       <KessenHall />
     </Suspense>
   );
+}
+
+const KessenRules = dynamic(() =>
+  import("@/layout/kessen/KessenRules").then((mod) => mod.KessenRules),
+);
+
+/** Guests can read the same rules without entering a match or creating an account. */
+function KessenGuestEntry({ ready }: { ready: boolean }) {
+  const [showRules, setShowRules] = useState(false);
+  const router = useNavigationRouter();
+  const onPlay = () => router.replace("/kessen", { scroll: false });
+  return (
+    <>
+      <Suspense fallback={null}>
+        <GuestRulesTab onChange={setShowRules} />
+      </Suspense>
+      {showRules ? (
+        <KessenRules
+          tabs={
+            <HallTabs
+              current="Rules"
+              options={INTRO_TABS}
+              onSelect={(tab) => {
+                if (tab === "Play") onPlay();
+              }}
+            />
+          }
+          onPlay={onPlay}
+        />
+      ) : (
+        <KessenGuestHall ready={ready} />
+      )}
+    </>
+  );
+}
+
+/** Keep the public guest hall prerendered while its query-selected tab hydrates. */
+function GuestRulesTab({ onChange }: { onChange: (show: boolean) => void }) {
+  const searchParams = useSearchParams();
+  const showRules = tabOfParam(searchParams.get("tab")) === "Rules";
+  useEffect(() => onChange(showRules), [showRules, onChange]);
+  return null;
 }
 
 // The table, its playback and its stylesheet load only when a match opens.
@@ -636,7 +679,7 @@ function KessenHall() {
             : []),
         ];
 
-  // The lesson and the starter choice show no tabs, counters or deck to manage yet.
+  // Rewards and deck management stay hidden until the lesson and starter choice are complete.
   const onboarding = hub.needsLesson || hub.needsStarter;
   // A graduate's Academy folds to one row below the Circuit; until then it leads the tab.
   const academyPanel = (
@@ -731,11 +774,26 @@ function KessenHall() {
     );
   }
 
+  const tabs = (
+    <HallTabs
+      current={tab}
+      options={onboarding ? INTRO_TABS : TABS}
+      onSelect={selectTab}
+      packCount={packCount}
+      duelCount={incomingChallenges}
+      focusCurrent={leftTable && tab !== "Play"}
+      onFocused={() => setLeftTable(false)}
+    />
+  );
+  if (tab === "Rules") {
+    return <KessenRules tabs={tabs} onPlay={() => selectTab("Play")} />;
+  }
+
   // First visit: one button, Lemu's first lesson.
   const firstLesson = hub.academy.lessons[0] ?? null;
   if (hub.needsLesson) {
     return (
-      <HallBox scene={scene} subtitle="Lemu's first lesson">
+      <HallBox scene={scene} subtitle="Lemu's first lesson" tabs={tabs}>
         <div className="flex flex-col gap-5">
           {header}
           <section
@@ -777,7 +835,7 @@ function KessenHall() {
   // After the lesson: the starter faction, then the First Bundle opens.
   if (hub.needsStarter) {
     return (
-      <HallBox scene={scene} subtitle="Choose your starter faction">
+      <HallBox scene={scene} subtitle="Choose your starter faction" tabs={tabs}>
         <div className="flex flex-col gap-5">
           {header}
           <StarterChoice
@@ -823,20 +881,7 @@ function KessenHall() {
   );
 
   return (
-    <HallBox
-      scene={scene}
-      subtitle={TAB_SUBTITLES[tab]}
-      tabs={
-        <HallTabs
-          current={tab}
-          onSelect={selectTab}
-          packCount={packCount}
-          duelCount={incomingChallenges}
-          focusCurrent={leftTable && tab !== "Play"}
-          onFocused={() => setLeftTable(false)}
-        />
-      }
-    >
+    <HallBox scene={scene} subtitle={TAB_SUBTITLES[tab]} tabs={tabs}>
       <div className="flex flex-col gap-5">
         {tab === "Play" ? (
           <>
@@ -1052,6 +1097,7 @@ const CardMasterStall = () => {
  */
 const HallTabs = ({
   current,
+  options = TABS,
   onSelect,
   packCount = 0,
   duelCount = 0,
@@ -1059,6 +1105,7 @@ const HallTabs = ({
   onFocused,
 }: {
   current: KessenTab;
+  options?: readonly KessenTab[];
   onSelect: (tab: KessenTab) => void;
   packCount?: number;
   /** Challenges waiting for the player's answer. */
@@ -1077,10 +1124,10 @@ const HallTabs = ({
     <nav ref={ref} aria-label="Card Hall sections" className="kh-hall-tabs">
       <NavTabs
         current={current}
-        options={TABS}
+        options={options}
         remember={false}
         icons={TAB_ICONS}
-        iconOnlyOptions={TABS}
+        iconOnlyOptions={options}
         labelClassName={(option) => (option === current ? "not-sr-only" : "")}
         counts={{ Packs: packCount, Duels: duelCount }}
         countLabels={{ Packs: "unopened packs", Duels: "challenges waiting" }}
@@ -1089,7 +1136,7 @@ const HallTabs = ({
         itemClassName={() => "mr-0 shrink-0"}
         className="min-h-[44px] min-w-[44px] px-2"
         onChange={(value) => {
-          const next = TABS.find((option) => option === value);
+          const next = options.find((option) => option === value);
           if (next) onSelect(next);
         }}
       />
@@ -1354,7 +1401,8 @@ const selectChallengeUser = (profile: NonNullable<UserWithRelations>) => ({
   latitude: profile.latitude,
 });
 
-const TABS = ["Play", "Duels", "Decks", "Collection", "Packs"] as const;
+const TABS = ["Play", "Duels", "Decks", "Collection", "Packs", "Rules"] as const;
+const INTRO_TABS = ["Play", "Rules"] as const;
 
 /** The content box subtitle names what each section is for, short enough for a phone. */
 const TAB_SUBTITLES: Record<(typeof TABS)[number], string> = {
@@ -1363,6 +1411,7 @@ const TAB_SUBTITLES: Record<(typeof TABS)[number], string> = {
   Decks: "Build your decks",
   Collection: "Your cards",
   Packs: "Packs and the Card Master",
+  Rules: "Rules and card reference",
 };
 
 const TAB_STORAGE_KEY = "kessenTab";
@@ -1375,6 +1424,7 @@ const TAB_ICON_COMPONENTS: Record<KessenTab, LucideIcon> = {
   Decks: Layers,
   Collection: BookOpen,
   Packs: Package,
+  Rules: BookText,
 };
 
 const TAB_ICONS = Object.fromEntries(

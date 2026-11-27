@@ -1,5 +1,5 @@
-import { ManualKessenScreen } from "@/screens/manual/kessen/ManualKessenScreen";
+import { redirect } from "next/navigation";
 
 export default function ManualKessen() {
-  return <ManualKessenScreen />;
+  redirect("/kessen?tab=rules");
 }

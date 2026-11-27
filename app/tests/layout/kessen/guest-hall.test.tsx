@@ -27,12 +27,22 @@ const CARDS: KessenCatalogEntry[] = KESSEN_SEED_CATALOG.map((card) => ({
 
 let session = { isSignedIn: false, isClerkLoaded: true };
 let catalogFetched = 0;
+let searchParams = new URLSearchParams();
+let replaceRoute = vi.fn();
 
 beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   session = { isSignedIn: false, isClerkLoaded: true };
   catalogFetched = 0;
-  vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
+  searchParams = new URLSearchParams();
+  replaceRoute = vi.fn();
+  vi.spyOn(navigation, "useRouter").mockReturnValue({
+    push: vi.fn(),
+    replace: replaceRoute,
+  } as never);
+  vi.spyOn(navigation, "useSearchParams").mockImplementation(
+    () => searchParams as never,
+  );
   // A signed-out visitor: no profile, only the public catalog. Any other tRPC hook would
   // need a provider this suite does not give, so the guest hall is shown to read nothing
   // else from the server.
@@ -66,8 +76,24 @@ afterEach(async () => {
 });
 
 describe("Kessen for signed-out visitors", () => {
+  it("opens the shared Rules tab by URL and offers a return to play", async () => {
+    searchParams.set("tab", "rules");
+    const view = render(<KessenPage />);
+    expect(
+      await view.findByRole("heading", { name: "How a match works" }),
+    ).toBeTruthy();
+    const sections = view.getByRole("navigation", { name: "Card Hall sections" });
+    expect(within(sections).getByRole("button", { name: "Rules" })).toBeTruthy();
+    expect(view.queryByRole("link", { name: "Balance report" })).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Play Kessen" }));
+    expect(replaceRoute).toHaveBeenCalledWith("/kessen", { scroll: false });
+  });
+
   it("shows the guest hall: every lesson, every Circuit opponent and the locked sections", async () => {
     const view = await renderGuestHall();
+    expect(view.getByRole("link", { name: "Rules" }).getAttribute("href")).toBe(
+      "/kessen?tab=rules",
+    );
     const hero = view.getByRole("region", { name: "Kessen: play for free" });
     expect(hero.nextElementSibling).toBe(
       view.getByRole("region", { name: "Keep cards and ryo" }),

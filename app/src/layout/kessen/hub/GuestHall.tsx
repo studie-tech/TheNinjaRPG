@@ -6,6 +6,7 @@ import "./circuit.css";
 import "./guest.css";
 import {
   BookOpen,
+  BookText,
   Check,
   GraduationCap,
   Info,
@@ -115,7 +116,19 @@ export const KessenGuestHall = ({ ready }: { ready: boolean }) => {
 
   return (
     <>
-      <HallBox subtitle="Free to play in your browser" scene={scene} isGuest>
+      <HallBox
+        subtitle="Free to play in your browser"
+        scene={scene}
+        isGuest
+        tabs={
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/kessen?tab=rules">
+              <BookText className="mr-1.5 size-4" aria-hidden />
+              Rules
+            </Link>
+          </Button>
+        }
+      >
         <MiniGameGuestHero
           id="kessen"
           name="Kessen"

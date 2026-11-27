@@ -465,8 +465,8 @@ function PackSummary({
         Each Weighted Cache tag below is one group of slots. Copies beyond a card&apos;s
         copy limit are re-rolled among cards the player still needs; Epic and Legendary
         pity override the last slot. Rules and live odds:{" "}
-        <Link href="/manual/kessen" className="font-semibold underline">
-          Kessen manual
+        <Link href="/kessen?tab=rules" className="font-semibold underline">
+          Kessen rules
         </Link>
         .
       </p>
