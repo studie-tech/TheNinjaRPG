@@ -58,6 +58,17 @@ describe("TopRankinGames callback", () => {
     );
   });
 
+  it("records an opaque provider receipt ID", async () => {
+    const body = payload({ site_vote_id: "trg-vote-123456" });
+    expect((await POST(request(body))).status).toBe(200);
+    expect(recordVote).toHaveBeenCalledWith(
+      expect.anything(),
+      "player-token",
+      "trg-vote-123456",
+      new Date(body.voted_at * 1000),
+    );
+  });
+
   it("asks for a retry when the signing secret is not configured", async () => {
     env.TOPRANKINGAMES_WEBHOOK_SECRET = undefined;
     expect((await POST(request())).status).toBe(503);
@@ -86,9 +97,12 @@ describe("TopRankinGames callback", () => {
     "{",
     payload({ game: "another-game" }),
     payload({ site_vote_id: "" }),
+    payload({ site_vote_id: "x".repeat(129) }),
+    payload({ site_vote_id: undefined }),
     payload({ token: "player@example.com" }),
     payload({ sent_at: "123" }),
     payload({ voted_at: null }),
+    payload({ voted_at: undefined }),
   ])("rejects a malformed signed payload", async (body) => {
     expect((await POST(request(body))).status).toBe(400);
     expect(recordVote).not.toHaveBeenCalled();
@@ -103,8 +117,49 @@ describe("TopRankinGames callback", () => {
     },
   );
 
-  it("acknowledges the dashboard test without recording a player vote", async () => {
-    expect((await POST(request(payload({ token: "trg-test" })))).status).toBe(200);
+  it.each([
+    {},
+    { site_vote_id: "dashboard-test" },
+    { site_vote_id: null, voted_at: "test" },
+    { site_vote_id: "x".repeat(129), voted_at: -1 },
+  ])(
+    "acknowledges the dashboard test regardless of unused receipt fields %j",
+    async (receipt) => {
+      const response = await POST(
+        request({
+          game: "theninja-rpg",
+          token: "trg-test",
+          sent_at: Math.floor(Date.now() / 1000),
+          ...receipt,
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toBe("OK");
+      expect(recordVote).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([{ game: "another-game" }, { sent_at: undefined }, { sent_at: "123" }])(
+    "validates the dashboard test envelope %j",
+    async (changes) => {
+      const response = await POST(request(payload({ token: "trg-test", ...changes })));
+      expect(response.status).toBe(400);
+      expect(recordVote).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([-301, 301])("rejects an expired dashboard test %s", async (offset) => {
+    const response = await POST(
+      request(
+        payload({ token: "trg-test", sent_at: Math.floor(Date.now() / 1000) + offset }),
+      ),
+    );
+    expect(response.status).toBe(401);
+    expect(recordVote).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsigned dashboard test", async () => {
+    expect((await POST(request(payload({ token: "trg-test" }), ""))).status).toBe(401);
     expect(recordVote).not.toHaveBeenCalled();
   });
 
