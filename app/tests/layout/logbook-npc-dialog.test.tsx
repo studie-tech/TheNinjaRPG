@@ -174,6 +174,7 @@ describe("logbook earlier dialogue", () => {
     const toggle = screen.getByRole("button", { name: "Hide" });
     const list = document.getElementById(toggle.getAttribute("aria-controls") ?? "");
     expect(region.contains(list)).toBe(true);
+    expect(list?.getAttribute("tabindex")).toBe("0");
     expect(list?.className).toContain("max-h-96");
     expect(list?.className).toContain("overflow-y-auto");
     expect(list?.textContent).toMatch(/third words.*second words.*first words/);

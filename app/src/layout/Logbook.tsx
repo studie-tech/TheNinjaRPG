@@ -945,6 +945,8 @@ const EarlierQuestDialogue: React.FC<{
         // One readable column in the classic 650px centre, two where a wide layout has 768px.
         <div
           id={listId}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Browsers that leave scroll containers out of the tab order (Safari) would otherwise keep the clipped entries out of keyboard reach.
+          tabIndex={0}
           className="mt-1 grid max-h-96 grid-cols-1 gap-3 overflow-y-auto overscroll-contain rounded-md border p-2 @5xl:grid-cols-2"
         >
           {entries.map((entry) => (
