@@ -13,6 +13,7 @@ beforeEach(() => {
 afterEach(() => {
   Reflect.deleteProperty(window, "PokiSDK");
   Reflect.deleteProperty(window, "ytgame");
+  Reflect.deleteProperty(window, "GamePix");
   restoreBrowserGlobals();
 });
 
@@ -48,6 +49,25 @@ const fakePlayables = (loadData: () => Promise<string>) => ({
   engagement: { sendScore: vi.fn(async () => {}) },
   ads: { requestInterstitialAd: vi.fn(async () => {}) },
 });
+
+/** A GamePix SDK whose `loaded()` settles as given, recording its event handlers. */
+const fakeGamePix = (loaded: () => Promise<unknown>) => {
+  const handlers: Record<string, () => void> = {};
+  return {
+    handlers,
+    lifecycle: {
+      loading: vi.fn(),
+      loaded: vi.fn(loaded),
+      gameStart: vi.fn(() => true),
+    },
+    events: {
+      on: vi.fn((name: string, handler: () => void) => {
+        handlers[name] = handler;
+      }),
+    },
+    ads: { interstitial: vi.fn(async () => ({ success: true })) },
+  };
+};
 
 describe("Shuriken Siege portal adapter", () => {
   it("plays without a Poki SDK whose init never settles", async () => {
@@ -108,5 +128,56 @@ describe("Shuriken Siege portal adapter", () => {
     const portal = createPortal(build("youtube"));
     expect(portal.hostControls).toBe(false);
     expect(portal.hostAudio()).toBeNull();
+  });
+
+  it("tells GamePix the game loaded before its first ad and its one start signal", async () => {
+    const order: string[] = [];
+    const gamePix = fakeGamePix(async () => {
+      order.push("loaded");
+    });
+    gamePix.ads.interstitial.mockImplementation(async () => {
+      order.push("interstitial");
+      return { success: true };
+    });
+    gamePix.lifecycle.gameStart.mockImplementation(() => {
+      order.push("gameStart");
+      return true;
+    });
+    Object.assign(window, { GamePix: gamePix });
+    const portal = createPortal(build("gamepix"), { sdkWaitMs: 50 });
+    await portal.commercialBreak();
+    portal.gameplayStart();
+    portal.gameplayStop();
+    portal.gameplayStart();
+    await portal.init();
+    await Promise.resolve();
+    expect(order).toEqual(["loaded", "interstitial", "gameStart"]);
+    expect(gamePix.lifecycle.loaded).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds the game while GamePix pauses it, and plays on when loaded() stalls", async () => {
+    const gamePix = fakeGamePix(() => new Promise(() => {}));
+    Object.assign(window, { GamePix: gamePix });
+    const portal = createPortal(build("gamepix"), { sdkWaitMs: 50 });
+    const paused: boolean[] = [];
+    portal.onHostPause((value) => paused.push(value));
+    await portal.init();
+    gamePix.handlers.pause?.();
+    gamePix.handlers.pause?.();
+    gamePix.handlers.resume?.();
+    expect(paused).toEqual([true, true, false]);
+    expect(portal.store.saveRuns).toBe(true);
+  });
+
+  it("ignores a GamePix SDK on other builds", async () => {
+    const gamePix = fakeGamePix(async () => {});
+    Object.assign(window, { GamePix: gamePix });
+    const portal = createPortal(build("plain"), { sdkWaitMs: 50 });
+    await portal.init();
+    await portal.commercialBreak();
+    portal.gameplayStart();
+    expect(gamePix.lifecycle.loaded).not.toHaveBeenCalled();
+    expect(gamePix.ads.interstitial).not.toHaveBeenCalled();
+    expect(gamePix.events.on).not.toHaveBeenCalled();
   });
 });

@@ -8,6 +8,7 @@ export const SHURIKEN_SIEGE_TARGETS = [
   "plain",
   "poki",
   "gamedistribution",
+  "gamepix",
   "youtube",
 ] as const;
 export type ShurikenSiegeTarget = (typeof SHURIKEN_SIEGE_TARGETS)[number];

@@ -2,20 +2,25 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ShurikenSiegeApp } from "@/standalone/shurikenSiege/App";
 import { loadBuildData, readBuild } from "@/standalone/shurikenSiege/build";
-import { activePlayables } from "@/standalone/shurikenSiege/portal";
+import { activeGamePix, activePlayables } from "@/standalone/shurikenSiege/portal";
 import { serveBundledMedia } from "@/utils/image";
 
 const root = document.getElementById("root");
 
 /**
  * Load the game data, serve its bundled media from the page's folder, then play. The page
- * shows its loading screen meanwhile, which is YouTube's first frame.
+ * shows its loading screen meanwhile, which is YouTube's first frame; GamePix hears how
+ * far loading has come, and that it finished once the game has rendered.
  */
 const start = async () => {
   if (!root) return;
-  activePlayables(readBuild())?.game.firstFrameReady();
+  const build = readBuild();
+  activePlayables(build)?.game.firstFrameReady();
+  const gamePix = activeGamePix(build);
+  gamePix?.lifecycle.loading(10);
   try {
     const data = await loadBuildData();
+    gamePix?.lifecycle.loading(90);
     const missing = new Set<string>();
     serveBundledMedia(
       new Map(

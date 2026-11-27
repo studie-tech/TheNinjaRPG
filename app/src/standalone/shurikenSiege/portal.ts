@@ -50,6 +50,17 @@ interface GameDistributionSdk {
   showAd: (type?: string) => Promise<unknown>;
 }
 
+/** The GamePix SDK v3 with `lifecycle: "manual"`; its calls resolve without a Player too. */
+interface GamePixSdk {
+  lifecycle: {
+    loading: (percentage: number) => void;
+    loaded: () => Promise<unknown>;
+    gameStart: () => unknown;
+  };
+  events: { on: (name: "pause" | "resume", handler: () => void) => unknown };
+  ads: { interstitial: () => Promise<{ success: boolean; message?: string }> };
+}
+
 interface YouTubePlayables {
   IN_PLAYABLES_ENV: boolean;
   game: {
@@ -72,6 +83,7 @@ declare global {
   interface Window {
     PokiSDK?: PokiSdk;
     gdsdk?: GameDistributionSdk;
+    GamePix?: GamePixSdk;
     ytgame?: YouTubePlayables;
   }
 }
@@ -88,6 +100,10 @@ const CLOUD_RETRY_MS = 800;
 /** The Playables SDK when the page runs inside YouTube; outside it the SDK does nothing. */
 export const activePlayables = (build: ShurikenSiegeBuild) =>
   build.target === "youtube" && window.ytgame?.IN_PLAYABLES_ENV ? window.ytgame : null;
+
+/** The GamePix SDK in the GamePix build, which loads it before the game. */
+export const activeGamePix = (build: ShurikenSiegeBuild) =>
+  build.target === "gamepix" ? (window.GamePix ?? null) : null;
 
 /** The SDK object once its script has defined it, or null if it never arrives. */
 const waitFor = async <T>(
@@ -166,11 +182,14 @@ export const createPortal = (
   };
   let poki: PokiSdk | null = null;
   let gd: GameDistributionSdk | null = null;
-  // The Playables SDK is loaded before the game.
+  // The Playables and GamePix SDKs are loaded before the game.
   const yt = activePlayables(build);
+  const gamePix = activeGamePix(build);
   // Portals reject repeated start or stop events, so only changes are reported.
   let playing = false;
   let announced = false;
+  // GamePix hears of gameplay once, when the first run starts.
+  let gamePixStarted = false;
 
   const setup = async () => {
     if (target === "poki") {
@@ -194,6 +213,20 @@ export const createPortal = (
         () => (window.gdsdk?.showAd ? window.gdsdk : undefined),
         sdkWaitMs,
       );
+    } else if (gamePix) {
+      // GamePix pauses the game around its ads and Player overlays, sometimes twice in a
+      // row; holding the run and audio is idempotent.
+      gamePix.events.on("pause", () => {
+        holdAudioPlayback("host", true);
+        pauseHost(true);
+      });
+      gamePix.events.on("resume", () => {
+        holdAudioPlayback("host", false);
+        pauseHost(false);
+      });
+      // The Player shows the game once told it has loaded; ads and the start signal are
+      // refused before that.
+      await succeedsWithin(gamePix.lifecycle.loaded(), sdkWaitMs);
     } else if (yt) {
       yt.system.onPause(() => {
         holdAudioPlayback("host", true);
@@ -227,6 +260,9 @@ export const createPortal = (
         .finally(() => holdAudioPlayback("ad", false));
     } else if (gd) {
       await gd.showAd().catch(() => undefined);
+    } else if (gamePix) {
+      // Its own pause and resume events hold the game around the ad.
+      await gamePix.ads.interstitial().catch(() => undefined);
     } else if (yt) {
       holdAudioPlayback("ad", true);
       await yt.ads
@@ -245,6 +281,10 @@ export const createPortal = (
       yt?.game.gameReady();
     },
     gameplayStart: () => {
+      if (gamePix && !gamePixStarted) {
+        gamePixStarted = true;
+        void init().then(() => gamePix.lifecycle.gameStart());
+      }
       if (playing || !poki) return;
       playing = true;
       poki.gameplayStart();
