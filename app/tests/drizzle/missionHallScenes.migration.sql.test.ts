@@ -13,7 +13,7 @@ import {
 } from "../setup/testDatabase";
 
 const migration = await readFile(
-  new URL("../../drizzle/migrations/0197_nervous_prowler.sql", import.meta.url),
+  new URL("../../drizzle/migrations/0198_tiny_rockslide.sql", import.meta.url),
   "utf8",
 );
 const statements = migration
