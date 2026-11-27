@@ -927,7 +927,8 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
 /**
  * The quest's briefing and the dialogue before the latest one, each folded behind a link
  * so the objectives stay near the quest name. Earlier dialogue reads oldest first, leading
- * into the current dialogue below it.
+ * into the current dialogue below it, and scrolls within a capped height so a long quest
+ * keeps its card short.
  */
 const QuestStoryLinks: React.FC<{
   briefing?: string | null;
@@ -936,6 +937,7 @@ const QuestStoryLinks: React.FC<{
 }> = ({ briefing, earlierDialogue }) => {
   const [isBriefingOpen, setIsBriefingOpen] = useState(false);
   const [isDialogueOpen, setIsDialogueOpen] = useState(false);
+  const dialogueId = useId();
   if (!briefing && earlierDialogue.length === 0) return null;
   return (
     <div className="@container space-y-2">
@@ -957,6 +959,7 @@ const QuestStoryLinks: React.FC<{
             variant="link"
             className="h-auto p-0"
             aria-expanded={isDialogueOpen}
+            aria-controls={dialogueId}
             onClick={() => setIsDialogueOpen((open) => !open)}
           >
             {isDialogueOpen
@@ -967,13 +970,17 @@ const QuestStoryLinks: React.FC<{
       </div>
       {isBriefingOpen && briefing && <div data-reading-text>{parseHtml(briefing)}</div>}
       {isDialogueOpen && (
-        <section aria-label="Earlier quest dialogue">
-          {/* One readable column in the classic 650px centre, two where a wide layout has 768px. */}
-          <div className="grid grid-cols-1 gap-3 @5xl:grid-cols-2">
-            {[...earlierDialogue].reverse().map((entry) => (
-              <QuestDialogueText key={entry.objectiveId} entry={entry} />
-            ))}
-          </div>
+        // One readable column in the classic 650px centre, two where a wide layout has 768px.
+        <section
+          id={dialogueId}
+          aria-label="Earlier quest dialogue"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Browsers that leave scroll containers out of the tab order (Safari) would otherwise keep the clipped entries out of keyboard reach.
+          tabIndex={0}
+          className="grid max-h-96 grid-cols-1 gap-3 overflow-y-auto overscroll-contain rounded-md border p-2 @5xl:grid-cols-2"
+        >
+          {[...earlierDialogue].reverse().map((entry) => (
+            <QuestDialogueText key={entry.objectiveId} entry={entry} />
+          ))}
         </section>
       )}
     </div>

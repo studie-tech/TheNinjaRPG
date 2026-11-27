@@ -367,32 +367,36 @@ const renderLongConversation = (compact?: boolean) => {
 };
 
 describe("logbook earlier dialogue", () => {
-  it("keeps earlier dialogue in a capped scroll area, newest first", () => {
+  it("keeps earlier dialogue folded behind a link until the player opens it", () => {
     renderLongConversation();
-    const region = screen.getByRole("region", { name: "Earlier dialogue (3)" });
-    const toggle = screen.getByRole("button", { name: "Hide" });
-    expect(toggle.getAttribute("aria-controls")).toBe(region.id);
-    expect(region.getAttribute("tabindex")).toBe("0");
-    expect(region.className).toContain("max-h-96");
-    expect(region.className).toContain("overflow-y-auto");
-    expect(region.textContent).toMatch(/third words.*second words.*first words/);
+    const toggle = screen.getByRole("button", { name: "Show dialogue (3)" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("first words")).toBeNull();
     expect(
       screen.getByRole("region", { name: "Quest dialogue" }).textContent,
     ).toContain("fourth words");
   });
 
-  it("lets the player fold earlier dialogue away and open it again", () => {
+  it("opens earlier dialogue in a capped scroll area, oldest first", () => {
     renderLongConversation();
-    fireEvent.click(screen.getByRole("button", { name: "Hide" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show dialogue (3)" }));
+    const region = screen.getByRole("region", { name: "Earlier quest dialogue" });
+    const toggle = screen.getByRole("button", { name: "Hide dialogue" });
+    expect(toggle.getAttribute("aria-controls")).toBe(region.id);
+    expect(region.getAttribute("tabindex")).toBe("0");
+    expect(region.className).toContain("max-h-96");
+    expect(region.className).toContain("overflow-y-auto");
+    expect(region.textContent).toMatch(/first words.*second words.*third words/);
+    fireEvent.click(toggle);
     expect(screen.queryByText("first words")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show" }));
-    expect(screen.getByText("first words")).toBeTruthy();
   });
 
-  it("starts folded in the compact dock", () => {
+  it("keeps it folded in the compact dock too", () => {
     renderLongConversation(true);
     expect(
-      screen.getByRole("button", { name: "Show" }).getAttribute("aria-expanded"),
+      screen
+        .getByRole("button", { name: "Show dialogue (3)" })
+        .getAttribute("aria-expanded"),
     ).toBe("false");
     expect(screen.queryByText("first words")).toBeNull();
   });
