@@ -226,6 +226,733 @@ ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `image` = VALUES(`image`), `des
 UPDATE `Quest` SET `content` = JSON_SET(`content`, '$.reward.reward_exp', 100)
 WHERE `questType` = 'errand' AND JSON_EXTRACT(`content`, '$.reward.reward_exp') = 0;
 
+-- Mission Hall errands, crimes and missions: every scene shows who is speaking, over a
+-- background of where it happens, with objective text that says what the player does.
+-- Each update is guarded on the objective ids it edits, so a quest restructured since is
+-- left alone. The scene art they use is created wherever it is missing.
+INSERT INTO `GameAsset` (`id`, `name`, `type`, `image`, `url`, `frames`, `speed`, `hidden`, `folder`, `licenseDetails`) VALUES
+('1B5XtlPGA7kPhvRYjhsvC', 'Matron Suzu', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2XUuEBnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'warmissions', 'TNR generated art'),
+('1TjPakroW5q8m6nylQRcT', 'Forsworn Scene - Warehouse Clerk', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGuzJ8eRfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('1YXbXYW2wz3GETVMb6DT6', 'Blank Scene Character', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxEdx09PWZsq9k0Von5rUfP6OgQ2TyptCKHS4', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'ghostship', 'Original AI-generated art for TNR, event Ghost Ship'),
+('5QsG6MvGvGlzelOx_g0JN', 'Forsworn Scene - Old Ghost', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6ojyqKDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('7XdeP3QA1DqHqttxvg2iS', 'DM Long Road Dusk', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJo4kmI0Z9MPZpHJ7VliuEWDfATdxhv62SXnm4', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'dmissions', 'AI generated, created for TNR by staff'),
+('8mDurYQYmy3G0vb862mkO', 'Forsworn Scene - Grain Merchant', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2i6csznMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('9XGzvvofzi8zgDfp7ghOE', 'Bg Village Wall', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHT2qlYQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'warmissions', 'TNR generated art'),
+('AM0saNTIIl1FPgc5pAzxc', 'Forsworn Scene - Keeper', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJXPVYNR2qIOpAoLKbZ4nW9Rsil2V67yuFwQhq', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('B2fw7KCNRhOUQkePEMDXo', 'Records Hall', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnQtrYBJmojJ0EqeDCvBrNmZaXVdY97gSpOWi', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnQtrYBJmojJ0EqeDCvBrNmZaXVdY97gSpOWi', 1, 1, 0, 'bmissions', 'Generated for TNR, internal use'),
+('CbU3BRjOLX-Ad5PnbUfxM', 'Forsworn Scene - Pale Fang', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJyL48KcukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('E4VJ-IeIQMwbmGGfKc-sn', 'Forsworn Scene BG - East Road Ambush Site', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJOGD7OHOVHevxIThUauQkGJEBY3D2cPqy8f5s', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('E53t0GfZlQZQEf1zgvKRo', 'Generated: Shaper: squat green amphibian creature, stern broad face, dark bumpy head, cyan circular runes, open purple robes, calm standing pose. One isolated complete full figure, retro pixe', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/content-ptfHApYtfy7m_n_jpYEjD.webp', 'https://ui0arpl8sm.ufs.sh/f/content-ptfHApYtfy7m_n_jpYEjD.webp', 1, 1, 0, 'generated', 'TNR (generated)'),
+('EESU8a5LifbN16jSor4ng', 'Captain Yuzuki', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJC9dhOG26OYrIJuNP1pvSyz29edFtKbngjRcA', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'warmissions', 'TNR generated art'),
+('FEZm7doATryohOd1MsO3i', 'Covert Briefing Room', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQBH80QjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQBH80QjhzBPya1rwfCIqOTU0cV5xgsMeo3u2', 1, 1, 0, 'bmissions', 'Generated for TNR, internal use'),
+('Fm2kvTLoc_tMlp7-imYFJ', 'Harvest Plains Trade Road', 'SCENE_BACKGROUND', 'https://bbenpyo9uu.ufs.sh/f/0tzd8oDeiVIzgwv9eX0Scr3oOmAWxUNbREgn16fIK4YXGkvB', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'Gobblefather', 'TNR'),
+('JAh1c6Ykf_nUfM5Xk67DW', 'Hall Steps Before Dawn', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJzuU6uqUemvaQu94EYJs8HpxVzofny6iPtbgC', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'bmissions', 'AI generated for TNR, original character, no third party rights'),
+('JUb5wIdMC0o7VwVVOx1zm', 'Forsworn Scene BG - Canal Frontage', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHCDFP9QvYURJhgs76VZtf9wxpMa13Cq0iOnr', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('O2MokayxTOH32-smnzFL2', 'DM Mission Counter', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtxITByFUYJDfpFXWm3nrcPluEtIZqyLkaSV1', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'dmissions', 'AI generated, created for TNR by staff'),
+('PTq0FV7nUsW6lHzXjOFqJ', 'FrontlineBattlefield', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjsRviw4XzPI8f1v96qBot0Q3wsUp2nxu7SMb', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 0, 'Warpath', 'TNR'),
+('TUtC7yPymsp2GyWwZhoTf', 'Forsworn Scene BG - Drying Yard', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJeRbH5WyV3OvUJQExAi0bGoIZDF74LqSnHRdp', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('Wwyl90f85Xw2mCaoX9auz', 'Generated: Anonymous elderly male civilian, visible wrinkled face, thin grey hair, modest worn brown tunic and loose grey trousers, simple sandals. Slight stoop, worried expression, hands hel', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/content-X7uhyguDzLPy6S-ZLurdS.webp', 'https://ui0arpl8sm.ufs.sh/f/content-X7uhyguDzLPy6S-ZLurdS.webp', 1, 1, 0, 'generated', 'TNR (generated)'),
+('XAjOr4zBngvaztvPd0Ls0', 'Safehouse Room', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHT6FceQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHT6FceQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 1, 1, 0, 'bmissions', 'Generated for TNR, internal use'),
+('XGlL-kEqY1llY6oT5CE0d', 'Elder Kaelen', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRcC31Um0udmODoNtpa0FMcwI4k2Eq7nJhyvj', 'https://utfs.io/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 0, 'TheSilentBloom', 'TNR'),
+('XsLLy8awDAtaE6hXVIi_0', 'DM Mission Clerk', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ0SSY1UrgrYldRWJcD6vE10SjNsXHeA9pVMfQ', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'dmissions', 'AI generated, created for TNR by staff'),
+('__YKAVW0TRhoAP-PUBC-X', 'Masquerade Hedge Maze', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYhqToROMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'masquerade', 'Original AI-generated art for TNR, event Crimson Masquerade'),
+('a9ZwaJtcrwxHS1sJKDsfV', 'DM Night Walls', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtxIQy6hUYJDfpFXWm3nrcPluEtIZqyLkaSV1', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'dmissions', 'AI generated, created for TNR by staff'),
+('asvKeN5HIBRJ2-fzg9Und', 'Forsworn Scene - Squad Survivor', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPAY1UXMpKeUGyX2kj6u45AOQiSa1zYH0mqZo', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('bBV9I0DcmYGcxVGaBdWL0', 'Forsworn Scene BG - Warehouse Loading Floor', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJbPoVBYAtYUndMi56GkX19q0A4PzyeIloBrEa', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('c1e60fERuLUxzt9WY4U37', 'Forsworn Scene BG - Drying Shed', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJl5JG25rWYxAsuC7ofQn9pM45OD0ERqkdBXJU', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('cSZBQ23AVVuLmKDaA2jh2', 'Forsworn Scene - Winter Crow', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJM7pG84tsO4cexqW2RDgkE3zZbNXSFGitmnar', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('cYu6VwVX55m6uq1oxlWc1', 'BustlingTownMarket', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYD40RwOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYD40RwOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d', 1, 1, 0, '', 'TNR'),
+('eXoh3W7Q_KaWec02TB17n', 'Forsworn Scene BG - Rooftop Eastern Quarter', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJH4hvqDOQvYURJhgs76VZtf9wxpMa13Cq0iOn', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('gIU6lE4RWWwV8FbP3Fkvs', 'Forsworn Scene - Principal', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJp2BkJQbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('gXpaJL3VnawaQ5PGqSoAB', 'Market Road Pre-Dawn', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJvCqh2yEmSnXwslYEpV1yOeNL8gMtqhjPdf36', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'bmissions', 'AI generated for TNR, original character, no third party rights'),
+('kmDsQUEHSub9GIX5ulO6i', 'Forsworn Scene BG - Waystation Door', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJoidFEoZ9MPZpHJ7VliuEWDfATdxhv62SXnm4', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('m4oDyw_A3S0dlMjWB0no5', 'Kgkgenin1', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJWbe8qqvszvj71yaSYC0MDOmbko5q9JAGuLHf', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 0, 'Kgkgenin', 'TNR'),
+('nLhC3A8Tf2QHY8bJr-HA9', 'DM Village Street', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ0kObnWgrYldRWJcD6vE10SjNsXHeA9pVMfQi', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'dmissions', 'AI generated, created for TNR by staff'),
+('nmrMHmz9xWojzyIV2mAR8', 'Forsworn Scene BG - Pass Road Dusk', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTUB2345IU29dZYJPoOKSh5vmlqatMub3EigH', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('ntekwfgbhzCLe3jiRXGqF', 'Generated: Young male genin trainee, visible youthful face, short tousled dark hair, plain navy training tunic, tan trousers and sandals, no village emblem. Defiant frown, arms folded, calm u', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/content-loGkZaHi-5n16wmzK9Iso.webp', 'https://ui0arpl8sm.ufs.sh/f/content-loGkZaHi-5n16wmzK9Iso.webp', 1, 1, 0, 'generated', 'TNR (generated)'),
+('pqihl43HYROpkIMX172-P', 'The Handler', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5qZoceH797jl4ubX8xrRqTZasyMp2WA5eLGU', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'bmissions', 'AI generated for TNR, original character, no third party rights'),
+('pvdMoUc3e4ahadi4Ho_j3', 'Headless Rider Horror - Village Dawn', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/yRTL_H2b5UaK3KwUDMYhj.webp', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'HeadlessRiderHorror', 'TNR'),
+('qFJk06nwwy0B9o2qZ1oZE', 'OnePerfectCrop Scene - Ittetsu', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJqpGORkWdkOZgJQ8mGRcdx3SsWvPelyYFTt5V', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'OnePerfectCrop', 'TNR'),
+('qiFtWf9G91kt4spFRA1VF', 'OnePerfectCrop Scene - Waystation Keeper', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHM8ObaQvYURJhgs76VZtf9wxpMa13Cq0iOnr', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'OnePerfectCrop', 'TNR'),
+('rkdd7b_84F_NYq1YUMEl_', 'Forsworn Scene - Deputy', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGmh92kRfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'forswornscenes', 'TNR'),
+('rsQ_tLEA9hJ0iKPSfDU3v', 'Moonlight Treeline', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJeg4fNqyV3OvUJQExAi0bGoIZDF74LqSnHRdp', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 0, 'TheSilentBellsofWinter', 'TNR'),
+('xSuCTLGL_YqzCCrifDlFM', 'Dim Alleyway', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdijLMoP62PI3ciLaYzgVX8FopBADxSrGmvQl', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdijLMoP62PI3ciLaYzgVX8FopBADxSrGmvQl', 1, 1, 0, '', 'TNR'),
+('xqugvFDL-jfUrvpRPZceK', 'DM Cartographer', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGc4tiHRfoVrha0LP4mAS5KM7wtiZbUNXJxdC', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'dmissions', 'AI generated, created for TNR by staff'),
+('xsikTqetvzo5OXKdTicK6', 'DM Road Merchant', 'SCENE_CHARACTER', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJexCaO9yV3OvUJQExAi0bGoIZDF74LqSnHRdp', 'https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp', 1, 1, 1, 'dmissions', 'AI generated, created for TNR by staff'),
+('yluYOGmz5e0Hqujb426fZ', 'Hyorin Village Street', 'SCENE_BACKGROUND', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJwCOm9rT2j854CWbaITZyegfXimvd7s16cO0h', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJwCOm9rT2j854CWbaITZyegfXimvd7s16cO0h', 1, 1, 0, 'hyorin', 'Generated for TNR, internal use')
+ON DUPLICATE KEY UPDATE `id` = `GameAsset`.`id`;
+
+-- Akasumi's Broken Gate
+UPDATE `Quest` SET `name` = 'Akasumi''s Broken Gate',
+  `description` = 'An ox came through the village gate at full charge and took half of it along. The gatewright needs a spare pair of hands.',
+  `successDescription` = 'The new posts hold. Have the hospital look at that nail in your foot.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[0].description', 'The gatewright hurries over, out of breath. "An ox went through my gate like it was paper! Meet me there, I can''t lift these posts alone."',
+    '$.objectives[0].sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[1].description', 'The gatewright kicks a splintered post. "Hinges are gone, and half the frame with them. Fetch the spare timber from the woodpile, it''s marked on your map. Mind the nails."',
+    '$.objectives[1].sceneBackground', '9XGzvvofzi8zgDfp7ghOE',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'))
+WHERE `id` = 'm70w5B8c0WANxnWHkF5FV'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = '0hXsXLaSTiIv4E-Ys1JUh'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'nNxvaVjDYFyRsj_rSYebW';
+
+-- Akikaze's Broken Gate
+UPDATE `Quest` SET `name` = 'Akikaze''s Broken Gate',
+  `description` = 'An ox came through the village gate at full charge and took half of it along. The gatewright needs a spare pair of hands.',
+  `successDescription` = 'The new posts hold. Have the hospital look at that nail in your foot.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[0].description', 'The gatewright hurries over, out of breath. "An ox went through my gate like it was paper! Meet me there, I can''t lift these posts alone."',
+    '$.objectives[0].sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[1].description', 'The gatewright kicks a splintered post. "Hinges are gone, and half the frame with them. Fetch the spare timber from the woodpile, it''s marked on your map. Mind the nails."',
+    '$.objectives[1].sceneBackground', '9XGzvvofzi8zgDfp7ghOE',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'))
+WHERE `id` = 'vbcedPjcQnSd0cRE7Fg6t'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = '0hXsXLaSTiIv4E-Ys1JUh'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'nNxvaVjDYFyRsj_rSYebW';
+
+-- City of Mei's Broken Gate
+UPDATE `Quest` SET `name` = 'City of Mei''s Broken Gate',
+  `description` = 'An ox came through the village gate at full charge and took half of it along. The gatewright needs a spare pair of hands.',
+  `successDescription` = 'The new posts hold. Have the hospital look at that nail in your foot.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[0].description', 'The gatewright hurries over, out of breath. "An ox went through my gate like it was paper! Meet me there, I can''t lift these posts alone."',
+    '$.objectives[0].sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[1].description', 'The gatewright kicks a splintered post. "Hinges are gone, and half the frame with them. Fetch the spare timber from the woodpile, it''s marked on your map. Mind the nails."',
+    '$.objectives[1].sceneBackground', '9XGzvvofzi8zgDfp7ghOE',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'))
+WHERE `id` = 'Nn7ZhVk3qYgVJZ-rX4CS8'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = '0hXsXLaSTiIv4E-Ys1JUh'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'nNxvaVjDYFyRsj_rSYebW';
+
+-- Hyorin's Broken Gate
+UPDATE `Quest` SET `name` = 'Hyorin''s Broken Gate',
+  `description` = 'An ox came through the village gate at full charge and took half of it along. The gatewright needs a spare pair of hands.',
+  `successDescription` = 'The new posts hold. Have the hospital look at that nail in your foot.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'yluYOGmz5e0Hqujb426fZ',
+    '$.sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[0].description', 'The gatewright hurries over, out of breath. "An ox went through my gate like it was paper! Meet me there, I can''t lift these posts alone."',
+    '$.objectives[0].sceneBackground', 'yluYOGmz5e0Hqujb426fZ',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[1].description', 'The gatewright kicks a splintered post. "Hinges are gone, and half the frame with them. Fetch the spare timber from the woodpile, it''s marked on your map. Mind the nails."',
+    '$.objectives[1].sceneBackground', '9XGzvvofzi8zgDfp7ghOE',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'))
+WHERE `id` = 'A3he5vVNzt5mbQI8JPQj9'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = '0hXsXLaSTiIv4E-Ys1JUh'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'nNxvaVjDYFyRsj_rSYebW';
+
+-- Shirohana's Broken Gate
+UPDATE `Quest` SET `name` = 'Shirohana''s Broken Gate',
+  `description` = 'An ox came through the village gate at full charge and took half of it along. The gatewright needs a spare pair of hands.',
+  `successDescription` = 'The new posts hold. Have the hospital look at that nail in your foot.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[0].description', 'The gatewright hurries over, out of breath. "An ox went through my gate like it was paper! Meet me there, I can''t lift these posts alone."',
+    '$.objectives[0].sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[1].description', 'The gatewright kicks a splintered post. "Hinges are gone, and half the frame with them. Fetch the spare timber from the woodpile, it''s marked on your map. Mind the nails."',
+    '$.objectives[1].sceneBackground', '9XGzvvofzi8zgDfp7ghOE',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'))
+WHERE `id` = 't0YvUu0uZ3H-IxC8wePtq'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = '0hXsXLaSTiIv4E-Ys1JUh'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'nNxvaVjDYFyRsj_rSYebW';
+
+-- Horizon's Broken Gate
+UPDATE `Quest` SET `name` = 'Horizon''s Broken Gate',
+  `description` = 'An ox came through the village gate at full charge and took half of it along. The gatewright needs a spare pair of hands.',
+  `successDescription` = 'The new posts hold. Have the hospital look at that nail in your foot.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[0].description', 'The gatewright hurries over, out of breath. "An ox went through my gate like it was paper! Meet me there, I can''t lift these posts alone."',
+    '$.objectives[0].sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[1].description', 'The gatewright kicks a splintered post. "Hinges are gone, and half the frame with them. Fetch the spare timber from the woodpile, it''s marked on your map. Mind the nails."',
+    '$.objectives[1].sceneBackground', '9XGzvvofzi8zgDfp7ghOE',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'))
+WHERE `id` = 'An3HqyV6lhWaGeVCkwp8_'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = '0hXsXLaSTiIv4E-Ys1JUh'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'nNxvaVjDYFyRsj_rSYebW';
+
+-- Tsukimori's Broken Gate
+UPDATE `Quest` SET `name` = 'Tsukimori''s Broken Gate',
+  `description` = 'An ox came through the village gate at full charge and took half of it along. The gatewright needs a spare pair of hands.',
+  `successDescription` = 'The new posts hold. Have the hospital look at that nail in your foot.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[0].description', 'The gatewright hurries over, out of breath. "An ox went through my gate like it was paper! Meet me there, I can''t lift these posts alone."',
+    '$.objectives[0].sceneBackground', 'pvdMoUc3e4ahadi4Ho_j3',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'),
+    '$.objectives[1].description', 'The gatewright kicks a splintered post. "Hinges are gone, and half the frame with them. Fetch the spare timber from the woodpile, it''s marked on your map. Mind the nails."',
+    '$.objectives[1].sceneBackground', '9XGzvvofzi8zgDfp7ghOE',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('qFJk06nwwy0B9o2qZ1oZE'))
+WHERE `id` = 'H3s7RQ0coL4a4Jlyzc_h-'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = '0hXsXLaSTiIv4E-Ys1JUh'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'nNxvaVjDYFyRsj_rSYebW';
+
+-- Rowdy Genin Brawler
+UPDATE `Quest` SET `description` = 'A genin who washed out of the Academy is smashing up the market. Show the kid what training is for.',
+  `successDescription` = 'The kid will think twice before swinging at a real shinobi.',
+  `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'Somebody''s kid is wrecking stalls at the edge of town. Find him before the merchants do.',
+    '$.objectives[0].sceneBackground', 'cYu6VwVX55m6uq1oxlWc1',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('ntekwfgbhzCLe3jiRXGqF'),
+    '$.objectives[1].description', 'He''s sulking now, but he''ll come quietly. Walk him back to the Academy and let the instructors deal with him.',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('ntekwfgbhzCLe3jiRXGqF'))
+WHERE `id` = 'BpSR6DrYT2Cy-USWCC-Wk'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = '3WQJd0am078FVK2h3Ey1t'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'i5UGbOF9bvlivJdZSDqKH';
+
+-- Kidnap the Lord's Daughter
+UPDATE `Quest` SET `successDescription` = 'The lord''s daughter is at the safe house, unharmed, and no alarm was raised. The Handler pays in full.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', '__YKAVW0TRhoAP-PUBC-X',
+    '$.sceneCharacters', JSON_ARRAY('pqihl43HYROpkIMX172-P'),
+    '$.objectives[0].description', 'The Handler hands you a sketch of the estate. "The lord''s daughter walks the garden at dusk. Get her out without a sound, and without a scratch on her."',
+    '$.objectives[0].sceneBackground', '__YKAVW0TRhoAP-PUBC-X',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('pqihl43HYROpkIMX172-P'),
+    '$.objectives[1].description', '"Her bodyguard followed you," the Handler hisses. "Deal with him before he raises the alarm."',
+    '$.objectives[1].sceneBackground', 'XAjOr4zBngvaztvPd0Ls0',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('pqihl43HYROpkIMX172-P'))
+WHERE `id` = 'm_S8FIw6XLg0wuYjcaJDf'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'XXP5x3CxDXpwQev4z8iOS'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'fyz9NJ1QAq2Va3yIgP7Ef';
+
+-- Bully the Weak
+UPDATE `Quest` SET `name` = 'Bully the Weak',
+  `description` = 'It is a hard season in the Syndicate, and an old man still owes. Collect, and make an example of him.',
+  `successDescription` = 'The debt is paid in the only coin he had left. Nobody saw a thing.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'xSuCTLGL_YqzCCrifDlFM',
+    '$.objectives[0].description', 'The old man knows why you have come. He wrings his hands. "I told them I would pay next month..."',
+    '$.objectives[0].sceneBackground', 'xSuCTLGL_YqzCCrifDlFM',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('Wwyl90f85Xw2mCaoX9auz'),
+    '$.objectives[1].description', 'Word gets around. The rest of the street pays on time this month.',
+    '$.objectives[1].sceneBackground', 'xSuCTLGL_YqzCCrifDlFM',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'))
+WHERE `id` = 'R09_H8tCYUEZ9UiqoSkYK'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'xGbLKLEG1JUlIA1KpbSqo'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = '-QBzz';
+
+-- Titan comes for Syndicate
+UPDATE `Quest` SET `description` = 'A titan is marching on the Syndicate. Every blade in the city is needed to bring it down.',
+  `successDescription` = 'The titan falls outside the walls. The city sleeps easier tonight.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'PTq0FV7nUsW6lHzXjOFqJ',
+    '$.objectives[0].description', 'Elder Kaelen taps a scroll against his palm. "The titan will reach our walls by nightfall. Meet it before it does."',
+    '$.objectives[0].sceneBackground', 'PTq0FV7nUsW6lHzXjOFqJ',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('XGlL-kEqY1llY6oT5CE0d'))
+WHERE `id` = 'QRlOMK0NpkagVVvcl2NmF'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'RTkPT88CV3mKIe1e_zkQr';
+
+-- Shaper Attacks Syndicate
+UPDATE `Quest` SET `description` = 'A Shaper has crawled out of the wastes and into the Syndicate''s streets. It is not here for coin.',
+  `successDescription` = 'Close one. The Shaper is gone, and you are still breathing.',
+  `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'The Shaper turns its runed face toward you, and its robes stir without any wind. Survive it.',
+    '$.objectives[0].successDescription', 'You held your ground.',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('E53t0GfZlQZQEf1zgvKRo'))
+WHERE `id` = 'zi6L_1aBbr0S6-_dpsKHe'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'NeFjDGCFv-LwEWfmFxQ-u';
+
+-- Lantern Rounds
+UPDATE `Quest` SET `description` = 'The lamplighter is laid up, and the village lamps will not light themselves. Make the rounds before full dark.',
+  `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.sceneCharacters', JSON_ARRAY('qiFtWf9G91kt4spFRA1VF'),
+    '$.objectives[0].description', '<i>The lamplighter leans on the notice board, favouring one knee.</i> <br> <br> "Bad knee, of all nights. The oil flask is by the west row. West row first, then the gate. <b>Don''t skip the gate</b>, people trip."',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('qiFtWf9G91kt4spFRA1VF'),
+    '$.objectives[1].sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('qiFtWf9G91kt4spFRA1VF'),
+    '$.objectives[2].sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('qiFtWf9G91kt4spFRA1VF'),
+    '$.objectives[3].sceneBackground', 'a9ZwaJtcrwxHS1sJKDsfV',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('qiFtWf9G91kt4spFRA1VF'),
+    '$.objectives[4].sceneBackground', 'a9ZwaJtcrwxHS1sJKDsfV',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('qiFtWf9G91kt4spFRA1VF'))
+WHERE `id` = 'hRUUTeZ-N0VaSh5tTluVA'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'm1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'c1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'm2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'w1';
+
+-- Night Watch Shadow
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'a9ZwaJtcrwxHS1sJKDsfV',
+    '$.sceneCharacters', JSON_ARRAY('EESU8a5LifbN16jSor4ng'),
+    '$.objectives[0].description', '<i>The watch captain meets you on the wall, the night''s log in hand.</i> <br> <br> "Three nights running, someone has been up here, and gone by the time my watch turns. Follow them and find out who. Come back with a name or a bruise; either one is proof."',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('EESU8a5LifbN16jSor4ng'),
+    '$.objectives[1].sceneBackground', 'rsQ_tLEA9hJ0iKPSfDU3v',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('EESU8a5LifbN16jSor4ng'),
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('EESU8a5LifbN16jSor4ng'),
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('EESU8a5LifbN16jSor4ng'))
+WHERE `id` = 'XYVozogbr0kYY-k0VbTKA'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'b1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'r1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'w1';
+
+-- Well Rounds
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.sceneCharacters', JSON_ARRAY('1B5XtlPGA7kPhvRYjhsvC'),
+    '$.objectives[0].description', '<i>The infirmary matron holds up a stoppered flask.</i> <br> <br> "Samples from the north well and the south well, before the season turns. It is <b>routine</b>." <i>She says it like someone who has had to say it a lot.</i>',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('1B5XtlPGA7kPhvRYjhsvC'),
+    '$.objectives[1].sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('1B5XtlPGA7kPhvRYjhsvC'),
+    '$.objectives[2].sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('1B5XtlPGA7kPhvRYjhsvC'),
+    '$.objectives[3].description', 'Two samples, clearly labelled, delivered before dark. The matron stamps the receipt twice.',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('1B5XtlPGA7kPhvRYjhsvC'))
+WHERE `id` = 'rnuuVy-0m4rvb4LYhw_WG'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'm1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'c1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'w1';
+
+-- The Runaway Goat
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.sceneCharacters', JSON_ARRAY('xsikTqetvzo5OXKdTicK6'),
+    '$.objectives[0].description', '<i>The merchant is out of breath and out of patience.</i> <br> <br> "She has my pouch! The goat! Don''t let the horns fool you, she is faster than she looks. Last seen by the market."',
+    '$.objectives[1].sceneBackground', 'cYu6VwVX55m6uq1oxlWc1',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('xsikTqetvzo5OXKdTicK6'),
+    '$.objectives[2].sceneBackground', 'Fm2kvTLoc_tMlp7-imYFJ',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('xsikTqetvzo5OXKdTicK6'),
+    '$.objectives[3].sceneBackground', 'Fm2kvTLoc_tMlp7-imYFJ',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('xsikTqetvzo5OXKdTicK6'),
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('xsikTqetvzo5OXKdTicK6'))
+WHERE `id` = 'zDy-5u2yvLl_AtQmVDKwB'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'm1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'm2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'c1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'w1';
+
+-- The Misfiled Board
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'O2MokayxTOH32-smnzFL2',
+    '$.sceneCharacters', JSON_ARRAY('XsLLy8awDAtaE6hXVIi_0'),
+    '$.objectives[0].description', '<i>The clerk speaks without looking up, very quietly.</i> <br> <br> "A week of postings went up on the wrong boards. Collect the misplaced ones and repin them where they belong." <i>He finally looks up.</i> <b>"This conversation never happened."</b>',
+    '$.objectives[1].sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('XsLLy8awDAtaE6hXVIi_0'),
+    '$.objectives[2].sceneBackground', 'O2MokayxTOH32-smnzFL2',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('XsLLy8awDAtaE6hXVIi_0'),
+    '$.objectives[3].sceneBackground', 'O2MokayxTOH32-smnzFL2',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('XsLLy8awDAtaE6hXVIi_0'))
+WHERE `id` = 'cMwD0P4f4QfZOlJyuXptm'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'c1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'm1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'w1';
+
+-- The Cartographer's Ink
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.sceneCharacters', JSON_ARRAY('xqugvFDL-jfUrvpRPZceK'),
+    '$.objectives[0].description', '<i>The cartographer doesn''t look up from the map, one hand raised in apology.</i> <br> <br> "My ink came in at the roadside depot. If I stop now I lose the light, and the whole ridge line with it. It''s the sealed case with my name burned on the lid."',
+    '$.objectives[1].sceneBackground', '7XdeP3QA1DqHqttxvg2iS',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('xqugvFDL-jfUrvpRPZceK'),
+    '$.objectives[2].sceneBackground', '7XdeP3QA1DqHqttxvg2iS',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('xqugvFDL-jfUrvpRPZceK'),
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('xqugvFDL-jfUrvpRPZceK'))
+WHERE `id` = 'ueFeuSqUC5yDbLLUuYZgL'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'm1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'c1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'w1';
+
+-- The Cartographer's Satchel
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneCharacters', JSON_ARRAY('xqugvFDL-jfUrvpRPZceK'))
+WHERE `id` = 'LK9kvaTvX0nUThUJM1FWZ';
+
+-- The Long Road
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneCharacters', JSON_ARRAY('xsikTqetvzo5OXKdTicK6'),
+    '$.objectives[3].sceneBackground', '7XdeP3QA1DqHqttxvg2iS',
+    '$.objectives[5].sceneCharacters', JSON_ARRAY('xsikTqetvzo5OXKdTicK6'))
+WHERE `id` = '8C7MyiuvZjU0ueyWx8EF5'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'b1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[5].id')) = 'w1';
+
+-- Poachers' Due
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneCharacters', JSON_ARRAY('XsLLy8awDAtaE6hXVIi_0'),
+    '$.objectives[1].sceneBackground', 'nLhC3A8Tf2QHY8bJr-HA9',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('XsLLy8awDAtaE6hXVIi_0'))
+WHERE `id` = 'SkDKiQMLXLt0t0i6GrxlY'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'b1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'w1';
+
+-- Blacksteel Contract: Cleanup Detail
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'You have been inside their walls, Sora says, which makes you the standing pick for this. A remnant cell is regrouping with an aberration in tow. Disperse it.',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('Ujjb0ahNxfBnxR5ieZUkn'),
+    '$.objectives[1].sceneBackground', 'm4oDyw_A3S0dlMjWB0no5')
+WHERE `id` = 'FvcbW7aLiGcJYT5MeMWb7'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'b1';
+
+-- Blacksteel Contract: Iron Hunt
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'An iron aberration slipped the stronghold perimeter and is tearing up the wilds, Sora says. You have fought their people. Now fight their machines.',
+    '$.objectives[1].sceneBackground', 'm4oDyw_A3S0dlMjWB0no5')
+WHERE `id` = 'JfZ08yMgPgvthpDmO0J8d'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'b1';
+
+-- Blacksteel Contract: Perimeter Breach
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'Their perimeter patrol runs with an obelisk anchoring it, Sora says. Break the patrol and the stronghold sees a little less. Every deployment after yours gets easier.',
+    '$.objectives[1].sceneBackground', 'm4oDyw_A3S0dlMjWB0no5')
+WHERE `id` = 'diUHUQxtzzCMmmKAeKYLJ'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'b1';
+
+-- Blacksteel Contract: Supply Raid
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'We mapped a supply cache on one of their lanes, Sora says. Hit it. The guards will not be volunteers, so bring everything you trained.',
+    '$.objectives[1].sceneBackground', 'm4oDyw_A3S0dlMjWB0no5')
+WHERE `id` = 'I8gFtsojmIiYOk_qFyOGW'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'b1';
+
+-- Blacksteel Contract: Shard Salvage
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'More blacksteel debris flagged in the wilds, Sora says. Salvage it. And listen: every team that lingers over a shard reports company. Do not linger unarmed.',
+    '$.objectives[1].sceneBackground', 'm4oDyw_A3S0dlMjWB0no5',
+    '$.objectives[2].sceneBackground', 'm4oDyw_A3S0dlMjWB0no5',
+    '$.objectives[3].sceneBackground', 'm4oDyw_A3S0dlMjWB0no5')
+WHERE `id` = 'QAVR7mWpXvrVawLgbRgMo'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'c1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'd2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'b1';
+
+-- Case Contract: Courier Intercept
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'A courier left an hour ago carrying crates under a seal we did not issue, Sora says. Stop the escort and seize the cargo. Expect a fight.',
+    '$.objectives[1].sceneBackground', '7XdeP3QA1DqHqttxvg2iS')
+WHERE `id` = 'eqFwr5m6GUP0ME5T6leh4'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'b1';
+
+-- Case Contract: Ledger Sweep
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'Standing contract, Sora says without looking up. Another falsified ledger page surfaced outside the village. Recover it before the trail goes cold.',
+    '$.objectives[1].sceneBackground', '7XdeP3QA1DqHqttxvg2iS')
+WHERE `id` = 'n8r6-Kwmxa1szdRpv8aTp'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'c1';
+
+-- Case Contract: Route Watch
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'Two watch legs on the route, Sora says, marking your map. Walk both. If anything on that road looks wrong, I want it in your report, not in a rumor.',
+    '$.objectives[1].sceneBackground', '7XdeP3QA1DqHqttxvg2iS',
+    '$.objectives[2].sceneBackground', '7XdeP3QA1DqHqttxvg2iS')
+WHERE `id` = 'mlds_FSavrGG0emDImut8'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'm1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'm2';
+
+-- Case Contract: Site Sweep
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.objectives[0].description', 'The raid site with the violet scoring is not empty, Sora says. Two hostiles minimum, holding ground. Clear it so recovery can work.',
+    '$.objectives[1].sceneBackground', 'm4oDyw_A3S0dlMjWB0no5')
+WHERE `id` = 'scRI7XJ6AcmsUNxWdjBpG'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'd1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'b1';
+
+-- The Empty Contract
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[0].description', '<i>The deputy lays the dead courier''s contract on the table.</i> <br> <br> "A place, a night, a price. No job. Nobody pays that much for a beating. Be on the market road tonight and see who turns up."',
+    '$.objectives[0].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Go tonight.',
+    '$.objectives[1].description', 'Someone is already waiting on the market road, counting the patrol lanterns as they pass.',
+    '$.objectives[1].sceneBackground', 'gXpaJL3VnawaQ5PGqSoAB',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[2].description', '<i>The deputy turns the contract over.</i> <br> <br> "They were timing our patrols. A count like that sells to anyone who can pay for it."',
+    '$.objectives[2].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[3].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'))
+WHERE `id` = '9kzvd414kRRXauKSXsGIq'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- The Waystation
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'kmDsQUEHSub9GIX5ulO6i',
+    '$.sceneCharacters', JSON_ARRAY('AM0saNTIIl1FPgc5pAzxc'),
+    '$.objectives[0].description', '<i>The keeper unlocks the waystation door for the first time in a year.</i> <br> <br> "The posting says bandits. Bandits don''t bar the shutters from the inside."',
+    '$.objectives[0].sceneBackground', 'kmDsQUEHSub9GIX5ulO6i',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('AM0saNTIIl1FPgc5pAzxc'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Hold the door.',
+    '$.objectives[1].description', 'Night on the pass road. Whoever barred those shutters comes back for what they left inside.',
+    '$.objectives[1].sceneBackground', 'nmrMHmz9xWojzyIV2mAR8',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[2].description', '<i>The keeper lights the lamp over the door.</i> <br> <br> "Whatever they kept here, they won''t keep it here again. Tell your village it was never bandits."',
+    '$.objectives[2].sceneBackground', 'kmDsQUEHSub9GIX5ulO6i',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('AM0saNTIIl1FPgc5pAzxc'),
+    '$.objectives[3].sceneBackground', 'kmDsQUEHSub9GIX5ulO6i',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('AM0saNTIIl1FPgc5pAzxc'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'kmDsQUEHSub9GIX5ulO6i',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('AM0saNTIIl1FPgc5pAzxc'))
+WHERE `id` = 'ATV6Fs3XFqOf7wch99qDW'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- Protection
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'TUtC7yPymsp2GyWwZhoTf',
+    '$.sceneCharacters', JSON_ARRAY('8mDurYQYmy3G0vb862mkO'),
+    '$.objectives[0].description', '<i>The grain merchant counts coin into the box by his yard wall, as he has every eighth day for two years.</i> <br> <br> "They doubled it this month. I have never seen a face. Just the box, empty by morning."',
+    '$.objectives[0].sceneBackground', 'TUtC7yPymsp2GyWwZhoTf',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('8mDurYQYmy3G0vb862mkO'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Watch the box.',
+    '$.objectives[1].description', 'The third night. A hand reaches over the wall for the box.',
+    '$.objectives[1].sceneBackground', 'c1e60fERuLUxzt9WY4U37',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[2].description', '<i>Behind the box, the merchant pulls a loose stone from the wall. Folded notes are tucked in the gap.</i> <br> <br> "So that''s how they talk to him. He never has to come here at all."',
+    '$.objectives[2].sceneBackground', 'TUtC7yPymsp2GyWwZhoTf',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('8mDurYQYmy3G0vb862mkO'),
+    '$.objectives[3].sceneBackground', 'TUtC7yPymsp2GyWwZhoTf',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('8mDurYQYmy3G0vb862mkO'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'TUtC7yPymsp2GyWwZhoTf',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('8mDurYQYmy3G0vb862mkO'))
+WHERE `id` = 'otFtGNvBFn8ZVGlda7UOH'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- Chalk and Corner
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[0].description', '<i>The deputy hands you a slate.</i> <br> <br> "Four corner stones, four chalk marks. Write down each mark and the hour you saw it. Don''t scrub anything. Don''t add anything."',
+    '$.objectives[0].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Start the rounds.',
+    '$.objectives[1].description', 'At the fourth stone, a figure crouches to change the mark and finds you already there.',
+    '$.objectives[1].sceneBackground', 'JUb5wIdMC0o7VwVVOx1zm',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[2].description', '<i>The deputy lines your slate up against the patrol rota.</i> <br> <br> "The marks change when our patrols do. It is a timetable, not a boundary."',
+    '$.objectives[2].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[3].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'))
+WHERE `id` = 'Sx_NfWziba6NYOEsfXrS5'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- The Loud Way
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'bBV9I0DcmYGcxVGaBdWL0',
+    '$.sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[0].description', '<i>Eleven crates on the loading floor, bonded four months and never opened.</i> <br> <br> Nobody guards them. Somebody is meant to find them.',
+    '$.objectives[0].sceneBackground', 'bBV9I0DcmYGcxVGaBdWL0',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Go straight in.',
+    '$.objectives[1].description', 'A shinobi steps out between the crates, unhurried, as if waiting for a delivery.',
+    '$.objectives[1].sceneBackground', 'bBV9I0DcmYGcxVGaBdWL0',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[2].description', '<i>Each crate holds one sealed letter and nothing else.</i> <br> <br> Two people use this floor so that they never have to meet.',
+    '$.objectives[2].sceneBackground', 'bBV9I0DcmYGcxVGaBdWL0',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[3].sceneBackground', 'bBV9I0DcmYGcxVGaBdWL0',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'bBV9I0DcmYGcxVGaBdWL0',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'))
+WHERE `id` = 'ilYoJqbk--np9OSqT9lGx'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- Nothing to Report
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'XAjOr4zBngvaztvPd0Ls0',
+    '$.sceneCharacters', JSON_ARRAY('1TjPakroW5q8m6nylQRcT'),
+    '$.objectives[0].description', '<i>The clerk hugs two years of collection sheets to his chest.</i> <br> <br> "The audit sits at first light. Get me and these books to the records hall. And please, don''t let me drop them."',
+    '$.objectives[0].sceneBackground', 'XAjOr4zBngvaztvPd0Ls0',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('1TjPakroW5q8m6nylQRcT'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Move out.',
+    '$.objectives[1].description', 'Halfway to the records hall, trained shinobi drop from the rooftops. They want the books, not the clerk.',
+    '$.objectives[1].sceneBackground', 'eXoh3W7Q_KaWec02TB17n',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[2].description', '<i>The clerk sets the books on the audit table with shaking hands.</i> <br> <br> "A broker, a bank, eleven dates. I never met any of them. I only wrote down the money."',
+    '$.objectives[2].sceneBackground', 'B2fw7KCNRhOUQkePEMDXo',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('1TjPakroW5q8m6nylQRcT'),
+    '$.objectives[3].sceneBackground', 'B2fw7KCNRhOUQkePEMDXo',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('1TjPakroW5q8m6nylQRcT'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'XAjOr4zBngvaztvPd0Ls0',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('1TjPakroW5q8m6nylQRcT'))
+WHERE `id` = 's7Lnjsv-9Fvo4_YEzq-3w'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- The Tenth Name
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'FEZm7doATryohOd1MsO3i',
+    '$.sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[0].description', '<i>The deputy spreads the page across the table.</i> <br> <br> "Nine of these are copied out of our own Bingo Book. The tenth is one of us: our prefix, and a date eight months out. Copies are on the move. Stop the courier carrying the next one."',
+    '$.objectives[0].sceneBackground', 'FEZm7doATryohOd1MsO3i',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Find the courier.',
+    '$.objectives[1].description', 'The courier waits on the eastern rooftops, the copied page folded into a sleeve.',
+    '$.objectives[1].sceneBackground', 'eXoh3W7Q_KaWec02TB17n',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('1YXbXYW2wz3GETVMb6DT6'),
+    '$.objectives[2].description', '<i>The deputy reads the copy and laughs once, without humour.</i> <br> <br> "Every field on here, we printed ourselves and pinned to a wall. They never broke in. They just read our board."',
+    '$.objectives[2].sceneBackground', 'FEZm7doATryohOd1MsO3i',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[3].sceneBackground', 'FEZm7doATryohOd1MsO3i',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'FEZm7doATryohOd1MsO3i',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'))
+WHERE `id` = '8ndqsf6RBZ88q3pfyZQQh'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- Three Rounds
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'E4VJ-IeIQMwbmGGfKc-sn',
+    '$.sceneCharacters', JSON_ARRAY('asvKeN5HIBRJ2-fzg9Und'),
+    '$.objectives[0].description', '<i>The only one of the squad to make it back sits against a road marker, holding his ribs.</i> <br> <br> "Pale Fang. He let us go one at a time, so we would tell the village. He wants a third."',
+    '$.objectives[0].sceneBackground', 'E4VJ-IeIQMwbmGGfKc-sn',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('asvKeN5HIBRJ2-fzg9Und'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Be the third.',
+    '$.objectives[1].description', 'Pale Fang salutes before he moves. He means it, and it does not slow him down.',
+    '$.objectives[1].sceneBackground', 'E4VJ-IeIQMwbmGGfKc-sn',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('CbU3BRjOLX-Ad5PnbUfxM'),
+    '$.objectives[2].description', '<i>After a minute, Pale Fang breaks off, breathing hard, and is gone up the east road.</i> <br> <br> "He''s not unbeatable," the survivor says. "He just can''t keep it up."',
+    '$.objectives[2].sceneBackground', 'E4VJ-IeIQMwbmGGfKc-sn',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('asvKeN5HIBRJ2-fzg9Und'),
+    '$.objectives[3].sceneBackground', 'E4VJ-IeIQMwbmGGfKc-sn',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('asvKeN5HIBRJ2-fzg9Und'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'E4VJ-IeIQMwbmGGfKc-sn',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('asvKeN5HIBRJ2-fzg9Und'))
+WHERE `id` = 'fBQNC1wFqTPYp7reiK79T'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- Old Ghost
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[0].description', '<i>The deputy pins a fresh brief over the faded entry.</i> <br> <br> "Old Ghost ran a covert cell out of this village before most of you were born. He''s back, and he isn''t hiding. Bring him in."',
+    '$.objectives[0].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Take the contract.',
+    '$.objectives[1].description', 'Old Ghost waits by the canal as if he expected you. "They always send someone young. Go on, then."',
+    '$.objectives[1].sceneBackground', 'JUb5wIdMC0o7VwVVOx1zm',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('5QsG6MvGvGlzelOx_g0JN'),
+    '$.objectives[2].description', '<i>Down on one knee, Old Ghost smiles.</i> <br> <br> "Four squads before you. I knew every name on that wall. That''s why they sent me away." By morning, he is gone again.',
+    '$.objectives[2].sceneBackground', 'JUb5wIdMC0o7VwVVOx1zm',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('5QsG6MvGvGlzelOx_g0JN'),
+    '$.objectives[3].sceneBackground', 'JUb5wIdMC0o7VwVVOx1zm',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'JAh1c6Ykf_nUfM5Xk67DW',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('rkdd7b_84F_NYq1YUMEl_'))
+WHERE `id` = 'KmGPDnZnGOCvATQqA5LI8'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- The Long Winter
+UPDATE `Quest` SET `content` = JSON_SET(`content`,
+    '$.sceneBackground', 'JUb5wIdMC0o7VwVVOx1zm',
+    '$.sceneCharacters', JSON_ARRAY('gIU6lE4RWWwV8FbP3Fkvs'),
+    '$.objectives[0].description', '<i>Five people signed one page during the border winter. Three of them are dead.</i> <br> <br> "I don''t even remember what it was for," she says. "Grain, I think. It was a hard winter."',
+    '$.objectives[0].sceneBackground', 'JUb5wIdMC0o7VwVVOx1zm',
+    '$.objectives[0].sceneCharacters', JSON_ARRAY('gIU6lE4RWWwV8FbP3Fkvs'),
+    '$.objectives[0].nextObjectiveId[0].text', 'Stay with her.',
+    '$.objectives[1].description', 'On the third night, Winter Crow comes over the rooftops, unhurried, already reaching.',
+    '$.objectives[1].sceneBackground', 'eXoh3W7Q_KaWec02TB17n',
+    '$.objectives[1].sceneCharacters', JSON_ARRAY('cSZBQ23AVVuLmKDaA2jh2'),
+    '$.objectives[2].description', '<i>Winter Crow is down, and her copy of the page is in your hand: four grain convoys bought across a closed border, three paid for.</i> <br> <br> "We cheated someone," she says quietly, "and nobody ever had to learn his name."',
+    '$.objectives[2].sceneBackground', 'JUb5wIdMC0o7VwVVOx1zm',
+    '$.objectives[2].sceneCharacters', JSON_ARRAY('gIU6lE4RWWwV8FbP3Fkvs'),
+    '$.objectives[3].sceneBackground', 'JUb5wIdMC0o7VwVVOx1zm',
+    '$.objectives[3].sceneCharacters', JSON_ARRAY('gIU6lE4RWWwV8FbP3Fkvs'),
+    '$.objectives[4].description', 'You had to fall back. The contract is still open when you are ready.',
+    '$.objectives[4].sceneBackground', 'JUb5wIdMC0o7VwVVOx1zm',
+    '$.objectives[4].sceneCharacters', JSON_ARRAY('gIU6lE4RWWwV8FbP3Fkvs'))
+WHERE `id` = 'WIsqHEoo4c-ToRaV5_cZj'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[0].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[2].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[3].id')) = 'f_win'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[4].id')) = 'rs_f2';
+
+-- Copies, Not Thefts
+UPDATE `Quest` SET `successDescription` = 'The ledger names the buyer, and the name stays face down on the Commander''s map.',
+  `content` = JSON_SET(`content`,
+    '$.objectives[12].description', 'You were spotted. Fall back across the border and try the archive again.',
+    '$.objectives[13].sceneCharacters', JSON_ARRAY('1TjPakroW5q8m6nylQRcT'),
+    '$.objectives[14].sceneCharacters', JSON_ARRAY('1TjPakroW5q8m6nylQRcT'),
+    '$.objectives[15].sceneCharacters', JSON_ARRAY('1TjPakroW5q8m6nylQRcT'),
+    '$.objectives[21].description', 'You were spotted. Fall back across the border and try the archive again.',
+    '$.objectives[24].description', 'Contract closed. The name stays face down on the Commander''s map.')
+WHERE `id` = 'd-94cxrGW91o1SJCr9rsq'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[12].id')) = 'l4'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[13].id')) = 'f1'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[14].id')) = 'f2'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[15].id')) = 'f3'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[21].id')) = 'c6'
+  AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[24].id')) = 'd5';
+
 -- A mask over the lower face, for characters whose eyes stay in view.
 INSERT INTO `GameAsset` (`id`, `name`, `type`, `image`, `url`, `hidden`, `folder`, `licenseDetails`, `lpcConfig`) VALUES ('half-mask', 'LPC half mask', 'LPC', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPAbYiuspKeUGyX2kj6u45AOQiSa1zYH0mqZo', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPAbYiuspKeUGyX2kj6u45AOQiSa1zYH0mqZo', 0, 'LPC', 'OGA-BY 3.0', CAST('{"version":2,"category":"equipment","replacementSlots":["beard"],"defaultColor":"gray","defaultEyes":"blue","variants":{"male/red/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmX41pIHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6nF8tKDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/blue/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4wS9WFlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJUDq8s6ILCIhwPniJ69VxpvAbTDWkOyGzS8rM","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/gold/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJXPWX9kqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJrvEfpMhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/gray/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPAbYiuspKeUGyX2kj6u45AOQiSa1zYH0mqZo","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPN5P6QpKeUGyX2kj6u45AOQiSa1zYH0mqZoc","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/red/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmX41pIHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6nF8tKDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/black/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVtumobF2veAXohUuE59nTQHRJIYjtiG18aF4","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCdaWIY26OYrIJuNP1pvSyz29edFtKbngjRcA","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/brown/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJFmka1wG2iOewJtjGzvNcmEX3TBnoSfMDZPH4","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2WEj9bnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/green/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJlfMccHrWYxAsuC7ofQn9pM45OD0ERqkdBXJU","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj3BJLu4XzPI8f1v96qBot0Q3wsUp2nxu7SMb","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/white/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6svJYmDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJeVamY4yV3OvUJQExAi0bGoIZDF74LqSnHRdp","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/blue/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4wS9WFlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJUDq8s6ILCIhwPniJ69VxpvAbTDWkOyGzS8rM","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/gold/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJXPWX9kqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJrvEfpMhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/gray/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPAbYiuspKeUGyX2kj6u45AOQiSa1zYH0mqZo","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPN5P6QpKeUGyX2kj6u45AOQiSa1zYH0mqZoc","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/orange/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGgSAcszRfoVrha0LP4mAS5KM7wtiZbUNXJxd","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnQtDGkfmojJ0EqeDCvBrNmZaXVdY97gSpOWi","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/purple/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQwTRGWjhzBPya1rwfCIqOTU0cV5xgsMeo3u2","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCmrq1xW26OYrIJuNP1pvSyz29edFtKbngjRc","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/silver/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJzNw0LnemvaQu94EYJs8HpxVzofny6iPtbgCZ","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPAa3XRQpKeUGyX2kj6u45AOQiSa1zYH0mqZo","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"male/yellow/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxSiqs4WZsq9k0Von5rUfP6OgQ2TyptCKHS4u","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2Li6xUnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/black/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVtumobF2veAXohUuE59nTQHRJIYjtiG18aF4","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCdaWIY26OYrIJuNP1pvSyz29edFtKbngjRcA","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/brown/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJFmka1wG2iOewJtjGzvNcmEX3TBnoSfMDZPH4","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2WEj9bnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/green/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJlfMccHrWYxAsuC7ofQn9pM45OD0ERqkdBXJU","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj3BJLu4XzPI8f1v96qBot0Q3wsUp2nxu7SMb","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/white/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6svJYmDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJeVamY4yV3OvUJQExAi0bGoIZDF74LqSnHRdp","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/orange/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGgSAcszRfoVrha0LP4mAS5KM7wtiZbUNXJxd","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnQtDGkfmojJ0EqeDCvBrNmZaXVdY97gSpOWi","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/purple/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQwTRGWjhzBPya1rwfCIqOTU0cV5xgsMeo3u2","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCmrq1xW26OYrIJuNP1pvSyz29edFtKbngjRc","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/silver/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJzNw0LnemvaQu94EYJs8HpxVzofny6iPtbgCZ","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPAa3XRQpKeUGyX2kj6u45AOQiSa1zYH0mqZo","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}],"female/yellow/blue":[{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxSiqs4WZsq9k0Von5rUfP6OgQ2TyptCKHS4u","z":114,"layout":{"cell":64,"columns":16,"clips":{"hurt":[[188,189,190,191,192,193],[194,195,196,197,198,199],[200,201,202,203,204,205],[206,207,208,209,210,211]],"idle":[[4,4,5],[6,6,7],[8,8,9],[10,10,11]],"walk":[[20,21,22,23,24,25,26,27],[28,29,30,31,32,33,34,35],[36,37,38,39,40,41,42,43],[44,45,46,47,48,49,50,51]],"shoot":[[136,137,138,139,140,141,142,143,144,145,146,147,148],[149,150,151,152,153,154,155,156,157,158,159,160,161],[162,163,164,165,166,167,168,169,170,171,172,173,174],[175,176,177,178,179,180,181,182,183,184,185,186,187]],"slash":[[52,53,54,55,56,57],[58,59,60,61,62,63],[64,65,66,67,68,69],[70,71,72,73,74,75]],"stand":[[0],[1],[2],[3]],"combat":[[12,12,13],[14,14,15],[16,16,17],[18,18,19]],"thrust":[[76,77,78,79,80,81,82,83],[84,85,86,87,88,89,90,91],[92,93,94,95,96,97,98,99],[100,101,102,103,104,105,106,107]],"spellcast":[[108,109,110,111,112,113,114],[115,116,117,118,119,120,121],[122,123,124,125,126,127,128],[129,130,131,132,133,134,135]]}},"travel":{"image":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2Li6xUnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8","z":114,"layout":{"cell":64,"columns":2,"clips":{"idle":[[0,0,0],[1,1,4],[2,2,5],[3,3,6]],"walk":[[0,0,0,0,0,0,0,0],[7,7,1,1,7,7,1,1],[2,2,8,2,2,2,8,2],[9,9,3,3,9,9,3,3]],"stand":[[0],[1],[2],[3]]},"trim":{"x":23,"y":21,"width":18,"height":16}}}}]},"attributions":[{"profile":"half-mask","file":"facial/masks/plain","authors":["Nila122"],"licenses":["OGA-BY 3.0","CC-BY-SA 3.0","GPL 2.0","GPL 3.0"],"chosenLicense":"OGA-BY 3.0","urls":["https://opengameart.org/content/lpc-masks","https://opengameart.org/content/lpc-expanded-hats-facial-helmets"],"notes":"Cut down to the lower face and reshaded for The Ninja RPG"}],"sourceRevision":"86160e7507d6841259cff624a51a63c1d4847ee3","sourceUrl":"https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator/tree/86160e7507d6841259cff624a51a63c1d4847ee3","upstream":[]}' AS JSON))
 ON DUPLICATE KEY UPDATE `id` = `GameAsset`.`id`;
