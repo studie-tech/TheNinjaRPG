@@ -5961,6 +5961,7 @@ export const userVote = mysqlTable(
     topWebGames: boolean("topWebGames").default(false).notNull(),
     topRankinGames: boolean("topRankinGames").default(false).notNull(),
     topRankinGamesVoteId: varchar("topRankinGamesVoteId", { length: 128 }),
+    topRankinGamesVotedAt: datetime("topRankinGamesVotedAt", { mode: "date", fsp: 3 }),
     top100Arena: boolean("top100Arena").default(false).notNull(),
     mmoHub: boolean("mmoHub").default(false).notNull(),
     arenaTop100: boolean("arenaTop100").default(false).notNull(),

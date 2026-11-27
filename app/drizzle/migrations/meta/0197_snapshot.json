@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "ce13a6f5-d430-4485-a083-830108c3a190",
+  "id": "a5633e85-560a-4375-ae19-972e880664d1",
   "prevId": "9e0f2c60-e7e3-4ec7-a137-71b78c7f9012",
   "tables": {
     "AbEvent": {
@@ -24778,6 +24778,13 @@
         "topRankinGamesVoteId": {
           "name": "topRankinGamesVoteId",
           "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "topRankinGamesVotedAt": {
+          "name": "topRankinGamesVotedAt",
+          "type": "datetime(3)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

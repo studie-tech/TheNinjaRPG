@@ -1,8 +1,11 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, setSystemTime } from "bun:test";
+import { createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { userVote } from "@/drizzle/schema";
+import { GET } from "@/app/api/daily-votes/route";
+import { POST } from "@/app/api/webhooks/toprankingames/route";
+import { gameSetting, userVote } from "@/drizzle/schema";
+import { env } from "@/env/server.mjs";
 import {
-  updateUserVoteForGET,
   updateUserVoteForHandleVote,
   updateUserVoteForTopRankinGames,
 } from "@/queries/profile";
@@ -13,71 +16,162 @@ import {
   resetTables,
 } from "../setup/testDatabase";
 
+const today = new Date("2026-11-28T00:00:01Z");
+const yesterday = new Date("2026-11-27T00:00:01Z");
+const key = "test-toprankingames-secret";
 const readVote = async () =>
   (await getTestDatabase()).query.userVote.findFirst({
     where: eq(userVote.userId, "voter"),
   });
 
+const callback = (votedAt = today, voteId = "123") => {
+  const body = JSON.stringify({
+    game: "theninja-rpg",
+    site_vote_id: voteId,
+    token: "vote-token",
+    voted_at: votedAt.getTime() / 1000,
+    sent_at: Date.now() / 1000,
+  });
+  return POST(
+    new Request("http://example.test/api/webhooks/toprankingames", {
+      method: "POST",
+      body,
+      headers: {
+        "x-signature": `sha256=${createHmac("sha256", key).update(body).digest("hex")}`,
+      },
+    }),
+  );
+};
+
+const resetDailyVotes = () =>
+  GET(
+    new Request("http://example.test/api/daily-votes", {
+      headers: { authorization: "Bearer test-daily-votes-cron" },
+    }),
+  );
+
 describeWithDatabase("TopRankinGames vote recording", () => {
+  let originalSecret: string | undefined;
+  let originalCronSecret: string | undefined;
+
   beforeEach(async () => {
-    await resetTables(userVote);
+    originalSecret = env.TOPRANKINGAMES_WEBHOOK_SECRET;
+    originalCronSecret = process.env.CRON_SECRET;
+    env.TOPRANKINGAMES_WEBHOOK_SECRET = key;
+    process.env.CRON_SECRET = "test-daily-votes-cron";
+    setSystemTime(today);
+    await resetTables(userVote, gameSetting);
+    const database = await getTestDatabase();
+    await database.insert(gameSetting).values({
+      id: "daily-votes-timer",
+      name: "daily-votes",
+      value: 0,
+      time: yesterday,
+    });
     await insertUserVotes([{ userId: "voter", secret: "vote-token" }]);
+  });
+
+  afterEach(() => {
+    setSystemTime();
+    env.TOPRANKINGAMES_WEBHOOK_SECRET = originalSecret;
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
   });
 
   it("records concurrent duplicate deliveries only once", async () => {
     const database = await getTestDatabase();
     const results = await Promise.all(
       Array.from({ length: 5 }, () =>
-        updateUserVoteForTopRankinGames(database, "vote-token", "123", new Date()),
+        updateUserVoteForTopRankinGames(database, "vote-token", "123", today),
       ),
     );
     expect(results.filter((result) => result.rowsAffected > 0)).toHaveLength(1);
     expect(await readVote()).toMatchObject({
       topRankinGames: true,
       topRankinGamesVoteId: "123",
+      topRankinGamesVotedAt: today,
     });
   });
 
-  it("keeps the receipt when daily flags reset and refuses its replay", async () => {
+  it.each([false, true])(
+    "retains a midnight vote when yesterday's claimed state is %s",
+    async (claimed) => {
+      const database = await getTestDatabase();
+      await database.update(userVote).set({
+        topRankinGames: true,
+        topRankinGamesVoteId: "122",
+        topRankinGamesVotedAt: yesterday,
+        topWebGames: true,
+        claimed,
+      });
+      expect((await callback()).status).toBe(200);
+      expect(await readVote()).toMatchObject({
+        topRankinGames: true,
+        topRankinGamesVoteId: "123",
+        topRankinGamesVotedAt: today,
+        claimed,
+      });
+      expect((await resetDailyVotes()).status).toBe(200);
+      expect((await callback()).status).toBe(200);
+      expect(await readVote()).toMatchObject({
+        topRankinGames: true,
+        topRankinGamesVoteId: "123",
+        topRankinGamesVotedAt: today,
+        topWebGames: false,
+        claimed: false,
+      });
+    },
+  );
+
+  it("clears yesterday's vote and rejects a fresh retry before and after reset", async () => {
     const database = await getTestDatabase();
-    await updateUserVoteForTopRankinGames(database, "vote-token", "123", new Date());
-    await updateUserVoteForGET(database);
+    await updateUserVoteForTopRankinGames(database, "vote-token", "122", yesterday);
+    expect(await (await callback(yesterday, "122")).json()).toBe("INVALID");
+    expect((await resetDailyVotes()).status).toBe(200);
+    expect(await (await callback(yesterday, "122")).json()).toBe("INVALID");
     expect(await readVote()).toMatchObject({
       topRankinGames: false,
-      topRankinGamesVoteId: "123",
+      topRankinGamesVoteId: "122",
+      topRankinGamesVotedAt: yesterday,
     });
-    await updateUserVoteForTopRankinGames(database, "vote-token", "123", new Date());
-    expect(await readVote()).toMatchObject({ topRankinGames: false });
-    await updateUserVoteForTopRankinGames(database, "vote-token", "124", new Date());
+    expect((await callback()).status).toBe(200);
+    expect(await readVote()).toMatchObject({ topRankinGames: true });
+  });
+
+  it("persists the signed vote time rather than the retry delivery time", async () => {
+    setSystemTime(new Date("2026-11-28T00:04:00Z"));
+    expect((await callback()).status).toBe(200);
+    expect((await resetDailyVotes()).status).toBe(200);
     expect(await readVote()).toMatchObject({
       topRankinGames: true,
-      topRankinGamesVoteId: "124",
+      topRankinGamesVotedAt: today,
     });
   });
 
   it("does not let the unsigned legacy endpoint complete the signed site", async () => {
     const database = await getTestDatabase();
-    await updateUserVoteForHandleVote(
-      database,
-      "topRankinGames",
-      new Date(),
-      "vote-token",
-    );
+    await updateUserVoteForHandleVote(database, "topRankinGames", today, "vote-token");
     expect(await readVote()).toMatchObject({
       topRankinGames: false,
       topRankinGamesVoteId: null,
+      topRankinGamesVotedAt: null,
     });
   });
 
-  it("ignores unknown tokens and already claimed vote sets", async () => {
+  it("ignores unknown tokens and refuses same-day refills after a claim", async () => {
     const database = await getTestDatabase();
-    await updateUserVoteForTopRankinGames(database, "wrong-token", "123", new Date());
+    await updateUserVoteForTopRankinGames(database, "wrong-token", "123", today);
     expect(await readVote()).toMatchObject({ topRankinGames: false });
+    await updateUserVoteForTopRankinGames(database, "vote-token", "123", today);
     await database
       .update(userVote)
-      .set({ claimed: true })
+      .set({ claimed: true, topRankinGames: false })
       .where(eq(userVote.userId, "voter"));
-    await updateUserVoteForTopRankinGames(database, "vote-token", "123", new Date());
-    expect(await readVote()).toMatchObject({ topRankinGames: false });
+    await updateUserVoteForTopRankinGames(database, "vote-token", "124", today);
+    expect(await readVote()).toMatchObject({
+      topRankinGames: false,
+      topRankinGamesVoteId: "123",
+      claimed: true,
+    });
   });
 });

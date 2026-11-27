@@ -161,6 +161,8 @@ export const updateUserVoteForGET = (client: Pick<DrizzleClient, "update">) =>
   client.update(userVote).set({
     claimed: false,
     ...Object.fromEntries(ACTIVE_VOTING_SITES.map((site) => [site, false])),
+    // A signed vote can arrive after midnight before the daily cron runs.
+    topRankinGames: sql<boolean>`coalesce(${gte(userVote.topRankinGamesVotedAt, periodStart("daily", new Date()))}, false)`,
   });
 
 /** Build the `userData` lookup for `GET`, selecting only `username`. */
@@ -203,24 +205,31 @@ const VOTE_POSTBACK_SITES: Record<string, (typeof ACTIVE_VOTING_SITES)[number]> 
 };
 
 /**
- * Record a verified TopRankinGames vote once per daily vote set. Keep its id across daily
- * resets; callbacks also reject votes from earlier UTC days, so a retry cannot fill a new
- * day's vote set. Signed callbacks stay separate from the unsigned legacy postback map.
+ * Record one signed vote per UTC day, including while the previous day's flags or claim
+ * await the daily reset. Keep the receipt and signed vote time across resets so retries
+ * cannot refill a later day's vote set or a set already claimed that day.
  */
 export const updateUserVoteForTopRankinGames = (
   client: Pick<DrizzleClient, "update">,
   secret: string,
   voteId: string,
-  now: Date,
+  votedAt: Date,
 ) =>
   client
     .update(userVote)
-    .set({ topRankinGames: true, topRankinGamesVoteId: voteId, lastVoteAt: now })
+    .set({
+      topRankinGames: true,
+      topRankinGamesVoteId: voteId,
+      topRankinGamesVotedAt: votedAt,
+      lastVoteAt: new Date(),
+    })
     .where(
       and(
         eq(userVote.secret, secret),
-        eq(userVote.claimed, false),
-        eq(userVote.topRankinGames, false),
+        or(
+          isNull(userVote.topRankinGamesVotedAt),
+          lt(userVote.topRankinGamesVotedAt, periodStart("daily", votedAt)),
+        ),
         or(
           isNull(userVote.topRankinGamesVoteId),
           ne(userVote.topRankinGamesVoteId, voteId),

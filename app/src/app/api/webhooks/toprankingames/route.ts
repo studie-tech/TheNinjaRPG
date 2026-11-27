@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       drizzleDB,
       vote.data.token,
       vote.data.site_vote_id,
-      now,
+      new Date(vote.data.voted_at * 1000),
     );
     return Response.json("OK");
   } catch (cause) {

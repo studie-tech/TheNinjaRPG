@@ -47,13 +47,14 @@ const request = (body: unknown = payload(), signature?: string) => {
 
 describe("TopRankinGames callback", () => {
   it("records a signed vote using its opaque token", async () => {
-    const response = await POST(request());
+    const body = payload();
+    const response = await POST(request(body));
     expect(response.status).toBe(200);
     expect(recordVote).toHaveBeenCalledWith(
       expect.anything(),
       "player-token",
       "123456",
-      expect.any(Date),
+      new Date(body.voted_at * 1000),
     );
   });
 
