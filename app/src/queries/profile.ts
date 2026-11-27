@@ -161,6 +161,8 @@ export const updateUserVoteForGET = (client: Pick<DrizzleClient, "update">) =>
   client.update(userVote).set({
     claimed: false,
     ...Object.fromEntries(ACTIVE_VOTING_SITES.map((site) => [site, false])),
+    // Preserve an early UTC-day vote only while its receipt remains unclaimed.
+    topRankinGames: sql<boolean>`coalesce(${and(isNotNull(userVote.topRankinGamesVoteId), gte(userVote.topRankinGamesVotedAt, periodStart("daily", new Date())))}, false)`,
   });
 
 /** Build the `userData` lookup for `GET`, selecting only `username`. */
@@ -201,6 +203,39 @@ const VOTE_POSTBACK_SITES: Record<string, (typeof ACTIVE_VOTING_SITES)[number]> 
   arenaTop100: "arenaTop100",
   topWebGames: "topWebGames",
 };
+
+/**
+ * Record one signed vote per UTC day, including while the previous day's flags or claim
+ * await the daily reset. The receipt marks an unclaimed vote; retain the signed vote time
+ * after a claim so retries cannot refill a set already claimed that day.
+ */
+export const updateUserVoteForTopRankinGames = (
+  client: Pick<DrizzleClient, "update">,
+  secret: string,
+  voteId: string,
+  votedAt: Date,
+) =>
+  client
+    .update(userVote)
+    .set({
+      topRankinGames: true,
+      topRankinGamesVoteId: voteId,
+      topRankinGamesVotedAt: votedAt,
+      lastVoteAt: new Date(),
+    })
+    .where(
+      and(
+        eq(userVote.secret, secret),
+        or(
+          isNull(userVote.topRankinGamesVotedAt),
+          lt(userVote.topRankinGamesVotedAt, periodStart("daily", votedAt)),
+        ),
+        or(
+          isNull(userVote.topRankinGamesVoteId),
+          ne(userVote.topRankinGamesVoteId, voteId),
+        ),
+      ),
+    );
 
 /**
  * Fetch a user by id
@@ -1651,6 +1686,7 @@ export const findUserVoteForClaimVotes = (
  * Execute the claim of a completed vote set together with its reputation credit. One
  * guarded multi-table UPDATE flips `claimed` and credits the voter atomically, so only the
  * request that claims the votes is credited; zero affected rows means nothing was claimed.
+ * Consume the signed receipt so the daily reset cannot restore a vote already credited.
  */
 export const executeClaimVotes = (
   client: Pick<DrizzleClient, "execute">,
@@ -1660,6 +1696,7 @@ export const executeClaimVotes = (
   client.execute(sql`
     UPDATE ${userVote} INNER JOIN ${userData} ON ${userData.userId} = ${userVote.userId}
     SET ${userVote.claimed} = true,
+        ${userVote.topRankinGamesVoteId} = NULL,
         ${userVote.totalClaims} = ${userVote.totalClaims} + 1,
         ${userVote.secret} = ${secret},
         ${userData.reputationPoints} = ${userData.reputationPoints} + ${VOTE_REWARD_REPUTATION},

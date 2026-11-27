@@ -70,12 +70,18 @@ export const STARTER_VILLAGES = [
 export type StarterVillage = (typeof STARTER_VILLAGES)[number];
 
 // bbogd.com stopped resolving (Oct 2026); its UserVote column is kept but no longer active
-export const ACTIVE_VOTING_SITES = ["mmoHub", "arenaTop100", "topWebGames"] as const;
+export const ACTIVE_VOTING_SITES = [
+  "mmoHub",
+  "arenaTop100",
+  "topWebGames",
+  "topRankinGames",
+] as const;
 /** Player-facing names of the voting sites; the ids stay the vote column keys. */
 export const VOTING_SITE_NAMES: Record<(typeof ACTIVE_VOTING_SITES)[number], string> = {
   mmoHub: "MMOHub",
   arenaTop100: "Arena Top 100",
   topWebGames: "Top Web Games",
+  topRankinGames: "TopRankinGames",
 };
 /** Reputation credited once a day for voting on every active site. */
 export const VOTE_REWARD_REPUTATION = 1;

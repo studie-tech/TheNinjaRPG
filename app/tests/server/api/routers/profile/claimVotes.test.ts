@@ -73,6 +73,21 @@ describeWithDatabase("vote claims", () => {
     });
   });
 
+  it("requires the TopRankinGames vote before crediting the daily claim", async () => {
+    const database = await getTestDatabase();
+    await database
+      .update(userVote)
+      .set({ topRankinGames: false })
+      .where(eq(userVote.userId, VOTER));
+    const result = await (await callerFor(profileRouter, VOTER)).claimVotes();
+    expect(result.success).toBe(false);
+    expect(await readVoter()).toMatchObject({
+      reputationPoints: 0,
+      reputationPointsTotal: 0,
+    });
+    expect(await readVote()).toMatchObject({ claimed: false, totalClaims: 0 });
+  });
+
   it("claims and credits in one statement without a transaction", async () => {
     const database = await getTestDatabase();
     const result = await callerForDatabase(

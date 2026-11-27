@@ -171,7 +171,7 @@ export function ProfileSharing() {
           {VOTE_REWARD_REPUTATION} reputation point per day.
         </p>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {ACTIVE_VOTING_SITES.map((site) => {
               const hasVoted = userData?.votes?.[site];
               return (

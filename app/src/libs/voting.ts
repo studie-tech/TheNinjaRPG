@@ -12,5 +12,7 @@ export const getVotingLink = (
       return `https://www.arena-top100.com/index.php?a=in&u=Terriator&incentive=${current.secret}-arenaTop100`;
     case "topWebGames":
       return `https://topwebgames.com/game/theninja-rpg-core4/vote?uid=${current.secret}-topWebGames`;
+    case "topRankinGames":
+      return `https://toprankingames.com/vote/theninja-rpg/?u=${current.secret}`;
   }
 };
