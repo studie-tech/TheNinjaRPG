@@ -41,7 +41,8 @@ const GATEWRIGHT = "qFJk06nwwy0B9o2qZ1oZE";
 const LEMU = "UxcxyMdvZoae6zaSMZklT";
 const BLANK = "1YXbXYW2wz3GETVMb6DT6";
 
-/** A village errand as production stores it: two walks, a blank cast, no text. */
+/** A village errand as production stores it: two walks, a blank cast, no text, and a
+ * second step placed in whatever sector the player stands in. */
 const errand = (id: string, objectiveIds: [string, string]) => ({
   id,
   name: "Hyorins Broken Gate",
@@ -55,7 +56,7 @@ const errand = (id: string, objectiveIds: [string, string]) => ({
       id: objectiveId,
       task: "move_to_location",
       description: "",
-      sectorType: "user_village",
+      sectorType: index === 0 ? "user_village" : "current_sector",
       locationType: "specific",
       latitude: 5 + index,
       longitude: 5 + index,
@@ -95,6 +96,8 @@ describeWithDatabase("Mission Hall scenes", () => {
       expect(objective.sceneCharacters).toEqual([GATEWRIGHT]);
       expect(objective.sceneBackground).not.toBe("");
       expect(objective.description).toContain("gatewright");
+      // The gate is in the player's own village, wherever they happen to stand.
+      expect(objective).toMatchObject({ sectorType: "user_village" });
     }
   });
 
