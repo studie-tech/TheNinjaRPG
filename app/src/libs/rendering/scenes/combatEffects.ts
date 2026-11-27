@@ -8,6 +8,8 @@ import type { TerrainHex } from "@/libs/hexgrid";
 import {
   assetAnimationClip,
   EFFECT_ANIMATION_HEX_RATIO,
+  STILL_EFFECT_MARKER,
+  stillEffectMarkerScale,
 } from "@/libs/rendering/animation";
 import { createSpriteClip } from "@/libs/rendering/primitives/animation";
 import {
@@ -266,7 +268,19 @@ export const createCombatEffects = (
           (effect.groundStyle === "SURFACE" ? (current.ground ?? root) : root).addChild(
             clip.sprite,
           );
-          current.clips.push({ ...clip, dispose: animationScope.dispose });
+          current.clips.push({
+            ...clip,
+            dispose: animationScope.dispose,
+            // Surface loops lie under fighters; only upright overlays need a still badge.
+            badge: effect.groundStyle !== "SURFACE",
+            base: {
+              scaleX: clip.sprite.scale.x,
+              scaleY: clip.sprite.scale.y,
+              alpha: clip.sprite.alpha,
+              x: clip.sprite.position.x,
+              y: clip.sprite.position.y,
+            },
+          });
         };
         const staticAsset = next.assets.find(
           (entry) => entry.id === effect.staticAssetPath,
@@ -437,15 +451,21 @@ export const createCombatEffects = (
       record.root.visible = record.displayed && !record.depleted;
       if (record.ground) record.ground.visible = record.root.visible;
       record.clips = record.clips.filter((clip) => {
-        if (!clip.renderAt(now - (record.startedAt ?? now), reducedMotion).finished)
-          return true;
-        clip.dispose();
-        return false;
+        // Without motion an arrival clip is skipped rather than held as a still frame.
+        if (
+          (reducedMotion && !clip.loop) ||
+          clip.renderAt(now - (record.startedAt ?? now), reducedMotion).finished
+        ) {
+          clip.dispose();
+          return false;
+        }
+        return true;
       });
       for (const clip of record.clips) {
         if (!clip.loop) playing = true;
-        else if (record.root.visible)
+        else if (record.root.visible && !reducedMotion)
           loopFrameRate = Math.max(loopFrameRate, clip.frameRate);
+        if (clip.loop && clip.badge) stillBadge(clip, record, reducedMotion);
       }
       if (record.barrier) {
         record.barrier.container.visible = record.root.visible && hoveredId === id;
@@ -453,6 +473,17 @@ export const createCombatEffects = (
         record.barrier.set(barrier.curHealth / barrier.maxHealth);
       }
     }
+  };
+  /** A frozen loop would cover the fighter, so it rests as a faint corner badge instead. */
+  const stillBadge = (clip: EffectClip, record: EffectRecord, still: boolean) => {
+    const { base, sprite } = clip;
+    const shrink = still ? stillEffectMarkerScale(record.effect.animationScale) : 1;
+    sprite.scale.set(base.scaleX * shrink, base.scaleY * shrink);
+    sprite.alpha = still ? base.alpha * STILL_EFFECT_MARKER.alpha : base.alpha;
+    sprite.position.set(
+      still ? record.tile.width * STILL_EFFECT_MARKER.x : base.x,
+      still ? record.tile.height * STILL_EFFECT_MARKER.y : base.y,
+    );
   };
   const hit = (x: number, y: number) => {
     for (const layer of [container, ground])
@@ -503,6 +534,12 @@ export type CombatEffectSnapshot = {
   sound: boolean;
   volume: number;
 };
+type EffectClip = Awaited<ReturnType<typeof createSpriteClip>> & {
+  /** Upright overlay that shrinks to a corner badge while motion is off. */
+  badge: boolean;
+  /** Authored transform, restored when motion returns. */
+  base: { scaleX: number; scaleY: number; alpha: number; x: number; y: number };
+};
 type EffectRecord = {
   scope: GameRenderer;
   root: Container;
@@ -511,7 +548,7 @@ type EffectRecord = {
   outerEdges: boolean[] | undefined;
   effect: GroundEffect | UserEffect;
   tile: TerrainHex;
-  clips: Awaited<ReturnType<typeof createSpriteClip>>[];
+  clips: EffectClip[];
   startedAt: number | null;
   ready: boolean;
   displayed: boolean;

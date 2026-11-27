@@ -61,5 +61,20 @@ export type AnimationClip = {
   loop: boolean;
 };
 
+/**
+ * With sprite animations off, a looping effect overlay would hold its first frame over the
+ * fighter. It shrinks instead to a faint badge in the tile's lower corner (shares of a hex).
+ */
+export const STILL_EFFECT_MARKER = {
+  size: 0.5,
+  alpha: 0.75,
+  x: 0.78,
+  y: 0.3,
+} as const;
+
+/** Scale factor that brings an overlay authored at animationScale hexes down to the badge. */
+export const stillEffectMarkerScale = (animationScale = 1) =>
+  Math.min(1, STILL_EFFECT_MARKER.size / Math.max(animationScale, 0.01));
+
 /** Square combat effect frames fit one hex height at every battlefield scale. */
 export const EFFECT_ANIMATION_HEX_RATIO = 1;
