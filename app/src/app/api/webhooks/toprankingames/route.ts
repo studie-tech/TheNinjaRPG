@@ -7,12 +7,15 @@ import { drizzleDB } from "@/server/db";
 import { constantTimeEquals } from "@/server/utils/constantTime";
 import { periodStart } from "@/utils/time";
 
-const voteSchema = z.object({
+const callbackSchema = z.object({
   game: z.literal("theninja-rpg"),
-  site_vote_id: z.string().regex(/^\d{1,128}$/),
   token: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
-  voted_at: z.number().int().nonnegative(),
   sent_at: z.number().int().nonnegative(),
+});
+
+const voteSchema = callbackSchema.extend({
+  site_vote_id: z.string().min(1).max(128),
+  voted_at: z.number().int().nonnegative(),
 });
 
 /** Receive signed vote confirmations; never grant reputation directly from a callback. */
@@ -36,17 +39,22 @@ export async function POST(request: Request) {
     } catch {
       return Response.json("Invalid vote payload", { status: 400 });
     }
-    const vote = voteSchema.safeParse(payload);
-    if (!vote.success) {
+    const callback = callbackSchema.safeParse(payload);
+    if (!callback.success) {
       return Response.json("Invalid vote payload", { status: 400 });
     }
 
     const now = new Date();
     const nowSeconds = now.getTime() / 1000;
-    if (Math.abs(nowSeconds - vote.data.sent_at) > 300) {
+    if (Math.abs(nowSeconds - callback.data.sent_at) > 300) {
       return Response.json("Expired callback", { status: 401 });
     }
-    if (vote.data.token === "trg-test") return Response.json("OK");
+    if (callback.data.token === "trg-test") return Response.json("OK");
+
+    const vote = voteSchema.safeParse(payload);
+    if (!vote.success) {
+      return Response.json("Invalid vote payload", { status: 400 });
+    }
 
     // Retries carry a fresh sent_at but retain voted_at. A prior day's vote must not
     // refill the flag after the daily cron clears it, even when the user did not claim.
