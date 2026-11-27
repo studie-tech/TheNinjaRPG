@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
   assetAnimationClip,
+  STILL_EFFECT_MARKER,
   sampleAnimationClip,
+  stillEffectMarkerScale,
   walkDuration,
   walkProgress,
 } from "@/libs/rendering/animation";
@@ -27,6 +29,15 @@ describe("shared animation clips", () => {
     const clip = assetAnimationClip({ image: "effect.png", frames: 8, speed: 60 });
     expect(sampleAnimationClip(clip, 200, true)).toEqual({ index: 0, finished: false });
     expect(sampleAnimationClip(clip, 480, true)).toEqual({ index: 0, finished: true });
+  });
+  it("sizes still overlays to one badge whatever their authored scale", () => {
+    for (const scale of [1, 1.5, 2.5])
+      expect(stillEffectMarkerScale(scale) * scale).toBeCloseTo(
+        STILL_EFFECT_MARKER.size,
+      );
+    expect(stillEffectMarkerScale()).toBeCloseTo(STILL_EFFECT_MARKER.size);
+    // Overlays already smaller than the badge keep their size.
+    expect(stillEffectMarkerScale(0.2)).toBe(1);
   });
 });
 

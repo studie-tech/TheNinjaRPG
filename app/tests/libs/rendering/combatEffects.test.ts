@@ -17,6 +17,7 @@ import {
 import { applyEffects, expireGroundEffects } from "@/libs/combat/process";
 import type { GroundEffect, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
+import { STILL_EFFECT_MARKER } from "@/libs/rendering/animation";
 import { groundDecalBoundaries } from "@/libs/rendering/primitives/groundDecal";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
@@ -177,6 +178,62 @@ const setupProjectileReplay = (strike = false) => {
 };
 
 describe("Pixi combat effects", () => {
+  describe("with sprite animations off", () => {
+    const still = async (animationScale?: number) => {
+      const scene = setup();
+      Object.assign(scene.effect, { appearAnimation: "animation", animationScale });
+      await scene.effects.sync(scene.snapshot);
+      const tile = scene.grid.getHex({ col: 3, row: 1 })!;
+      const root = scene.effects.container.getChildByLabel(scene.effect.id)!;
+      return { ...scene, tile, root };
+    };
+    it("skips the arrival clip instead of holding its first frame", async () => {
+      const scene = await still();
+      expect(scene.root.children).toHaveLength(2);
+      scene.effects.animate(0, true, false, null);
+      expect(scene.root.children).toHaveLength(1);
+      expect(scene.effects.isPlaying()).toBe(false);
+      // Returning motion does not replay an arrival that was skipped.
+      scene.effects.animate(10, false, false, null);
+      expect(scene.root.children).toHaveLength(1);
+    });
+    it.each([undefined, 1.5, 2.5])(
+      "shrinks a looping overlay at scale %s to a faint corner badge off the fighter",
+      async (animationScale) => {
+        const scene = await still(animationScale);
+        scene.effects.animate(0, true, false, null);
+        const sprite = scene.root.children[0] as Sprite;
+        expect(sprite.height).toBeCloseTo(scene.tile.height * STILL_EFFECT_MARKER.size);
+        expect(sprite.width).toBeCloseTo(scene.tile.height * STILL_EFFECT_MARKER.size);
+        expect(sprite.alpha).toBeCloseTo(STILL_EFFECT_MARKER.alpha);
+        expect(sprite.x).toBeCloseTo(scene.tile.width * STILL_EFFECT_MARKER.x);
+        expect(sprite.y).toBeCloseTo(scene.tile.height * STILL_EFFECT_MARKER.y);
+        expect(scene.effects.clipFrameRate()).toBe(0);
+      },
+    );
+    it("restores the authored overlay when animations come back", async () => {
+      const scene = await still(1.5);
+      scene.effect.animationOffsetY = 0.2;
+      scene.effects.animate(0, true, false, null);
+      scene.effects.animate(10, false, false, null);
+      const sprite = scene.root.children[0] as Sprite;
+      expect(sprite.height).toBeCloseTo(scene.tile.height * 1.5);
+      expect(sprite.alpha).toBe(1);
+      expect(sprite.x).toBeCloseTo(scene.tile.width / 2);
+      expect(sprite.y).toBeCloseTo(scene.tile.height / 2);
+      expect(scene.effects.clipFrameRate()).toBeGreaterThan(0);
+    });
+    it("leaves a flattened surface loop on the ground under fighters", async () => {
+      const scene = setup();
+      Object.assign(scene.effect, { groundStyle: "SURFACE", groundOpacity: 0.6 });
+      await scene.effects.sync(scene.snapshot);
+      const sprite = scene.effects.ground.children[0]!.children[0] as Sprite;
+      const tile = scene.grid.getHex({ col: 3, row: 1 })!;
+      scene.effects.animate(0, true, false, null);
+      expect(sprite.height).toBeCloseTo(tile.height * 0.55);
+      expect(sprite.alpha).toBeCloseTo(0.6);
+    });
+  });
   it("raises protective clips without moving their ground artwork or changing their scale", async () => {
     const scene = setup();
     Object.assign(scene.effect, {
@@ -887,7 +944,7 @@ describe("Pixi combat effects", () => {
       await scene.effects.sync(scene.snapshot);
       for (const zoom of [1, 2]) {
         scene.stage.scale.set(zoom, -zoom);
-        scene.effects.animate(0, true, false, null);
+        scene.effects.animate(0, false, false, null);
         for (const [id, scale, position] of [
           [scene.effect.id, 2.5, scene.effect],
           [legacy.id, 1, legacy],
