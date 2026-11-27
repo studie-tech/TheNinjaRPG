@@ -1,9 +1,10 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { z } from "zod";
 import { env } from "@/env/server.mjs";
 import { handleEndpointError } from "@/libs/gamesettings";
 import { updateUserVoteForTopRankinGames } from "@/queries/profile";
 import { drizzleDB } from "@/server/db";
+import { constantTimeEquals } from "@/server/utils/constantTime";
 import { periodStart } from "@/utils/time";
 
 const voteSchema = z.object({
@@ -25,12 +26,7 @@ export async function POST(request: Request) {
     const body = await request.text();
     const signature = request.headers.get("x-signature") ?? "";
     const expected = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
-    const actualBytes = Buffer.from(signature);
-    const expectedBytes = Buffer.from(expected);
-    if (
-      actualBytes.length !== expectedBytes.length ||
-      !timingSafeEqual(actualBytes, expectedBytes)
-    ) {
+    if (!constantTimeEquals(signature, expected)) {
       return Response.json("Invalid signature", { status: 401 });
     }
 
