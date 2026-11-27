@@ -72,6 +72,7 @@ its lobby before any enemy art.
 | `plain` | no | none | Game Jolt, Y8 and other portals that forbid outgoing links |
 | `poki` | no | Poki SDK v2 | Poki |
 | `gamedistribution` | no | GameDistribution HTML5 SDK | GameDistribution and the sites it syndicates to |
+| `gamepix` | no | GamePix SDK v3 | GamePix and the sites it distributes to |
 | `youtube` | no | YouTube Playables SDK v1 | YouTube Playables |
 
 The Poki build loads Poki's SDK and reports:
@@ -86,6 +87,18 @@ asks for an ad (`gdsdk.showAd()`) before each new run, always after the player p
 start. The SDK pauses the game around every ad, the preroll included, through its
 `SDK_GAME_PAUSE` and `SDK_GAME_START` events: the game holds its audio and freezes the run
 until the ad ends.
+
+The GamePix build sets `GamePixConfig = { lifecycle: "manual" }` and loads the GamePix SDK
+before any game code, because GamePix syncs `localStorage` only for a page that loaded its
+SDK first. Progress and unfinished runs stay under the same `localStorage` keys. The game:
+
+- reports loading progress with `lifecycle.loading()` while its data loads, and
+  `lifecycle.loaded()` once it has rendered, which lets the GamePix Player show it
+- sends `lifecycle.gameStart()` once, when the first run starts
+- asks for an interstitial (`ads.interstitial()`) before each new run, always after the
+  player pressed start
+- holds the run and its audio on the SDK's `pause` event and releases them on `resume`.
+  GamePix sends these around its own ads and Player overlays.
 
 If an SDK fails to load, for example because of an ad blocker, the game plays without it.
 
@@ -134,6 +147,9 @@ using the browser's request blocking or DevTools. Media missing from a build sho
 `[shuriken-siege] unbundled media` debug lines in the console.
 
 Every portal also has its own preview or QA tool, which runs the zip as players will see it.
+Served locally, the GamePix SDK stands in for its Player: open the `gamepix` build with
+`?gpx_inspector=1` to see the loading, start, ad, pause and resume events it receives, and
+to send it a pause or resume.
 
 ## Publishing
 
@@ -144,6 +160,7 @@ Every portal also has its own preview or QA tool, which runs the zip as players 
 | Poki | Apply on Poki for Developers | `poki` zip once invited | Poki prefers web exclusivity. Review their thumbnails and the Inspector before submitting. |
 | Game Jolt | Add game, browser build | `plain` zip | No links to other versions of the game. |
 | GameDistribution | Developer portal, add game | `gamedistribution` zip, built with the game ID from that page | Their QA tool checks the preroll ad and the pause events before the game is distributed. |
+| GamePix | my.gamepix.com, Create New Game | `gamepix` zip, under Build > Upload a build | Tick "SDK integration" under Info. Icon 256x256, cover 1360x850. Preview the build in the GamePix Player before submitting it for review. |
 | YouTube Playables | Apply through the Playables partner program | `youtube` zip, in YouTube's Playables test suite first | Covers and icons must not show TheNinja-RPG links or other platforms' branding. A YouTube partner manager approves each release. |
 
 Covers and thumbnails: each portal asks for its own sizes. Start them from
@@ -160,8 +177,8 @@ always snapshots the current live roster and media.
    with each linking portal's `SOURCE`.
 3. Test the build as above.
 4. Upload each zip as a new version on its portal. itch.io and Newgrounds replace the file
-   in place. Poki, GameDistribution and YouTube review a new version before it
-   goes live.
+   in place. Poki, GameDistribution, GamePix and YouTube review a new version
+   before it goes live.
 
 Players keep their progress across versions: the storage keys and the progress format
 stay the same, in `localStorage` and in YouTube's cloud save. A saved run

@@ -76,6 +76,8 @@ const TARGETS: Record<ShurikenSiegeTarget, { links: boolean; sdk?: string }> = {
     links: false,
     sdk: "https://html5.api.gamedistribution.com/main.min.js",
   },
+  // GamePix syncs localStorage only for a page that loaded its SDK before any game code.
+  gamepix: { links: false, sdk: "https://integration.gamepix.com/sdk/v3/gamepix.sdk.js" },
   // Playables must load their SDK before any game code.
   youtube: { links: false, sdk: "https://www.youtube.com/game_api/v1" },
 };
@@ -305,20 +307,26 @@ function page(build: ShurikenSiegeBuild, sdk?: string) {
   // GameDistribution reads its options before its script loads and reports events through
   // them; the page relays each to the game as a window event. Portal SDKs load without
   // holding up the page, so a stalled SDK request leaves the game playable without it;
-  // only YouTube requires its SDK before any game code.
+  // YouTube and GamePix require their SDK before any game code. GamePix is told the game
+  // reports its own loading and start.
   const gameDistribution =
     build.target === "gamedistribution"
       ? `<script>window.GD_OPTIONS={gameId:${JSON.stringify(gdGameId)},onEvent:function(event){window.dispatchEvent(new CustomEvent("shuriken-siege:gd",{detail:event.name}));}};</script>
 <script id="gamedistribution-jssdk" async src="${sdk}"></script>
 `
       : "";
-  const youtube = build.target === "youtube" ? `<script src="${sdk}"></script>\n` : "";
+  const first =
+    build.target === "youtube"
+      ? `<script src="${sdk}"></script>\n`
+      : build.target === "gamepix"
+        ? `<script>window.GamePixConfig={lifecycle:"manual"};</script>\n<script src="${sdk}"></script>\n`
+        : "";
   const other =
-    sdk && !gameDistribution && !youtube ? `<script async src="${sdk}"></script>\n` : "";
+    sdk && !gameDistribution && !first ? `<script async src="${sdk}"></script>\n` : "";
   return `<!doctype html>
 <html lang="en">
 <head>
-${youtube}<meta charset="utf-8">
+${first}<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Shuriken Siege</title>
 <meta name="description" content="Defend the ninja village against endless raiders with shuriken, hand seals and sentries. A game by TheNinja-RPG.">
