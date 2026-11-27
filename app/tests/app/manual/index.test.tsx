@@ -66,7 +66,6 @@ const playerCards = [
   "damage_calcs",
   "item",
   "jutsu",
-  "kessen",
   "logs",
   "opinions",
   "polls",
@@ -79,6 +78,7 @@ const playerCards = [
 ];
 const moderatorCards = ["recruitment", "resource_silos", "review", "rewards"];
 const contentCards = [
+  "kessen/balance",
   "splash",
   "dungeon",
   "hunting",
@@ -148,5 +148,9 @@ it("captions tiles with readable names instead of route slugs", () => {
   expect(label("/manual/damage_calcs")).toBe("Damage Calculator");
   expect(label("/manual/pvp_rank")).toBe("Ranked PvP");
   expect(label("/manual/crafting_recipes")).toBe("Crafting Recipes");
-  expect(label("/manual/kessen")).toBe("Kessen Rules");
+  expect(label("/manual/kessen")).toBeUndefined();
+  const { staff } = manualGrids("CONTENT");
+  expect(staff.find((tile) => tile.href === "/manual/kessen/balance")?.label).toBe(
+    "Kessen Balance",
+  );
 });

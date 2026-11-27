@@ -142,7 +142,7 @@ export function ManualKessenBalanceScreen() {
       <ContentBox
         title="Kessen Balance"
         subtitle="Every card and faction against the balance guidelines"
-        defaultBackHref="/manual/kessen"
+        defaultBackHref="/manual"
       >
         <NavTabs
           current={section}

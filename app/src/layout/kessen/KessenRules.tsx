@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Check, ChevronDown, Scale, Swords } from "lucide-react";
-import { useId, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,7 @@ import {
 } from "@/drizzle/constants";
 import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
 import ContentBox from "@/layout/ContentBox";
+import { HallBox } from "@/layout/kessen/hub/HallBox";
 import { KESSEN_BOOK_FACTIONS, KESSEN_FACTION_INFO } from "@/layout/kessen/hub/hubData";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
@@ -69,13 +70,13 @@ import type {
 } from "@/validators/kessen";
 
 /**
- * The Kessen manual: the player reference (how a match plays, rows, deck rules, the
+ * The Kessen rules tab: the player reference (how a match plays, rows, deck rules, the
  * keyword glossary, factions and their perks, sets, pack odds and pity, rewards and
  * limits), then for content staff the rules and AI versions, the Circuit roster with every
  * deck, reward and drop table, and the simulation targets the content is tuned to.
  * Everything is read from the shipped code data and the live card catalog.
  */
-export function ManualKessenScreen() {
+export function KessenRules({ tabs, onPlay }: { tabs: ReactNode; onPlay: () => void }) {
   const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const isStaff = !!userData && canChangeContent(userData.role);
   const catalog = useKessenCatalog();
@@ -84,11 +85,7 @@ export function ManualKessenScreen() {
   return (
     // Phones inherit a smaller body size; reference text stays readable at every width.
     <div className="text-base">
-      <ContentBox
-        title="Kessen"
-        subtitle="Rules and card reference"
-        defaultBackHref="/manual"
-      >
+      <HallBox subtitle="Rules and card reference" tabs={tabs}>
         <p>
           Kessen is a best-of-three card duel on a war table of three rows. Win two
           rounds against the Circuit&apos;s ninja to earn ryo, cards and packs, and
@@ -96,18 +93,18 @@ export function ManualKessenScreen() {
           two minutes on your first visit to the Card Hall.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button asChild>
-            <Link href="/kessen">
-              <Swords className="mr-2 h-5 w-5" aria-hidden />
-              Open the Card Hall
-            </Link>
+          <Button onClick={onPlay}>
+            <Swords className="mr-2 h-5 w-5" aria-hidden />
+            Play Kessen
           </Button>
-          <Button asChild variant="outline">
-            <Link href="/manual/kessen/balance">
-              <Scale className="mr-2 h-5 w-5" aria-hidden />
-              Balance report
-            </Link>
-          </Button>
+          {isStaff ? (
+            <Button asChild variant="outline">
+              <Link href="/manual/kessen/balance">
+                <Scale className="mr-2 h-5 w-5" aria-hidden />
+                Balance report
+              </Link>
+            </Button>
+          ) : null}
         </div>
         <nav aria-label="On this page" className="mt-3">
           <p className="font-bold">On this page</p>
@@ -126,7 +123,7 @@ export function ManualKessenScreen() {
             ))}
           </ul>
         </nav>
-      </ContentBox>
+      </HallBox>
 
       <ContentBox
         id="kessen-match"

@@ -90,7 +90,12 @@ export function ManualMainScreen() {
     { name: "pvp_rank", label: "Ranked PvP", img: IMG_MANUAL_RANKED },
     { name: "balance", label: "Balance Data", img: IMG_MANUAL_BALANCE },
     { name: "staff", label: "Staff", img: IMG_MANUAL_STAFF },
-    { name: "kessen", label: "Kessen Rules", img: IMG_KESSEN_MINIGAME_TILE },
+    {
+      name: "kessen/balance",
+      label: "Kessen Balance",
+      img: IMG_KESSEN_MINIGAME_TILE,
+      visible: canEditContent,
+    },
     {
       name: "activityStreak",
       label: "Activity Streaks",

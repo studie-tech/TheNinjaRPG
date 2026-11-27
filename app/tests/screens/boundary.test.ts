@@ -9,14 +9,13 @@ const pages = readdirSync(routeRoot, { recursive: true })
   .map(String)
   .filter((file) => /(^|\/)page\.[jt]sx?$/.test(file));
 
-it.each(pages)("%s delegates its UI to a screen", (file) => {
+it.each(pages)("%s delegates its UI to a screen or redirects", (file) => {
   const source = readFileSync(join(routeRoot, file), "utf8");
   const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
   const imports = ast.program.body.filter((node) => node.type === "ImportDeclaration");
   const screenImport = imports.find((node) =>
     node.source.value.startsWith("@/screens/"),
   );
-  expect(screenImport, file).toBeDefined();
   const entry = ast.program.body.find(
     (node) => node.type === "ExportDefaultDeclaration",
   );
@@ -27,6 +26,24 @@ it.each(pages)("%s delegates its UI to a screen", (file) => {
   // Route adapters resolve framework props and render one screen, without game UI or hooks.
   expect(entry.declaration.body.body).toHaveLength(1);
   const statement = entry.declaration.body.body[0];
+  if (statement?.type === "ExpressionStatement") {
+    // Redirect-only routes have no UI to delegate and only import the framework redirect.
+    expect(imports).toHaveLength(1);
+    const navigation = imports[0];
+    expect(navigation?.source.value).toBe("next/navigation");
+    expect(navigation?.specifiers).toHaveLength(1);
+    const binding = navigation?.specifiers[0];
+    expect(binding?.type).toBe("ImportSpecifier");
+    if (binding?.type !== "ImportSpecifier") return;
+    expect(binding.imported).toMatchObject({ type: "Identifier", name: "redirect" });
+    expect(statement.expression).toMatchObject({
+      type: "CallExpression",
+      callee: { type: "Identifier", name: binding.local.name },
+      arguments: [{ type: "StringLiteral" }],
+    });
+    return;
+  }
+  expect(screenImport, file).toBeDefined();
   expect(statement?.type).toBe("ReturnStatement");
   if (statement?.type !== "ReturnStatement") return;
   expect(statement.argument?.type).toBe("JSXElement");

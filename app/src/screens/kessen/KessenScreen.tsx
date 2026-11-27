@@ -5,6 +5,7 @@ import "@/layout/kessen/hub/hub.css";
 import "@/screens/kessen/hall.css";
 import {
   BookOpen,
+  BookText,
   Gift,
   GraduationCap,
   Layers,
@@ -17,7 +18,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,7 +100,7 @@ import type { CardPackReveal } from "@/validators/weightedCache";
  * pack ceremony take the hall's place inside its content box while they are open. An
  * unfinished match or duel reopens on arrival, and a duel that begins (an accepted
  * challenge, a ranked match) opens its table; `?tab=packs` (or `play`, `duels`, `decks`,
- * `collection`) opens that section, also when the table closes over it. Visitors
+ * `collection`, `rules`) opens that section, also when the table closes over it. Visitors
  * without an account get the guest hall (`KessenGuestHall`) instead.
  */
 export function KessenScreen() {
@@ -107,7 +108,7 @@ export function KessenScreen() {
   // Visitors who look signed out get the guest hall at once, which also puts it in the
   // prerendered page; its tables wait until sign-in is confirmed, so a signed-in player
   // never starts a guest match. A signed-in player waits for the profile in the hall.
-  if (!isSignedIn) return <KessenGuestHall ready={isClerkLoaded} />;
+  if (!isSignedIn) return <KessenGuestEntry ready={isClerkLoaded} />;
   // Search params need a Suspense boundary on a prerendered page; the hall then renders
   // in the browser only, so its remembered section never differs between the two sides.
   return (
@@ -115,6 +116,48 @@ export function KessenScreen() {
       <KessenHall />
     </Suspense>
   );
+}
+
+const KessenRules = dynamic(() =>
+  import("@/layout/kessen/KessenRules").then((mod) => mod.KessenRules),
+);
+
+/** Guests can read the same rules without entering a match or creating an account. */
+function KessenGuestEntry({ ready }: { ready: boolean }) {
+  const [showRules, setShowRules] = useState(false);
+  const router = useNavigationRouter();
+  const onPlay = () => router.replace("/kessen", { scroll: false });
+  return (
+    <>
+      <Suspense fallback={null}>
+        <GuestRulesTab onChange={setShowRules} />
+      </Suspense>
+      {showRules ? (
+        <KessenRules
+          tabs={
+            <HallTabs
+              current="Rules"
+              options={INTRO_TABS}
+              onSelect={(tab) => {
+                if (tab === "Play") onPlay();
+              }}
+            />
+          }
+          onPlay={onPlay}
+        />
+      ) : (
+        <KessenGuestHall ready={ready} />
+      )}
+    </>
+  );
+}
+
+/** Keep the public guest hall prerendered while its query-selected tab hydrates. */
+function GuestRulesTab({ onChange }: { onChange: (show: boolean) => void }) {
+  const searchParams = useSearchParams();
+  const showRules = tabOfParam(searchParams.get("tab")) === "Rules";
+  useEffect(() => onChange(showRules), [showRules, onChange]);
+  return null;
 }
 
 // The table, its playback and its stylesheet load only when a match opens.
@@ -204,14 +247,38 @@ function KessenHall() {
   const [duelError, setDuelError] = useState<string | null>(null);
   const queuePolling = useRankedQueuePolling(lobby, (found) => setDuelId(found));
 
-  if (!isClerkLoaded) return <Loader explanation="Loading user data" />;
+  const selectTab = (option: KessenTab) => {
+    safeLocalStorageSetItem(TAB_STORAGE_KEY, option);
+    // The section link has done its job; a reload reopens the section chosen last.
+    if (linkedTab) router.replace("/kessen", { scroll: false });
+    setTab(option);
+    setOpenedDeck(null);
+    // A plain visit to Decks reopens the edits in progress, not the deck opened last.
+    setDeckFocus(null);
+    setLeftTable(false);
+  };
+  const introTabs = (
+    <HallTabs current={tab} options={INTRO_TABS} onSelect={selectTab} />
+  );
+  // The public reference needs neither a character nor the hall; its catalog sections
+  // handle loading and failures themselves. Loaded halls give open tables priority.
+  if (tab === "Rules" && (!isClerkLoaded || !userId || !hub || !catalog)) {
+    return <KessenRules tabs={introTabs} onPlay={() => selectTab("Play")} />;
+  }
+  if (!isClerkLoaded || (!userId && profileStatus === "pending")) {
+    return (
+      <HallBox tabs={introTabs}>
+        <Loader explanation="Loading user data" />
+      </HallBox>
+    );
+  }
   if (!userId) {
     // A signed-in player whose profile did not load gets the reason and a retry; the
     // profile query does not retry on its own, so its error state is stable.
-    if (profileStatus === "pending") return <Loader explanation="Loading user data" />;
-    if (profileStatus !== "error") return <NoCharacter />;
+    if (profileStatus !== "error") return <NoCharacter tabs={introTabs} />;
     return (
       <HallError
+        tabs={introTabs}
         message="Your character could not be loaded. Try again in a moment."
         onRetry={() => void refreshUser()}
       />
@@ -222,12 +289,19 @@ function KessenHall() {
   if ((!hub && hubQuery.isError) || (!catalog && catalogQuery.isError)) {
     return (
       <HallError
+        tabs={introTabs}
         message={`The Card Hall could not be loaded: ${(hubQuery.error ?? catalogQuery.error)?.message ?? "unknown error"}`}
         onRetry={() => void Promise.all([hubQuery.refetch(), catalogQuery.refetch()])}
       />
     );
   }
-  if (!hub || !catalog) return <Loader explanation="Opening the Card Hall" />;
+  if (!hub || !catalog) {
+    return (
+      <HallBox tabs={introTabs}>
+        <Loader explanation="Opening the Card Hall" />
+      </HallBox>
+    );
+  }
 
   const lookup = catalogLookup(catalog.cards);
   const summaries = hub.decks.map((deck) => summarizeDeck(deck, lookup, hub.owned));
@@ -242,17 +316,6 @@ function KessenHall() {
   const packCount = ownedPacks.reduce((sum, pack) => sum + pack.quantity, 0);
   const incomingChallenges =
     lobby?.challenges.filter((challenge) => !challenge.outgoing).length ?? 0;
-
-  const selectTab = (option: KessenTab) => {
-    safeLocalStorageSetItem(TAB_STORAGE_KEY, option);
-    // The section link has done its job; a reload reopens the section chosen last.
-    if (linkedTab) router.replace("/kessen", { scroll: false });
-    setTab(option);
-    setOpenedDeck(null);
-    // A plain visit to Decks reopens the edits in progress, not the deck opened last.
-    setDeckFocus(null);
-    setLeftTable(false);
-  };
 
   /** Opens the Decks tab on a saved deck and names it where the focus lands. */
   const openDeck = (deck: { id: string; name: string } | null) => {
@@ -636,7 +699,7 @@ function KessenHall() {
             : []),
         ];
 
-  // The lesson and the starter choice show no tabs, counters or deck to manage yet.
+  // Rewards and deck management stay hidden until the lesson and starter choice are complete.
   const onboarding = hub.needsLesson || hub.needsStarter;
   // A graduate's Academy folds to one row below the Circuit; until then it leads the tab.
   const academyPanel = (
@@ -731,11 +794,26 @@ function KessenHall() {
     );
   }
 
+  const tabs = (
+    <HallTabs
+      current={tab}
+      options={onboarding ? INTRO_TABS : TABS}
+      onSelect={selectTab}
+      packCount={packCount}
+      duelCount={incomingChallenges}
+      focusCurrent={leftTable && tab !== "Play"}
+      onFocused={() => setLeftTable(false)}
+    />
+  );
+  if (tab === "Rules" && !scene) {
+    return <KessenRules tabs={tabs} onPlay={() => selectTab("Play")} />;
+  }
+
   // First visit: one button, Lemu's first lesson.
   const firstLesson = hub.academy.lessons[0] ?? null;
   if (hub.needsLesson) {
     return (
-      <HallBox scene={scene} subtitle="Lemu's first lesson">
+      <HallBox scene={scene} subtitle="Lemu's first lesson" tabs={tabs}>
         <div className="flex flex-col gap-5">
           {header}
           <section
@@ -777,7 +855,7 @@ function KessenHall() {
   // After the lesson: the starter faction, then the First Bundle opens.
   if (hub.needsStarter) {
     return (
-      <HallBox scene={scene} subtitle="Choose your starter faction">
+      <HallBox scene={scene} subtitle="Choose your starter faction" tabs={tabs}>
         <div className="flex flex-col gap-5">
           {header}
           <StarterChoice
@@ -823,20 +901,7 @@ function KessenHall() {
   );
 
   return (
-    <HallBox
-      scene={scene}
-      subtitle={TAB_SUBTITLES[tab]}
-      tabs={
-        <HallTabs
-          current={tab}
-          onSelect={selectTab}
-          packCount={packCount}
-          duelCount={incomingChallenges}
-          focusCurrent={leftTable && tab !== "Play"}
-          onFocused={() => setLeftTable(false)}
-        />
-      }
-    >
+    <HallBox scene={scene} subtitle={TAB_SUBTITLES[tab]} tabs={tabs}>
       <div className="flex flex-col gap-5">
         {tab === "Play" ? (
           <>
@@ -943,8 +1008,16 @@ function KessenHall() {
 }
 
 /** A hall that could not load: the reason and a retry. */
-const HallError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
-  <HallBox>
+const HallError = ({
+  message,
+  onRetry,
+  tabs,
+}: {
+  message: string;
+  onRetry: () => void;
+  tabs: ReactNode;
+}) => (
+  <HallBox tabs={tabs}>
     <section
       className="flex flex-col items-center gap-2 py-6 text-center"
       aria-labelledby="kessen-hall-error"
@@ -992,8 +1065,8 @@ const MatchUnavailable = ({
 );
 
 /** A signed-in account without a character: the cards belong to a character. */
-const NoCharacter = () => (
-  <HallBox>
+const NoCharacter = ({ tabs }: { tabs: ReactNode }) => (
+  <HallBox tabs={tabs}>
     <EmptyState
       icon={Swords}
       title="Sit at the war table"
@@ -1052,6 +1125,7 @@ const CardMasterStall = () => {
  */
 const HallTabs = ({
   current,
+  options = TABS,
   onSelect,
   packCount = 0,
   duelCount = 0,
@@ -1059,6 +1133,7 @@ const HallTabs = ({
   onFocused,
 }: {
   current: KessenTab;
+  options?: readonly KessenTab[];
   onSelect: (tab: KessenTab) => void;
   packCount?: number;
   /** Challenges waiting for the player's answer. */
@@ -1077,10 +1152,10 @@ const HallTabs = ({
     <nav ref={ref} aria-label="Card Hall sections" className="kh-hall-tabs">
       <NavTabs
         current={current}
-        options={TABS}
+        options={options}
         remember={false}
         icons={TAB_ICONS}
-        iconOnlyOptions={TABS}
+        iconOnlyOptions={options}
         labelClassName={(option) => (option === current ? "not-sr-only" : "")}
         counts={{ Packs: packCount, Duels: duelCount }}
         countLabels={{ Packs: "unopened packs", Duels: "challenges waiting" }}
@@ -1089,7 +1164,7 @@ const HallTabs = ({
         itemClassName={() => "mr-0 shrink-0"}
         className="min-h-[44px] min-w-[44px] px-2"
         onChange={(value) => {
-          const next = TABS.find((option) => option === value);
+          const next = options.find((option) => option === value);
           if (next) onSelect(next);
         }}
       />
@@ -1354,7 +1429,8 @@ const selectChallengeUser = (profile: NonNullable<UserWithRelations>) => ({
   latitude: profile.latitude,
 });
 
-const TABS = ["Play", "Duels", "Decks", "Collection", "Packs"] as const;
+const TABS = ["Play", "Duels", "Decks", "Collection", "Packs", "Rules"] as const;
+const INTRO_TABS = ["Play", "Rules"] as const;
 
 /** The content box subtitle names what each section is for, short enough for a phone. */
 const TAB_SUBTITLES: Record<(typeof TABS)[number], string> = {
@@ -1363,6 +1439,7 @@ const TAB_SUBTITLES: Record<(typeof TABS)[number], string> = {
   Decks: "Build your decks",
   Collection: "Your cards",
   Packs: "Packs and the Card Master",
+  Rules: "Rules and card reference",
 };
 
 const TAB_STORAGE_KEY = "kessenTab";
@@ -1375,6 +1452,7 @@ const TAB_ICON_COMPONENTS: Record<KessenTab, LucideIcon> = {
   Decks: Layers,
   Collection: BookOpen,
   Packs: Package,
+  Rules: BookText,
 };
 
 const TAB_ICONS = Object.fromEntries(
