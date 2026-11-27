@@ -3,14 +3,16 @@ import { createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { GET } from "@/app/api/daily-votes/route";
 import { POST } from "@/app/api/webhooks/toprankingames/route";
-import { gameSetting, userVote } from "@/drizzle/schema";
+import { gameSetting, userData, userVote } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
 import {
   updateUserVoteForHandleVote,
   updateUserVoteForTopRankinGames,
 } from "@/queries/profile";
-import { insertUserVotes } from "../setup/factories";
+import { profileRouter } from "@/server/api/routers/profile";
+import { insertUsers, insertUserVotes } from "../setup/factories";
 import {
+  callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -24,11 +26,11 @@ const readVote = async () =>
     where: eq(userVote.userId, "voter"),
   });
 
-const callback = (votedAt = today, voteId = "123") => {
+const callback = (votedAt = today, voteId = "123", token = "vote-token") => {
   const body = JSON.stringify({
     game: "theninja-rpg",
     site_vote_id: voteId,
-    token: "vote-token",
+    token,
     voted_at: votedAt.getTime() / 1000,
     sent_at: Date.now() / 1000,
   });
@@ -60,7 +62,7 @@ describeWithDatabase("TopRankinGames vote recording", () => {
     env.TOPRANKINGAMES_WEBHOOK_SECRET = key;
     process.env.CRON_SECRET = "test-daily-votes-cron";
     setSystemTime(today);
-    await resetTables(userVote, gameSetting);
+    await resetTables(userData, userVote, gameSetting);
     const database = await getTestDatabase();
     await database.insert(gameSetting).values({
       id: "daily-votes-timer",
@@ -68,6 +70,9 @@ describeWithDatabase("TopRankinGames vote recording", () => {
       value: 0,
       time: yesterday,
     });
+    await insertUsers([
+      { userId: "voter", reputationPoints: 0, reputationPointsTotal: 0 },
+    ]);
     await insertUserVotes([{ userId: "voter", secret: "vote-token" }]);
   });
 
@@ -120,8 +125,55 @@ describeWithDatabase("TopRankinGames vote recording", () => {
         topWebGames: false,
         claimed: false,
       });
+      for (const site of ["mmohub", "arenaTop100", "topWebGames"]) {
+        await updateUserVoteForHandleVote(database, site, today, "vote-token");
+      }
+      expect(
+        (await (await callerFor(profileRouter, "voter")).claimVotes()).success,
+      ).toBe(true);
+      expect(await readVote()).toMatchObject({
+        claimed: true,
+        topRankinGames: true,
+        topRankinGamesVoteId: null,
+        topRankinGamesVotedAt: today,
+        totalClaims: 1,
+      });
     },
   );
+
+  it("does not reuse a signed vote claimed before the daily reset", async () => {
+    const database = await getTestDatabase();
+    await database.update(userVote).set({
+      mmoHub: true,
+      arenaTop100: true,
+      topWebGames: true,
+    });
+    expect((await callback()).status).toBe(200);
+    const caller = await callerFor(profileRouter, "voter");
+    expect((await caller.claimVotes()).success).toBe(true);
+    expect((await resetDailyVotes()).status).toBe(200);
+    const afterReset = await readVote();
+    for (const site of ["mmohub", "arenaTop100", "topWebGames"]) {
+      await updateUserVoteForHandleVote(database, site, today, afterReset!.secret);
+    }
+    // Both a receipt retry and a different same-day receipt must stay consumed,
+    // even when delivered with the token rotated by the successful claim.
+    expect((await callback(today, "123", afterReset!.secret)).status).toBe(200);
+    expect((await callback(today, "124", afterReset!.secret)).status).toBe(200);
+    expect((await caller.claimVotes()).success).toBe(false);
+    expect(await readVote()).toMatchObject({
+      claimed: false,
+      topRankinGames: false,
+      topRankinGamesVoteId: null,
+      topRankinGamesVotedAt: today,
+      totalClaims: 1,
+    });
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, "voter"),
+      }),
+    ).toMatchObject({ reputationPoints: 1, reputationPointsTotal: 1 });
+  });
 
   it("clears yesterday's vote and rejects a fresh retry before and after reset", async () => {
     const database = await getTestDatabase();
