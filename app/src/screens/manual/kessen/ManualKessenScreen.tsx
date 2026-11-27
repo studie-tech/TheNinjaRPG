@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronDown, Swords } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Scale, Swords } from "lucide-react";
 import { useId, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -95,12 +95,20 @@ export function ManualKessenScreen() {
           build your own decks from the collection you gather. Lemu teaches the rules in
           two minutes on your first visit to the Card Hall.
         </p>
-        <Button asChild className="mt-3">
-          <Link href="/kessen">
-            <Swords className="mr-2 h-5 w-5" aria-hidden />
-            Open the Card Hall
-          </Link>
-        </Button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button asChild>
+            <Link href="/kessen">
+              <Swords className="mr-2 h-5 w-5" aria-hidden />
+              Open the Card Hall
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/manual/kessen/balance">
+              <Scale className="mr-2 h-5 w-5" aria-hidden />
+              Balance report
+            </Link>
+          </Button>
+        </div>
         <nav aria-label="On this page" className="mt-3">
           <p className="font-bold">On this page</p>
           <ul className="mt-1 flex flex-wrap gap-2">
@@ -633,7 +641,11 @@ const StaffReference = ({ catalog }: { catalog: KessenCatalog }) => {
         <p className="mt-2">
           Measurements come from AI self-play: thousands of seeded matches per pairing
           with the shipped decks. Rerun the simulations after changing card numbers,
-          knobs or NPC decks.
+          knobs or NPC decks. The{" "}
+          <Link href="/manual/kessen/balance" className="font-semibold underline">
+            balance report
+          </Link>{" "}
+          checks the live catalog against the balance guidelines on every visit.
         </p>
       </ContentBox>
     </>

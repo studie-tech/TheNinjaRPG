@@ -3,6 +3,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import { type ReactNode, useMemo } from "react";
+import * as client from "@/app/_trpc/client";
 import * as dialogComponents from "@/components/ui/dialog";
 import * as sortableList from "@/components/ui/sortable-list";
 import type { UserPatch } from "@/deltas/profile";
@@ -74,8 +75,8 @@ function testMocks() {
   return globals.__tutorialAssistantMocks;
 }
 const mocks = testMocks();
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
+function mockApi() {
+  Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
       profile: {
         getUser: {
@@ -104,8 +105,8 @@ vi.mock("@/app/_trpc/client", () => ({
       },
     },
     gameAsset: { getSceneAssets: { useQuery: () => ({ data: [] }) } },
-  },
-}));
+  });
+}
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
@@ -169,6 +170,7 @@ const assistantElement = () => (
 
 let close: (() => void) | undefined;
 beforeEach(() => {
+  mockApi();
   vi.spyOn(UserContext, "useUserData").mockImplementation(
     () =>
       ({

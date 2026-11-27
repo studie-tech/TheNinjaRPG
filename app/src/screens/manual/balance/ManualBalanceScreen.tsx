@@ -68,6 +68,11 @@ export function ManualBalanceScreen() {
       content: "Combat",
       timing: linkCell("/manual/combat"),
     },
+    {
+      content: "Kessen cards",
+      power: linkCell("/manual/kessen/balance#kessen-balance-cards"),
+      diversity: linkCell("/manual/kessen/balance#kessen-balance-factions"),
+    },
   ];
 
   // Setup table

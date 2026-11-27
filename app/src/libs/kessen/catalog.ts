@@ -179,6 +179,10 @@ export const VALUE_PREMIUM_MILLI: Record<KessenRarity, number> = {
 
 const SUMMON_VALUE_MILLI: Record<string, number> = { Sandworm: 3500, Crew: 3000 };
 
+/** Curve value of a Summon from `set`, in milli-points. */
+export const summonValueMilli = (set: string) =>
+  Object.hasOwn(SUMMON_VALUE_MILLI, set) ? (SUMMON_VALUE_MILLI[set] ?? 3000) : 3000;
+
 /**
  * Curve value (power + ability values) in milli-points; null for Infiltrators, whose
  * value depends on the board. A balanced card scores `provision * 1000 + premium`.
@@ -218,7 +222,7 @@ export const cardValueMilli = (card: KessenCard): number | null => {
         value += Math.min(6000, ability.x * 2250);
         break;
       case "summon":
-        value += SUMMON_VALUE_MILLI[ability.group] ?? 3000;
+        value += summonValueMilli(ability.group);
         break;
       case "revive":
         value += 6000 * (ability.times ?? 1);

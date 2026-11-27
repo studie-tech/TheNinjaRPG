@@ -107,6 +107,14 @@ it("links each balance data source from its content row and column", () => {
       "/manual/pvp_rank#matchmaking",
     ],
     ["Combat", "", "", "", "", "/manual/combat"],
+    [
+      "Kessen cards",
+      "",
+      "/manual/kessen/balance#kessen-balance-cards",
+      "",
+      "/manual/kessen/balance#kessen-balance-factions",
+      "",
+    ],
   ]);
   for (const link of view.getByRole("table").querySelectorAll("a")) {
     expect(link.querySelector("svg")?.getAttribute("class")).toContain("h-4 w-4");

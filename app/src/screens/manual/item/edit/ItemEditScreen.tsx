@@ -24,6 +24,11 @@ import {
 } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
+import {
+  type CardBalanceInput,
+  useCardBalanceDraft,
+  useCardMatchTest,
+} from "@/hooks/kessen/useCardBalanceDraft";
 import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
 import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
@@ -39,9 +44,14 @@ import { FurnitureViewsEditor } from "@/layout/FurnitureViewsEditor";
 import Image from "@/layout/Image";
 import { itemCardDisplay } from "@/layout/items/cardDisplay";
 import { KessenPackContentsEditor } from "@/layout/KessenPackContentsEditor";
+import {
+  CardBalancePanel,
+  CardBalanceSummary,
+} from "@/layout/kessen/balance/CardBalancePanel";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { LpcEquipmentFields } from "@/layout/LpcEquipmentFields";
+import { QueryError } from "@/layout/QueryError";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { isKessenPackId } from "@/libs/kessen/packs";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
@@ -227,27 +237,40 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
           {/* The card section sits above Save with a live face to check the art crop:
               beside the form where the editor is wide, above it where it is not. */}
           {isCard && (
-            <div className="@container col-span-full">
-              <div className="grid gap-3 @min-[560px]:grid-cols-[minmax(0,1fr)_160px]">
-                <CardStats form={form} disabled={isUpdating || !props.canSave} />
-                <div className="order-first @min-[560px]:sticky @min-[560px]:top-2 @min-[560px]:order-none @min-[560px]:self-start">
-                  <p className="mb-1 font-semibold text-sm">Card face preview</p>
-                  {cardPreview ? (
-                    <span className="block aspect-[5/7] w-[160px] max-w-full">
-                      <CardFace
-                        card={cardPreview}
-                        renderSize={160}
-                        className="w-full"
-                      />
-                    </span>
-                  ) : (
-                    <p className="text-muted-foreground text-sm">
-                      The preview appears once the card data is valid.
-                    </p>
-                  )}
+            <CardSection
+              saved={props.item}
+              draft={{
+                id: item.id,
+                name: itemName,
+                rarity: itemRarity,
+                cardData: itemCardData,
+              }}
+            >
+              {(summary) => (
+                <div className="grid gap-3 @min-[560px]:grid-cols-[minmax(0,1fr)_160px]">
+                  <CardStats form={form} disabled={isUpdating || !props.canSave} />
+                  <div className="order-first grid gap-2 @min-[560px]:sticky @min-[560px]:top-2 @min-[560px]:order-none @min-[560px]:self-start">
+                    <div>
+                      <p className="mb-1 font-semibold text-sm">Card face preview</p>
+                      {cardPreview ? (
+                        <span className="block aspect-[5/7] w-[160px] max-w-full">
+                          <CardFace
+                            card={cardPreview}
+                            renderSize={160}
+                            className="w-full"
+                          />
+                        </span>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">
+                          The preview appears once the card data is valid.
+                        </p>
+                      )}
+                    </div>
+                    {summary}
+                  </div>
                 </div>
-              </div>
-            </div>
+              )}
+            </CardSection>
           )}
           {isPack && (
             <PackSummary
@@ -345,6 +368,58 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
     </>
   );
 };
+
+/**
+ * The card section: the stats editor and preview from `children`, given the live balance
+ * summary for the preview column, then the full balance panel below them.
+ */
+export function CardSection({
+  saved,
+  draft,
+  children,
+}: {
+  saved: CardBalanceInput;
+  draft: CardBalanceInput;
+  children: (summary: React.ReactNode) => React.ReactNode;
+}) {
+  const catalog = useKessenCatalog();
+  const balance = useCardBalanceDraft(saved, draft, catalog.data?.cards);
+  const { test, run } = useCardMatchTest();
+  const { savedCatalog, savedCard, draftCard, savedFingerprint, analysis } = balance;
+  return (
+    <div className="@container col-span-full">
+      {children(catalog.data ? <CardBalanceSummary draft={balance} /> : null)}
+      {catalog.isError ? (
+        <QueryError
+          layout="panel"
+          message={`The card catalog could not be loaded: ${catalog.error?.message ?? "unknown error"}`}
+          isRetrying={catalog.isFetching}
+          onRetry={() => void catalog.refetch()}
+        />
+      ) : !catalog.data ? (
+        <Loader explanation="Loading the card catalog" />
+      ) : null}
+      {catalog.data ? (
+        <CardBalancePanel
+          draft={balance}
+          test={test}
+          canTest={!!savedCatalog && !!draftCard && !!analysis}
+          onTest={() => {
+            if (!savedCatalog || !draftCard || !savedFingerprint || !analysis) return;
+            void run({
+              savedCatalog,
+              draftCatalog: analysis.draftCatalog,
+              savedCard,
+              draftCard,
+              savedFingerprint,
+              draftFingerprint: analysis.draftFingerprint,
+            });
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 /** The card stats editor with the sets of the card catalog as options. */
 function CardStats(props: Omit<React.ComponentProps<typeof CardDataEditor>, "sets">) {

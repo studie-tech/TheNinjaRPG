@@ -72,9 +72,16 @@ import type {
   UnitDelta,
 } from "./types";
 
-/** Why `createMatch` would reject an input (an unknown leader or deck card); else null. */
-export const matchInputProblem = (input: CreateMatchInput): string | null => {
-  const library = new Map(input.cards.map((card) => [card.id, card]));
+/**
+ * Why `createMatch` would reject an input (an unknown leader or deck card); else null.
+ * Sweeps can supply one lookup of `input.cards` to avoid rebuilding it for every setup.
+ */
+export const matchInputProblem = (
+  input: CreateMatchInput,
+  library: ReadonlyMap<string, KessenCard> = new Map(
+    input.cards.map((card) => [card.id, card]),
+  ),
+): string | null => {
   for (const setup of input.seats) {
     if (setup.leaderId !== null && library.get(setup.leaderId)?.kind !== "LEADER") {
       return `Unknown leader ${setup.leaderId}`;

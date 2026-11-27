@@ -32,6 +32,7 @@ import { itemDatabaseFilter, itemRouter } from "@/server/api/routers/item";
 import { kessenCollectionRouter } from "@/server/api/routers/kessenCollection";
 import { getItemPurchasePeriodStart } from "@/utils/time";
 import { ItemValidator } from "@/validators/combat";
+import { CARD_ITEM_DEFAULTS } from "@/validators/itemCard";
 import { KESSEN_SEED_CATALOG } from "../../../libs/kessen/fixtures/catalog";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { beforeTransaction } from "../../../setup/statements";
@@ -530,6 +531,61 @@ describeWithDatabase("item router and Kessen goods", () => {
       const copy = await staff.clone({ id: packId });
       expect(copy.success).toBe(true);
       expect(isKessenPackId(copy.message)).toBe(true);
+    });
+  });
+  describe("staff card edits", () => {
+    const STAFF = "card-editor";
+
+    it("records the balance guidelines a card edit breaks and later clears", async () => {
+      const db = await getTestDatabase();
+      await resetTables(actionLog);
+      await insertUsers([
+        {
+          userId: STAFF,
+          username: "Card Editor",
+          role: "CONTENT-ADMIN",
+          status: "AWAKE",
+        },
+      ]);
+      const card = KESSEN_SEED_CATALOG.find((entry) => entry.name === "Cryverin");
+      if (!card) throw new Error("No Cryverin");
+      await insertItems([
+        {
+          ...CARD_ITEM_DEFAULTS,
+          id: card.id,
+          name: card.name,
+          itemType: "CARD",
+          rarity: card.rarity,
+          cardData: kessenCardToCardData(card),
+        },
+      ]);
+      const staff = await callerFor(itemRouter, STAFF);
+      const save = async (power: number) => {
+        const row = await db.query.item.findFirst({ where: eq(item.id, card.id) });
+        if (!row) throw new Error("No card row");
+        return staff.update({
+          id: card.id,
+          data: ItemValidator.parse({
+            ...row,
+            cardData: { ...kessenCardToCardData(card), power },
+          }),
+        });
+      };
+      const breakLine =
+        "Balance break: Value 9.0 is 3.0 over the 6.0 its cost allows (limit 1.5)";
+
+      const raised = await save(9);
+      expect(raised.success).toBe(true);
+      expect(raised.message).toContain(breakLine);
+      const restored = await save(card.power);
+      expect(restored.message).toContain(
+        breakLine.replace("Balance break", "Balance cleared"),
+      );
+      const logs = await db
+        .select({ changes: actionLog.changes })
+        .from(actionLog)
+        .where(eq(actionLog.relatedId, card.id));
+      expect(logs.flatMap((log) => log.changes as string[])).toContain(breakLine);
     });
   });
 });
