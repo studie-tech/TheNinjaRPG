@@ -141,7 +141,7 @@ describeWithDatabase("confirmed progression cache responses", () => {
         .update(userData)
         .set({
           bloodlineId: "cache-line",
-          bloodright: [{ skillId: "old-tier", cost: 77 }],
+          bloodright: [{ optionId: "old-tier", cost: 77 }],
           bloodrightSpent: 77,
         })
         .where(eq(userData.userId, userId));

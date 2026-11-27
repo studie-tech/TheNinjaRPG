@@ -404,7 +404,8 @@ describe("masked battle payload", () => {
             id: "line",
             name: "Visible bloodline",
             effects: [],
-            bloodrightTiers: [
+            bloodrightTiers: [{ id: "private-authoring-relation" }],
+            bloodrightOptions: [
               { id: "hidden-tier", hidden: true, description: "Secret catalog" },
             ],
           } as unknown as Bloodline,

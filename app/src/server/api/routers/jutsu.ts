@@ -157,6 +157,7 @@ import {
   insertUserJutsuForStartTraining,
   listActionLogForGetRecentTransfers,
   listBloodlineForGetJutsuRelations,
+  listBloodrightForJutsuRelations,
   listItemForGetJutsuRelations,
   listJutsuForGetAll,
   listJutsuForGetAllNames,
@@ -265,6 +266,7 @@ import {
 import { calculateContentDiff } from "@/utils/diff";
 import { fedJutsuLoadouts, getQueueTotalCapacity } from "@/utils/paypal";
 import {
+  canAccessHiddenSkillTree,
   canChangeContent,
   canEditJutsus,
   canModerateReskin,
@@ -842,12 +844,14 @@ export const jutsuRouter = createTRPCRouter({
           await selectJutsuForDelete(tx, input);
           const children = await selectJutsuForDelete2(tx, input);
           if (children.length) return false;
-          await deleteJutsuForDelete(tx, input);
-          return true;
+          const result = await deleteJutsuForDelete(tx, input);
+          return result.rowsAffected === 1;
         }),
       );
       if (!deleted)
-        return errorResponse("Unlink or delete its reskins before deleting this jutsu");
+        return errorResponse(
+          "Unlink or delete its reskins and Bloodright options before deleting this jutsu",
+        );
       await Promise.all([
         deleteUserJutsuForDelete(ctx.drizzle, input),
         insertActionLogForDelete(ctx.drizzle, ctx, entry),
@@ -1178,7 +1182,7 @@ export const jutsuRouter = createTRPCRouter({
       if (
         input.data.requiredSkillId &&
         !input.data.reskinParentJutsuId &&
-        requiredSkill?.pathType !== "SKILL"
+        !requiredSkill
       ) {
         return errorResponse("Select a valid SkillTree skill entry");
       }
@@ -2446,8 +2450,17 @@ export const jutsuRouter = createTRPCRouter({
     })
     .input(z.object({ jutsuId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const results = await getJutsuRelations(ctx.drizzle, input.jutsuId);
-      return results;
+      const [results, role] = await Promise.all([
+        getJutsuRelations(ctx.drizzle, input.jutsuId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
+      ]);
+      return {
+        ...results,
+        bloodrightOptions: results.bloodrightOptions.filter(
+          (option) =>
+            canAccessHiddenSkillTree(role) || (!option.hidden && !option.jutsuHidden),
+        ),
+      };
     }),
 });
 
@@ -2465,6 +2478,7 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
     childEvolutions,
     linkedReskins,
     playerReskins,
+    bloodrightOptions,
   ] = await Promise.all([
     listJutsuForGetJutsuRelations(client, jutsuId),
     listBloodlineForGetJutsuRelations(client, jutsuId),
@@ -2477,6 +2491,7 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
     // Player-owned reskins reference the jutsu by id; staff re-point them with
     // updateReskin before the jutsu can be deleted.
     selectJutsuReskinForGetJutsuRelations(client, jutsuId),
+    listBloodrightForJutsuRelations(client, jutsuId),
   ]);
 
   return {
@@ -2489,6 +2504,7 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
     childEvolutions,
     linkedReskins,
     playerReskins,
+    bloodrightOptions,
   };
 };
 /** Label each piece of content that injects a jutsu into battle. */
@@ -2507,6 +2523,7 @@ const describeJutsuRelations = (relations: JutsuRelations) => [
   ...relations.childEvolutions.map((e) => `Evolution: ${e.name}`),
   ...relations.linkedReskins.map((e) => `Reskin: ${e.name}`),
   ...relations.playerReskins.map((r) => `Player reskin: ${r.name}`),
+  ...relations.bloodrightOptions.map((option) => `Bloodright: ${option.name}`),
 ];
 
 export type JutsuRelations = Awaited<ReturnType<typeof getJutsuRelations>>;

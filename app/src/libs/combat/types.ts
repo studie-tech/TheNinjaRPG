@@ -17,6 +17,7 @@ import type {
   AnbuSquad,
   Bloodline,
   BloodlineReskin,
+  BloodrightOption,
   Bounty,
   BountySignup,
   Clan,
@@ -65,6 +66,7 @@ import type {
 import type { TerritoryBattleState } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import type { ActivityCompletions } from "@/server/utils/achievementObjectives";
+import type { BloodrightAppliedChange } from "@/validators/bloodright";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
 import type { BossArrival } from "@/validators/coop";
 import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
@@ -166,7 +168,11 @@ export type CombatQueryUser = {
     raidBuffs?: UserRaidBuff[];
     /** Completion receipts loaded only for settlement before entering combat. */
     cookingJobs?: { id: string; experience: number; finishesAt: Date }[];
-    bloodline: (Bloodline & { bloodrightTiers?: SkillTree[] }) | null;
+    bloodline:
+      | (Bloodline & {
+          bloodrightOptions?: (BloodrightOption & { jutsu: Jutsu | null })[];
+        })
+      | null;
     activeReskin?: BloodlineReskin | null; // For bloodline reskinning
     sageMode?: SageMode | null; // Sage mode (must be manually activated)
     // Present when processUsersForBattle is re-run from live BattleUserState
@@ -275,7 +281,7 @@ export type CombatUserFields = {
   }[];
   /** Distinct tag types the user applied this battle (for tag_usage_win tracker). Array not Set — serializes to JSON. */
   usedTagTypes: EffectType[];
-  /** Enemy-targeted skill and bloodright sources preloaded for on-action application. */
+  /** Enemy-targeted skill sources preloaded for on-action application. */
   enemySkillIds?: string[];
   pvpBoostPercent?: number;
   /** Activated skills captured at initiation for use gates, including injected jutsu. */
@@ -538,6 +544,7 @@ export type ExtraState = {
   /** Accompanying pet identities frozen at initiation, including pets that later retreat. */
   petIdsByOwner?: Record<string, string>;
   // Static data - never changes during battle (looked up by ID)
+  bloodrightChanges?: Record<string, Record<string, BloodrightAppliedChange[]>>;
   jutsus: Record<string, BattleJutsu>; // jutsuId -> Jutsu (includes user jutsus + injectable jutsus)
   jutsuReskins: Record<string, JutsuReskin>; // reskinId -> Reskin data
   items: Record<string, BattleItem>; // itemId -> Item

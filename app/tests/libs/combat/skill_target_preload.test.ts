@@ -5,15 +5,10 @@ import { IncreaseDamageGivenTag, PoisonTag } from "@/validators/combat";
 import { flatCombatStats, makeJutsu } from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
-const skill = (
-  id: string,
-  target: SkillTree["target"],
-  pathType: SkillTree["pathType"] = "SKILL",
-) =>
+const skill = (id: string, target: SkillTree["target"]) =>
   ({
     id,
     target,
-    pathType,
     effects: [
       target === "ENEMIES" ? PoisonTag.parse({}) : IncreaseDamageGivenTag.parse({}),
     ],
@@ -40,10 +35,9 @@ const preload = (
 ) => preloadBattle(users, { battleType, leftSideUserIds: ["caster", "ally"] });
 
 describe("skill targeting at battle initiation", () => {
-  it("preloads enemy skill and purchased bloodright without applying them at initiation", async () => {
+  it("preloads enemy skills without applying them at initiation", async () => {
     const caster = user("caster");
     const enemySkill = skill("enemy-skill", "ENEMIES");
-    const bloodright = skill("bloodright", "ENEMIES", "BLOODRIGHT");
     caster.userSkills = [
       {
         id: "owned",
@@ -54,17 +48,10 @@ describe("skill targeting at battle initiation", () => {
         skill: enemySkill,
       },
     ];
-    caster.bloodline = {
-      id: "line",
-      effects: [],
-      bloodrightTiers: [bloodright],
-    } as unknown as CombatQueryUser["bloodline"];
-    caster.bloodright = [{ skillId: bloodright.id, cost: 10 }];
     const result = await preload([caster, user("enemy")]);
-    expect(result.usersState[0]!.enemySkillIds).toEqual([enemySkill.id, bloodright.id]);
+    expect(result.usersState[0]!.enemySkillIds).toEqual([enemySkill.id]);
     expect(result.extraState.enemySkills).toEqual({
       [enemySkill.id]: enemySkill.effects,
-      [bloodright.id]: bloodright.effects,
     });
     expect(result.userEffects.filter((e) => e.fromType === "skill")).toHaveLength(0);
   });

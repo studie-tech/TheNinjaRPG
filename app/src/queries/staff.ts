@@ -429,7 +429,7 @@ export const updateUserDataForCloneUserForDebug = (
     money: number;
     bank: number;
     seichiSilver: number;
-    bloodright: { skillId: string; cost: number }[];
+    bloodright: { optionId: string; cost: number }[];
     bloodrightSpent: number;
     experience: number;
     earnedExperience: number;

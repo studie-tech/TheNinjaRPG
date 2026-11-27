@@ -27,6 +27,7 @@ const STORED_CATALOG_KEYS = [
   "jutsuReskins",
   "items",
   "bloodlines",
+  "bloodrightChanges",
   "enemySkills",
   "sageModes",
   "villages",

@@ -2,8 +2,20 @@
  * Database access for skill tree; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { and, eq, gt, ne } from "drizzle-orm";
-import { userData, userItem, userSkill } from "@/drizzle/schema";
+import { and, asc, eq, gt, gte, inArray, ne, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { COST_SKILL_RESET, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import type { SkillTree } from "@/drizzle/schema";
+import {
+  actionLog,
+  item,
+  jutsu,
+  skillTree,
+  skillTreeFolder,
+  userData,
+  userItem,
+  userSkill,
+} from "@/drizzle/schema";
 import type { MasterySources } from "@/libs/mastery";
 import type { DrizzleClient } from "@/server/db";
 import { getNextUserSnapshotAt } from "@/utils/time";
@@ -89,23 +101,10 @@ export const fetchMasterySources = async (
   };
 };
 
-import { asc, gte, inArray, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { COST_SKILL_RESET, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import {
-  actionLog,
-  bloodline,
-  item,
-  jutsu,
-  skillTree,
-  skillTreeFolder,
-} from "@/drizzle/schema";
-
-/** Build the `skillTree` listing for `getAllNames`, using predicates on `pathType`. */
+/** Build the `skillTree` listing for `getAllNames`. */
 export const listSkillTreeForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
   client.query.skillTree.findMany({
     columns: { id: true, name: true, skillType: true, hidden: true },
-    where: eq(skillTree.pathType, "SKILL"),
     with: { folder: true },
     orderBy: (table, { asc }) => [asc(table.name)],
   });
@@ -162,21 +161,10 @@ export const insertUserSkillForPurchaseSkill = (
     .values({ ...row, activated: true })
     .onDuplicateKeyUpdate({ set: { activated: true } });
 
-/** Build a bloodline ID lookup to validate its existence. */
-export const findBloodlineIdentityById = (
-  client: Pick<DrizzleClient, "query">,
-  bloodlineId: string,
-) =>
-  client.query.bloodline.findFirst({
-    where: eq(bloodline.id, bloodlineId),
-    columns: { id: true },
-  });
-
 /** Build the `skillTree` insert for `create`. */
 export const insertSkillTreeForCreate = (
   client: Pick<DrizzleClient, "insert">,
   id: string,
-  input: { bloodlineId?: undefined | string } | undefined,
 ) =>
   client.insert(skillTree).values({
     id,
@@ -188,8 +176,6 @@ export const insertSkillTreeForCreate = (
     tier: 1,
     requiredSkillIds: [],
     costSkillPoints: 1,
-    pathType: input?.bloodlineId ? "BLOODRIGHT" : "SKILL",
-    bloodlineId: input?.bloodlineId ?? null,
     hidden: true,
     skillType: "DEFAULT",
   });
@@ -223,16 +209,6 @@ export const listSkillTreeForUpdate = (
     where: inArray(skillTree.id, input.data.requiredSkillIds),
   });
 
-/** Build the `userData` lookup for `update`, selecting only `userId`, using predicates on `bloodright`. */
-export const findUserDataForUpdate = (
-  client: Pick<DrizzleClient, "query">,
-  input: { id: string },
-) =>
-  client.query.userData.findFirst({
-    where: sql`JSON_SEARCH(${userData.bloodright}, 'one', ${input.id}, NULL, '$[*].skillId') IS NOT NULL`,
-    columns: { userId: true },
-  });
-
 /** Build the `skillTree` listing for `update`, using predicates on `requiredSkillIds`. */
 export const listSkillTreeForUpdate2 = (
   client: Pick<DrizzleClient, "query">,
@@ -240,43 +216,32 @@ export const listSkillTreeForUpdate2 = (
 ) =>
   client.query.skillTree.findMany({
     where: sql`JSON_CONTAINS(${skillTree.requiredSkillIds}, ${JSON.stringify(input.id)})`,
-    columns: { id: true, tier: true, bloodlineId: true, pathType: true },
+    columns: { id: true, tier: true },
   });
 
-/** Build the `skillTree` update for `update`, setting `updatedAt`, using predicates on `id` and `bloodright`. */
+/** Build the `skillTree` update for `update`, setting `updatedAt`, using predicates on `id` and `updatedAt`. */
 export const updateSkillTreeForUpdate = (
   client: Pick<DrizzleClient, "update">,
   data: Pick<
-    import("@/drizzle/schema").SkillTree,
+    SkillTree,
     | "name"
     | "description"
     | "image"
     | "target"
-    | "bloodlineId"
     | "effects"
     | "tier"
     | "requiredSkillIds"
     | "costSkillPoints"
-    | "pathType"
-    | "seichiSilverCost"
     | "skillType"
     | "folderId"
   > & { hidden: undefined | false | true },
-  skill: { updatedAt: Date; pathType: "SKILL" | "BLOODRIGHT"; id: string },
+  skill: { updatedAt: Date; id: string },
   input: { id: string },
-  changesHierarchy: false | true,
 ) =>
   client
     .update(skillTree)
     .set({ ...data, updatedAt: getNextUserSnapshotAt(skill.updatedAt) })
-    .where(
-      and(
-        eq(skillTree.id, input.id),
-        changesHierarchy && skill.pathType === "BLOODRIGHT"
-          ? sql`NOT EXISTS (SELECT 1 FROM ${userData} WHERE JSON_SEARCH(${userData.bloodright}, 'one', ${skill.id}, NULL, '$[*].skillId') IS NOT NULL)`
-          : undefined,
-      ),
-    );
+    .where(and(eq(skillTree.id, input.id), eq(skillTree.updatedAt, skill.updatedAt)));
 
 /** Build the `skillTree` lookup for `delete`, using predicates on `id`. */
 export const findSkillTreeForDelete = (
@@ -471,15 +436,10 @@ export const listSkillTreeFolderForGetAllFolders = (
     orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
   });
 
-/** List folder assignments to distinguish bloodright-only folders from skill folders. */
-export const listSkillTreeFolderAssignments = (client: Pick<DrizzleClient, "query">) =>
-  client.query.skillTree.findMany({ columns: { folderId: true, pathType: true } });
-
-/** Build the `skillTree` listing for `getFolderStats`, using predicates on `pathType`. */
+/** Build the `skillTree` listing for `getFolderStats`. */
 export const listSkillTreeForGetFolderStats = (client: Pick<DrizzleClient, "query">) =>
   client.query.skillTree.findMany({
     columns: { id: true, folderId: true, hidden: true, skillType: true },
-    where: eq(skillTree.pathType, "SKILL"),
     with: { folder: true },
   });
 
@@ -564,13 +524,13 @@ export const updateSkillTreeFolderForReorderFolders = (
     .set({ order, updatedAt: new Date() })
     .where(eq(skillTreeFolder.id, id));
 
-/** Build the `skillTree` lookup, selecting only `id` and `pathType`, using predicates on `id`. */
+/** Build the `skillTree` lookup, selecting only `id`, using predicates on `id`. */
 export const findRequiredSkillTreeEntry = (
   client: Pick<DrizzleClient, "query">,
   input: { data: { requiredSkillId: string } },
 ) =>
   client.query.skillTree.findFirst({
-    columns: { id: true, pathType: true },
+    columns: { id: true },
     where: eq(skillTree.id, input.data.requiredSkillId),
   });
 

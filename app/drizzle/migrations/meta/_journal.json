@@ -1366,6 +1366,13 @@
       "when": 1795686182049,
       "tag": "0195_kessen_card_sets",
       "breakpoints": false
+    },
+    {
+      "idx": 196,
+      "version": "5",
+      "when": 1795711831662,
+      "tag": "0196_plain_prowler",
+      "breakpoints": false
     }
   ]
 }

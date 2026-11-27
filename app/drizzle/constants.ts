@@ -4855,10 +4855,9 @@ export const FEDERAL_MONTHLY_USD_CENTS = {
   GOLD: 1500,
   DIAMOND: 2500,
 } as const satisfies Record<Exclude<FederalStatus, "NONE">, number>;
-export const SkillTreePathTypes = ["SKILL", "BLOODRIGHT"] as const;
 /** Highest tier a skill tree entry can sit on. */
 export const SKILL_TREE_MAX_TIER = 10;
-export const MAX_BLOODRIGHT_TIERS = 5;
+export const MAX_BLOODRIGHT_OPTIONS = 5;
 
 /** Defaults are snapshotted when an objective village war is approved. */
 export const OBJECTIVE_WAR_DEFAULTS = {

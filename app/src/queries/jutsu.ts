@@ -33,6 +33,7 @@ import {
   aiProfile,
   bloodline,
   bloodlineReskin,
+  bloodrightOption,
   item,
   jutsu,
   jutsuLoadout,
@@ -549,7 +550,31 @@ export const selectJutsuForDelete2 = (
 export const deleteJutsuForDelete = (
   client: Pick<DrizzleClient, "delete">,
   input: { id: string },
-) => client.delete(jutsu).where(eq(jutsu.id, input.id));
+) =>
+  client
+    .delete(jutsu)
+    .where(
+      and(
+        eq(jutsu.id, input.id),
+        sql`NOT EXISTS (SELECT 1 FROM ${bloodrightOption} WHERE ${bloodrightOption.jutsuId} = ${input.id})`,
+      ),
+    );
+
+/** List dependent Bloodright options that must be removed before their source jutsu. */
+export const listBloodrightForJutsuRelations = (
+  client: Pick<DrizzleClient, "select">,
+  jutsuId: string,
+) =>
+  client
+    .select({
+      id: bloodrightOption.id,
+      name: bloodrightOption.name,
+      hidden: bloodrightOption.hidden,
+      jutsuHidden: jutsu.hidden,
+    })
+    .from(bloodrightOption)
+    .innerJoin(jutsu, eq(jutsu.id, bloodrightOption.jutsuId))
+    .where(eq(bloodrightOption.jutsuId, jutsuId));
 
 /** Build the `userJutsu` deletion for `delete`, using predicates on `jutsuId`. */
 export const deleteUserJutsuForDelete = (

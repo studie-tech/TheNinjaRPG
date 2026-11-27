@@ -30,6 +30,7 @@ import {
   TEMPORAL_AP_DELTA,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
+import { applyBloodrightChanges } from "@/libs/bloodrightEffects";
 import type { BattleJutsu } from "@/libs/combat/catalog";
 import {
   BARRIER_DAMAGE_TAG_TYPES,
@@ -271,7 +272,7 @@ export const availableUserActions = (
             return !isElemental;
           })
           .map((uj) => {
-            const action = userJutsuToAction(uj, battle);
+            const action = userJutsuToAction(uj, battle, user.userId);
             if (uj.jutsuId === SAGE_MODE_ACTIVATION_JUTSU_ID && user.sageModeId) {
               const mode = battle.extraState.sageModes?.[user.sageModeId];
               action.image = mode?.image ?? action.image;
@@ -818,13 +819,19 @@ export const userItemToAction = (
 export const userJutsuToAction = (
   userjutsu: BattleUserJutsu,
   battle: ReturnedBattle | CompleteBattle,
+  userId?: string,
 ) => {
   const base = getJutsu(battle, userjutsu.jutsuId);
   if (!base) throw new Error(`Jutsu not found: ${userjutsu.jutsuId}`);
-  const jutsu = applyLinkedJutsuReskin(
+  const inherited = applyLinkedJutsuReskin(
     base,
     userjutsu.linkedReskinId ? getJutsu(battle, userjutsu.linkedReskinId) : null,
   );
+  const changes = userId
+    ? battle.extraState.bloodrightChanges?.[userId]?.[base.id]
+    : undefined;
+  const effects = changes ? applyBloodrightChanges(inherited.effects, changes) : null;
+  const jutsu = effects ? { ...inherited, effects } : inherited;
 
   // Personal reskins override text and images while retaining linked effect cosmetics.
   const reskin = getJutsuReskin(battle, userjutsu.reskinId);

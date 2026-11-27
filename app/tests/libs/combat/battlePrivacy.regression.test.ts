@@ -161,7 +161,7 @@ describe("battle privacy regressions", () => {
         id: "line",
         name: "Visible bloodline",
         effects: [structuredClone(authored)],
-        bloodrightTiers: [],
+        bloodrightOptions: [],
       },
       items: [
         {

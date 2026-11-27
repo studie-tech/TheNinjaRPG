@@ -77,6 +77,7 @@ import {
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getReskinnedBloodline } from "@/libs/bloodline";
+import { buildBloodrightChanges } from "@/libs/bloodrightEffects";
 import type { CaravanBattleState } from "@/libs/caravan";
 import {
   availableUserActions,
@@ -220,6 +221,10 @@ import { isActiveEventEntrant } from "@/libs/tournament/events";
 import { getBiomeFromTileType } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import { listAiTransformations } from "@/queries/ai";
+import {
+  listBattleBloodrightJutsus,
+  listBloodrightJutsuIdentities,
+} from "@/queries/bloodright";
 import {
   buildQueuedTrainingClaim,
   deleteBattleById,
@@ -2203,6 +2208,8 @@ export const initiateBattle = async (
     dungeonEntryData,
     aiTransformations,
     patrolHome,
+    bloodrightJutsuIdentities,
+    bloodrightJutsus,
   ] = await Promise.all([
     info.territoryWar ??
       (battleType === "COMBAT" && sector !== undefined
@@ -2274,6 +2281,17 @@ export const initiateBattle = async (
     battleType === "COMBAT" && sector !== undefined
       ? fetchVillageDutyHome(client, sector)
       : undefined,
+    // Bloodright inheritance is resolved during initiation, including injected and lobby jutsu.
+    !RankedBattleTypes.includes(battleType)
+      ? listBloodrightJutsuIdentities(client)
+      : [],
+    !RankedBattleTypes.includes(battleType)
+      ? listBattleBloodrightJutsus(client, [
+          ...userIds,
+          ...targetIds,
+          ...(info.villageDuty ? [info.villageDuty.userId] : []),
+        ])
+      : [],
   ]);
 
   // All map PvP paths share this barrier, including failed robbery battles and scripted callers.
@@ -3412,6 +3430,41 @@ export const initiateBattle = async (
     queueUpdate.updatedAt = sql`CASE WHEN ${userData.userId} = ${actionActor.userId} THEN ${nextSnapshotSql(userData.updatedAt)} ELSE ${queueUpdate.updatedAt ?? userData.updatedAt} END`;
   }
 
+  // Actor-specific copies keep one player's purchases out of every other loadout.
+  if (!RankedBattleTypes.includes(battleType)) {
+    extraState.bloodrightChanges = {};
+    const catalog = [
+      ...bloodrightJutsus,
+      ...Object.values(extraState.jutsus),
+      ...injectableJutsus,
+    ];
+    for (const user of users) {
+      const actors = usersState.filter(
+        (actor) =>
+          actor.controllerId === user.userId &&
+          !actor.isSummon &&
+          ((actor.isOriginal && (!actor.isAi || actor.isVillageDutyCopy)) ||
+            (!user.isAi && AutoBattleTypes.includes(battleType))),
+      );
+      if (!actors.length) continue;
+      const options = (user.bloodline?.bloodrightOptions ?? []).filter(
+        (option) =>
+          option.bloodlineId === user.bloodlineId &&
+          option.jutsu?.bloodlineId === user.bloodlineId &&
+          user.bloodright.some((entry) => entry.optionId === option.id),
+      );
+      if (options.length) {
+        const changes = buildBloodrightChanges(
+          catalog,
+          options,
+          bloodrightJutsuIdentities,
+        );
+        for (const actor of actors)
+          extraState.bloodrightChanges[actor.userId] = changes;
+      }
+    }
+  }
+
   // Capture injectable jutsu availability for the controller's action prediction.
   for (const user of usersState) {
     user.skillLockedJutsuIds =
@@ -4249,23 +4302,6 @@ export const processUsersForBattle = async (
       });
     }
 
-    // Bloodright is preloaded at initiation and uses the same passive effect pipeline.
-    for (const tier of inputUser.bloodline?.bloodrightTiers ?? []) {
-      if (
-        tier.pathType === "BLOODRIGHT" &&
-        user.bloodright.some((entry) => entry.skillId === tier.id)
-      ) {
-        user.userSkills.push({
-          id: tier.id,
-          userId: user.userId,
-          skillId: tier.id,
-          activated: true,
-          purchasedAt: new Date(),
-          skill: tier,
-        });
-      }
-    }
-
     // Add skill tree effects
     if (user.userSkills && user.userSkills.length > 0 && !isRankedBattle) {
       user.userSkills.forEach(
@@ -4705,7 +4741,8 @@ export const processUsersForBattle = async (
       user.bloodlineId &&
       !extraState.bloodlines[user.bloodlineId]
     ) {
-      extraState.bloodlines[user.bloodlineId] = user.bloodline;
+      const { bloodrightOptions: _options, ...bloodline } = user.bloodline;
+      extraState.bloodlines[user.bloodlineId] = bloodline;
     }
 
     // Add sage mode definition (user carries sageModeId + sageMasteryExperience on state)

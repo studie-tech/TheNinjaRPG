@@ -269,7 +269,7 @@ const RelationRow: React.FC<{ name: string; href: string; className?: string }> 
 
 /** List related content with a count and direct links to its editors. */
 const RelationSection: React.FC<RelationSectionProps> = (props) => {
-  const { name, data, route, rowClassName } = props;
+  const { name, data, route, rowClassName, isCollection } = props;
   return (
     <div>
       <h5 className="mb-1 font-medium text-muted-foreground text-sm">
@@ -280,7 +280,7 @@ const RelationSection: React.FC<RelationSectionProps> = (props) => {
           <RelationRow
             key={ref.id}
             name={ref.name}
-            href={`${route}/${ref.id}`}
+            href={isCollection ? route : `${route}/${ref.id}`}
             className={rowClassName}
           />
         ))}
@@ -1125,6 +1125,7 @@ const renderJutsuRelations = (relations?: JutsuRelations) => {
     aiUsingJutsu,
     questsUsingJutsu,
     playerReskins,
+    bloodrightOptions,
   } = relations;
 
   // Define relation configurations with their specific routes
@@ -1163,6 +1164,12 @@ const renderJutsuRelations = (relations?: JutsuRelations) => {
       name: "Player Reskins",
       data: playerReskins,
       route: "/manual/jutsu/reskins/edit",
+    },
+    {
+      name: "Bloodright Options",
+      data: bloodrightOptions,
+      route: "/manual/bloodright",
+      isCollection: true,
     },
   ];
 
@@ -1393,6 +1400,7 @@ interface RelationSectionProps {
   data: { id: string; name: string }[];
   route: string;
   rowClassName?: string;
+  isCollection?: boolean;
 }
 
 type AiBossFight = RouterOutputs["ai"]["getBossFight"];

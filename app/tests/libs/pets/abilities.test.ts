@@ -157,8 +157,6 @@ describe("pet ability eligibility and shared power budget", () => {
     { target: "ALLIES" },
     { target: "ENEMIES" },
     { skillType: "SPECIAL" },
-    { pathType: "BLOODRIGHT" },
-    { bloodlineId: "line" },
     { requiredSkillIds: ["prerequisite"] },
     { effects: [SummonTag.parse({ aiId: "not-preloaded" })] },
   ] satisfies Partial<SkillTree>[])(
