@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -247,14 +247,45 @@ function KessenHall() {
   const [duelError, setDuelError] = useState<string | null>(null);
   const queuePolling = useRankedQueuePolling(lobby, (found) => setDuelId(found));
 
-  if (!isClerkLoaded) return <Loader explanation="Loading user data" />;
+  const selectTab = (option: KessenTab) => {
+    safeLocalStorageSetItem(TAB_STORAGE_KEY, option);
+    // The section link has done its job; a reload reopens the section chosen last.
+    if (linkedTab) router.replace("/kessen", { scroll: false });
+    setTab(option);
+    setOpenedDeck(null);
+    // A plain visit to Decks reopens the edits in progress, not the deck opened last.
+    setDeckFocus(null);
+    setLeftTable(false);
+  };
+  const introTabs = (
+    <HallTabs current={tab} options={INTRO_TABS} onSelect={selectTab} />
+  );
+  // The public reference needs neither a character nor the hall; its catalog sections
+  // handle loading and failures themselves. Loaded halls give open tables priority.
+  if (tab === "Rules" && (!isClerkLoaded || !userId || !hub || !catalog)) {
+    return <KessenRules tabs={introTabs} onPlay={() => selectTab("Play")} />;
+  }
+  if (!isClerkLoaded) {
+    return (
+      <HallBox tabs={introTabs}>
+        <Loader explanation="Loading user data" />
+      </HallBox>
+    );
+  }
   if (!userId) {
     // A signed-in player whose profile did not load gets the reason and a retry; the
     // profile query does not retry on its own, so its error state is stable.
-    if (profileStatus === "pending") return <Loader explanation="Loading user data" />;
-    if (profileStatus !== "error") return <NoCharacter />;
+    if (profileStatus === "pending") {
+      return (
+        <HallBox tabs={introTabs}>
+          <Loader explanation="Loading user data" />
+        </HallBox>
+      );
+    }
+    if (profileStatus !== "error") return <NoCharacter tabs={introTabs} />;
     return (
       <HallError
+        tabs={introTabs}
         message="Your character could not be loaded. Try again in a moment."
         onRetry={() => void refreshUser()}
       />
@@ -265,12 +296,19 @@ function KessenHall() {
   if ((!hub && hubQuery.isError) || (!catalog && catalogQuery.isError)) {
     return (
       <HallError
+        tabs={introTabs}
         message={`The Card Hall could not be loaded: ${(hubQuery.error ?? catalogQuery.error)?.message ?? "unknown error"}`}
         onRetry={() => void Promise.all([hubQuery.refetch(), catalogQuery.refetch()])}
       />
     );
   }
-  if (!hub || !catalog) return <Loader explanation="Opening the Card Hall" />;
+  if (!hub || !catalog) {
+    return (
+      <HallBox tabs={introTabs}>
+        <Loader explanation="Opening the Card Hall" />
+      </HallBox>
+    );
+  }
 
   const lookup = catalogLookup(catalog.cards);
   const summaries = hub.decks.map((deck) => summarizeDeck(deck, lookup, hub.owned));
@@ -285,17 +323,6 @@ function KessenHall() {
   const packCount = ownedPacks.reduce((sum, pack) => sum + pack.quantity, 0);
   const incomingChallenges =
     lobby?.challenges.filter((challenge) => !challenge.outgoing).length ?? 0;
-
-  const selectTab = (option: KessenTab) => {
-    safeLocalStorageSetItem(TAB_STORAGE_KEY, option);
-    // The section link has done its job; a reload reopens the section chosen last.
-    if (linkedTab) router.replace("/kessen", { scroll: false });
-    setTab(option);
-    setOpenedDeck(null);
-    // A plain visit to Decks reopens the edits in progress, not the deck opened last.
-    setDeckFocus(null);
-    setLeftTable(false);
-  };
 
   /** Opens the Decks tab on a saved deck and names it where the focus lands. */
   const openDeck = (deck: { id: string; name: string } | null) => {
@@ -988,8 +1015,16 @@ function KessenHall() {
 }
 
 /** A hall that could not load: the reason and a retry. */
-const HallError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
-  <HallBox>
+const HallError = ({
+  message,
+  onRetry,
+  tabs,
+}: {
+  message: string;
+  onRetry: () => void;
+  tabs: ReactNode;
+}) => (
+  <HallBox tabs={tabs}>
     <section
       className="flex flex-col items-center gap-2 py-6 text-center"
       aria-labelledby="kessen-hall-error"
@@ -1037,8 +1072,8 @@ const MatchUnavailable = ({
 );
 
 /** A signed-in account without a character: the cards belong to a character. */
-const NoCharacter = () => (
-  <HallBox>
+const NoCharacter = ({ tabs }: { tabs: ReactNode }) => (
+  <HallBox tabs={tabs}>
     <EmptyState
       icon={Swords}
       title="Sit at the war table"

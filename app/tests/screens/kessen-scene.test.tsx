@@ -153,6 +153,60 @@ function Screen() {
   );
 }
 
+it.each([
+  ["session loading", "Loading user data"],
+  ["profile loading", "Loading user data"],
+  ["no character", "Create a character"],
+  ["profile error", "Your character could not be loaded. Try again in a moment."],
+  ["hub loading", "Opening the Card Hall"],
+  ["hub error", "The Card Hall could not be loaded: hub unavailable"],
+  ["catalog loading", "Opening the Card Hall"],
+  ["catalog error", "The Card Hall could not be loaded: catalog unavailable"],
+])("keeps Rules accessible during %s while Play retains its guard", (state, guard) => {
+  params.set("tab", "rules");
+  mockUserContextValue({
+    data:
+      state.startsWith("profile") || state === "no character"
+        ? undefined
+        : { userId: "player", role: "USER" },
+    isClerkLoaded: state !== "session loading",
+    isSignedIn: true,
+    status:
+      state === "profile loading"
+        ? "pending"
+        : state === "profile error"
+          ? "error"
+          : "success",
+  });
+  const catalog = {
+    data: state.startsWith("catalog") ? undefined : { cards: [], packs: [] },
+    isError: state === "catalog error",
+    error: new Error("catalog unavailable"),
+    refetch: vi.fn(),
+  };
+  vi.spyOn(Hub, "useKessenHub").mockReturnValue({
+    hub: {
+      data: state.startsWith("hub") ? undefined : hub,
+      isError: state === "hub error",
+      error: state === "hub error" ? new Error("hub unavailable") : null,
+      refetch: vi.fn(),
+    },
+    catalog,
+  } as never);
+  vi.spyOn(Hub, "useKessenCatalog").mockReturnValue(catalog as never);
+
+  const view = render(<Screen />);
+  expect(view.getByRole("button", { name: "Play Kessen" })).toBeTruthy();
+  expect(view.getByRole("link", { name: "How a match works" })).toBeTruthy();
+  expect(view.queryByText(guard)).toBeNull();
+  expect(view.queryByRole("button", { name: "Duels" })).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "Play" }));
+  expect(view.getByText(guard)).toBeTruthy();
+  expect(view.queryByRole("button", { name: "Play Kessen" })).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "Rules" }));
+  expect(view.getByRole("button", { name: "Play Kessen" })).toBeTruthy();
+});
+
 it("opens a ranked match found while reading Rules and closes to the duel lobby", () => {
   localStorage.setItem("kessenTab", "Duels");
   const view = render(<Screen />);
