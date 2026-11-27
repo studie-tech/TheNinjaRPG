@@ -125,3 +125,42 @@ describeWithDatabase("Mission Hall scenes", () => {
     ).toEqual([LEMU]);
   });
 });
+
+describeWithDatabase("village errands", () => {
+  const errandInserts = statements.filter((entry) =>
+    /INSERT INTO `Quest` [^;]*'errand', 'D'/.test(entry),
+  );
+
+  beforeEach(async () => {
+    await resetTables(quest);
+    for (const statement of errandInserts) await runRawSql(statement);
+  });
+
+  it("offers every village several errands beside its own gate", async () => {
+    const database = await getTestDatabase();
+    const errands = await database.query.quest.findMany({
+      where: eq(quest.questType, "errand"),
+    });
+    expect(errands.length).toBeGreaterThanOrEqual(5);
+    expect(new Set(errands.map((entry) => entry.name)).size).toBe(errands.length);
+    for (const entry of errands) {
+      expect(entry).toMatchObject({
+        questRank: "D",
+        requiredVillage: null,
+        hidden: false,
+      });
+      const content = z
+        .object({ objectives: z.array(AllObjectives) })
+        .parse(entry.content);
+      for (const objective of content.objectives) {
+        expect(objective).toMatchObject({
+          task: "move_to_location",
+          sectorType: "user_village",
+        });
+        expect(objective.sceneCharacters).toHaveLength(1);
+        expect(objective.sceneBackground).not.toBe("");
+        expect(objective.description).not.toBe("");
+      }
+    }
+  });
+});

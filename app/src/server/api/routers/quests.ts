@@ -65,6 +65,7 @@ import {
   isQuestRankAllowed,
   isWarMissionAvailable,
   missionHallStartBlockedMessage,
+  pickMissionHallQuest,
   questDailyLimitMessage,
   questDailyQuota,
   questTypeConcurrentBlockMessage,
@@ -218,7 +219,6 @@ import {
 import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { getVillageChoiceBlock } from "@/server/utils/villageChoice";
-import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
   canAbandonQuestType,
@@ -570,7 +570,7 @@ export const questsRouter = createTRPCRouter({
       );
       if (concurrentBlock) return errorResponse(concurrentBlock);
       // Fetch quest
-      const result = getRandomElement(
+      const result = pickMissionHallQuest(
         results.filter((e) => isAvailableUserQuests(e, user).check),
       );
       if (!result) return errorResponse("No assignments at this level could be found");

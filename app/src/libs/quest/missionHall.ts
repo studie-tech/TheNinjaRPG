@@ -29,6 +29,7 @@ import { availableQuestLetterRanks } from "@/libs/rank";
 import { isLeadQuest } from "@/libs/storyGuidance";
 import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
+import { getRandomElement } from "@/utils/array";
 import { capitalizeFirstLetter, formatAmount } from "@/utils/string";
 import { canAccessStructure, type SectorVillage } from "@/utils/village";
 
@@ -198,6 +199,26 @@ export const filterMissionHallQuests = <
     }
   }
   return { filtered, rankInfo };
+};
+
+/**
+ * Pick the quest a random Mission Hall assignment hands out: one the player has never
+ * started if there is one, otherwise one from the half they started longest ago. A run of
+ * assignments therefore works through the pool before repeating, and never gets the one
+ * just finished while others are left.
+ *
+ * @param quests - The available quests, each with the player's history of it.
+ * @returns The quest to start, or undefined for an empty pool.
+ */
+export const pickMissionHallQuest = <T extends { history: { startedAt: Date } | null }>(
+  quests: T[],
+): T | undefined => {
+  const lastStarted = (quest: T) => quest.history?.startedAt.getTime() ?? -Infinity;
+  const byAge = [...quests].sort((a, b) => lastStarted(a) - lastStarted(b));
+  const unstarted = byAge.filter((quest) => !quest.history);
+  return getRandomElement(
+    unstarted.length > 0 ? unstarted : byAge.slice(0, Math.ceil(byAge.length / 2)),
+  );
 };
 
 /** A player can have multiple events, but cannot start the same quest twice. */

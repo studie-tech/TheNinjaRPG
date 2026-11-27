@@ -1,7 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { MEDNIN_REQUIRED_EXP } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
-import { filterMissionHallQuests, isQuestRankAllowed } from "@/libs/quest/missionHall";
+import {
+  filterMissionHallQuests,
+  isQuestRankAllowed,
+  pickMissionHallQuest,
+} from "@/libs/quest/missionHall";
 
 const user = {
   role: "USER",
@@ -133,5 +137,54 @@ describe("isQuestRankAllowed", () => {
     expect(
       isQuestRankAllowed({ questType: "crime", questRank: "S" }, { rank: "GENIN" }),
     ).toBe(false);
+  });
+});
+
+describe("pickMissionHallQuest", () => {
+  const errand = (id: string, startedAt?: number) => ({
+    id,
+    history: startedAt === undefined ? null : { startedAt: new Date(startedAt) },
+  });
+
+  it("hands out a quest the player has never started while one is left", () => {
+    const pool = [
+      errand("gate", 3),
+      errand("cart"),
+      errand("cat", 1),
+      errand("scrolls"),
+    ];
+    for (let run = 0; run < 50; run++) {
+      expect(["cart", "scrolls"]).toContain(pickMissionHallQuest(pool)?.id ?? "");
+    }
+  });
+
+  it("then picks from the half started longest ago, never the one just done", () => {
+    const pool = [
+      errand("gate", 40),
+      errand("cart", 10),
+      errand("cat", 30),
+      errand("scrolls", 20),
+    ];
+    for (let run = 0; run < 50; run++) {
+      expect(["cart", "scrolls"]).toContain(pickMissionHallQuest(pool)?.id ?? "");
+    }
+  });
+
+  it("gives three different errands in a row from a fresh pool of six", () => {
+    let pool = ["gate", "cart", "cat", "scrolls", "shrine", "wood"].map((id) =>
+      errand(id),
+    );
+    const seen: string[] = [];
+    for (let time = 1; time <= 3; time++) {
+      const picked = pickMissionHallQuest(pool);
+      seen.push(picked?.id ?? "");
+      pool = pool.map((quest) => (quest === picked ? errand(quest.id, time) : quest));
+    }
+    expect(new Set(seen).size).toBe(3);
+  });
+
+  it("still hands out the only quest there is", () => {
+    expect(pickMissionHallQuest([errand("gate", 5)])?.id).toBe("gate");
+    expect(pickMissionHallQuest([])).toBeUndefined();
   });
 });
