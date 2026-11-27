@@ -226,6 +226,8 @@ export const updateUserVoteForTopRankinGames = (
     .where(
       and(
         eq(userVote.secret, secret),
+        // Validation may precede UTC midnight while the write follows the daily reset.
+        sql`UTC_DATE() = ${votedAt.toISOString().slice(0, 10)}`,
         or(
           isNull(userVote.topRankinGamesVotedAt),
           lt(userVote.topRankinGamesVotedAt, periodStart("daily", votedAt)),

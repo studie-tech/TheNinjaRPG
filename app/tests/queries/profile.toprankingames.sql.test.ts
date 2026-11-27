@@ -11,15 +11,18 @@ import {
 } from "@/queries/profile";
 import { profileRouter } from "@/server/api/routers/profile";
 import { insertUsers, insertUserVotes } from "../setup/factories";
+import { resetServerModuleStubs, stubDatabase } from "../setup/serverModules";
+import { beforeStatements } from "../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
+  queryRawSql,
   resetTables,
 } from "../setup/testDatabase";
 
-const today = new Date("2026-11-28T00:00:01Z");
-const yesterday = new Date("2026-11-27T00:00:01Z");
+let today: Date;
+let yesterday: Date;
 const key = "test-toprankingames-secret";
 const readVote = async () =>
   (await getTestDatabase()).query.userVote.findFirst({
@@ -61,6 +64,11 @@ describeWithDatabase("TopRankinGames vote recording", () => {
     originalCronSecret = process.env.CRON_SECRET;
     env.TOPRANKINGAMES_WEBHOOK_SECRET = key;
     process.env.CRON_SECRET = "test-daily-votes-cron";
+    const [clock] = await queryRawSql<{ day: string }>(
+      "SELECT DATE_FORMAT(UTC_DATE(), '%Y-%m-%d') AS day",
+    );
+    today = new Date(`${clock!.day}T00:00:01Z`);
+    yesterday = new Date(today.getTime() - 86_400_000);
     setSystemTime(today);
     await resetTables(userData, userVote, gameSetting);
     const database = await getTestDatabase();
@@ -78,6 +86,7 @@ describeWithDatabase("TopRankinGames vote recording", () => {
 
   afterEach(() => {
     setSystemTime();
+    resetServerModuleStubs();
     env.TOPRANKINGAMES_WEBHOOK_SECRET = originalSecret;
     if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
     else process.env.CRON_SECRET = originalCronSecret;
@@ -177,7 +186,11 @@ describeWithDatabase("TopRankinGames vote recording", () => {
 
   it("clears yesterday's vote and rejects a fresh retry before and after reset", async () => {
     const database = await getTestDatabase();
-    await updateUserVoteForTopRankinGames(database, "vote-token", "122", yesterday);
+    await database.update(userVote).set({
+      topRankinGames: true,
+      topRankinGamesVoteId: "122",
+      topRankinGamesVotedAt: yesterday,
+    });
     expect(await (await callback(yesterday, "122")).json()).toBe("INVALID");
     expect((await resetDailyVotes()).status).toBe(200);
     expect(await (await callback(yesterday, "122")).json()).toBe("INVALID");
@@ -190,8 +203,71 @@ describeWithDatabase("TopRankinGames vote recording", () => {
     expect(await readVote()).toMatchObject({ topRankinGames: true });
   });
 
+  it.each([false, true])(
+    "rejects a callback that crosses UTC midnight before its write with an older receipt %s",
+    async (hasOlderReceipt) => {
+      const database = await getTestDatabase();
+      if (hasOlderReceipt) {
+        await database.update(userVote).set({
+          topRankinGames: true,
+          topRankinGamesVoteId: "121",
+          topRankinGamesVotedAt: new Date(yesterday.getTime() - 86_400_000),
+        });
+      }
+      stubDatabase(
+        beforeStatements(
+          database,
+          userVote,
+          [
+            async () => {
+              // The callback has passed its time checks; the daily reset wins the write race.
+              setSystemTime(today);
+              expect((await resetDailyVotes()).status).toBe(200);
+            },
+          ],
+          { when: (values) => values.topRankinGames === true },
+        ),
+      );
+      const votedAt = new Date(today.getTime() - 2_000);
+      setSystemTime(votedAt);
+      expect(await (await callback(votedAt)).json()).toBe("OK");
+      expect(await readVote()).toMatchObject({ topRankinGames: false });
+      for (const site of ["mmohub", "arenaTop100", "topWebGames"]) {
+        await updateUserVoteForHandleVote(database, site, today, "vote-token");
+      }
+      expect(
+        (await (await callerFor(profileRouter, "voter")).claimVotes()).success,
+      ).toBe(false);
+      expect(
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "voter"),
+        }),
+      ).toMatchObject({ reputationPoints: 0, reputationPointsTotal: 0 });
+      expect(await readVote()).toMatchObject({ totalClaims: 0 });
+    },
+  );
+
+  it.each([-1, 1])(
+    "rejects a signed vote %s UTC days from the database execution day",
+    async (offset) => {
+      const database = await getTestDatabase();
+      const result = await updateUserVoteForTopRankinGames(
+        database,
+        "vote-token",
+        "123",
+        new Date(today.getTime() + offset * 86_400_000),
+      );
+      expect(result.rowsAffected).toBe(0);
+      expect(await readVote()).toMatchObject({
+        topRankinGames: false,
+        topRankinGamesVoteId: null,
+        topRankinGamesVotedAt: null,
+      });
+    },
+  );
+
   it("persists the signed vote time rather than the retry delivery time", async () => {
-    setSystemTime(new Date("2026-11-28T00:04:00Z"));
+    setSystemTime(new Date(today.getTime() + 239_000));
     expect((await callback()).status).toBe(200);
     expect((await resetDailyVotes()).status).toBe(200);
     expect(await readVote()).toMatchObject({
