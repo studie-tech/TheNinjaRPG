@@ -36,6 +36,19 @@ const TournamentEditor = dynamic(
 );
 
 /**
+ * Resolve which variant of the tournament page to show. The staff route only changes
+ * navigation for tournament managers; anyone else who opens it (for example from a link a
+ * staff member shared) gets the regular player page with registration.
+ */
+export const resolveTournamentView = (staff: boolean, canManage: boolean) => {
+  const staffView = staff && canManage;
+  return {
+    staffView,
+    basePath: staffView ? "/manual/tournaments" : "/tournaments",
+  } as const;
+};
+
+/**
  * Shared player/staff view with advisory series readiness separate from match acceptance.
  * Mutations refresh details, listings and both global notice surfaces.
  */
@@ -57,6 +70,7 @@ export const EventTournaments = ({
   const reconcile = useEventActionCache();
   const [editing, setEditing] = useState(false);
   const canManage = canManageTournaments(user?.role ?? "USER");
+  const { staffView, basePath } = resolveTournamentView(staff, canManage);
   const list = api.tournament.listEvents.useQuery(undefined, {
     enabled: !tournamentId && isSignedIn,
     refetchInterval: 15000,
@@ -140,12 +154,6 @@ export const EventTournaments = ({
       </ContentBox>
     );
   if (userStatus === "pending") return <Loader explanation="Loading your account" />;
-  if (staff && !canManage)
-    return (
-      <ContentBox title="Tournaments">
-        <p>Content, event or coding staff access is required.</p>
-      </ContentBox>
-    );
   if (list.isError || details.isError)
     return (
       <ContentBox title="Tournaments">
@@ -177,12 +185,13 @@ export const EventTournaments = ({
   if (!event)
     return (
       <ContentBox
-        title={staff ? "Manage tournaments" : "Wake Island Tournaments"}
+        title={staffView ? "Manage tournaments" : "Wake Island Tournaments"}
         subtitle="Staff-hosted competitions at the Colosseum"
-        defaultBackHref={staff ? "/manual" : "/colosseum"}
+        defaultBackHref={staffView ? "/manual" : "/colosseum"}
       >
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <p>Register at Wake Island. Staff generate brackets and begin each round.</p>
+          {staffView && <PlayerPageHint href="/tournaments" />}
           {canManage && (
             <Button onClick={() => setEditing(true)}>Create tournament</Button>
           )}
@@ -193,7 +202,7 @@ export const EventTournaments = ({
               row.eventData && (
                 <Link
                   key={row.id}
-                  href={`${staff ? "/manual/tournaments" : "/tournaments"}/${row.id}`}
+                  href={`${basePath}/${row.id}`}
                   className="rounded-lg border bg-card p-4 text-card-foreground hover:bg-accent"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -238,8 +247,9 @@ export const EventTournaments = ({
     <ContentBox
       title={event.config.name}
       subtitle="Wake Island Colosseum"
-      defaultBackHref={staff ? "/manual/tournaments" : "/tournaments"}
+      defaultBackHref={basePath}
     >
+      {staffView && <PlayerPageHint href={`/tournaments/${tournamentId}`} />}
       <div className="mb-4 flex flex-wrap gap-2">
         <Badge>{label(event.status)}</Badge>
         <Badge variant="outline">{label(event.config.format)}</Badge>
@@ -580,6 +590,17 @@ export const EventTournaments = ({
     </ContentBox>
   );
 };
+
+/** Point staff at the player URL so shared links open the page with registration. */
+const PlayerPageHint = ({ href }: { href: string }) => (
+  <p className="mb-3 w-full rounded-md border border-dashed p-2 text-sm">
+    Staff view. Players register on the{" "}
+    <Link className="font-bold text-orange-500 underline" href={href}>
+      player page
+    </Link>
+    ; share that link with them, not this one.
+  </p>
+);
 
 /** Show the current game's acceptance window, including the delay between series games. */
 const ReadyCheck = ({
