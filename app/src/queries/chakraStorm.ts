@@ -59,7 +59,7 @@ export const findChakraStormClaimant = (
   ctx: { userId: string },
 ) =>
   client.query.userData.findFirst({
-    columns: { level: true, villageId: true },
+    columns: { level: true, rank: true, villageId: true, questData: true },
     where: eq(userData.userId, ctx.userId),
   });
 
@@ -136,13 +136,20 @@ export const updateChakraStormProgressForTrain = (
 export const updateUserDataForChakraStormDuty = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
-  duty: { ryo: number; prestige: number; paidAt: Date; dayStart: Date },
+  duty: {
+    ryo: number;
+    prestige: number;
+    experience: number;
+    paidAt: Date;
+    dayStart: Date;
+  },
 ) =>
   client
     .update(userData)
     .set({
       money: sql`${userData.money} + ${duty.ryo}`,
       villagePrestige: sql`${userData.villagePrestige} + ${duty.prestige}`,
+      earnedExperience: sql`${userData.earnedExperience} + ${duty.experience}`,
       chakraStormDutyAt: duty.paidAt,
     })
     .where(

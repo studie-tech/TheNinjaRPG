@@ -7,7 +7,14 @@ import {
   setDefaultTimeout,
   vi,
 } from "bun:test";
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { ComponentProps } from "react";
 import {
   ELEMENTAL_MASTERY_CAP,
@@ -15,6 +22,7 @@ import {
   MAX_MASTERY_CAP,
 } from "@/drizzle/constants";
 import * as tutorial from "@/hooks/tutorial";
+import * as ContentBox from "@/layout/ContentBox";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import type { UserWithRelations } from "@/routers/profile";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
@@ -77,6 +85,35 @@ const form = (onAccept: Accept, userData = trainee) => (
     isPending={false}
   />
 );
+
+it("labels the Simple/Advanced choice inside the box, clear of the header's overflow menu", () => {
+  vi.spyOn(ContentBox, "default").mockImplementation(
+    ({ children, topRightContent }) => (
+      <div>
+        <div data-content-box-header>{topRightContent}</div>
+        <div data-content-box-inner>{children}</div>
+      </div>
+    ),
+  );
+  const view = render(
+    <DistributeStatsForm
+      title="Assign Experience Points"
+      userData={trainee}
+      availableStats={trainee.earnedExperience}
+      onAccept={vi.fn()}
+      isPending={false}
+    />,
+  );
+  const header = view.container.querySelector("[data-content-box-header]")!;
+  expect(header.textContent).toBe("");
+  const inner = view.container.querySelector("[data-content-box-inner]")!;
+  const advanced = within(inner as HTMLElement).getByRole("button", {
+    name: "Advanced",
+  });
+  expect(view.getByText(/open Advanced to place each point yourself/)).toBeTruthy();
+  fireEvent.click(advanced);
+  expect(view.getByText("Choose how many points go into each stat.")).toBeTruthy();
+});
 
 describe("advanced experience assignment drafts", () => {
   it.each([undefined, { offence: 0 }])(
@@ -358,5 +395,52 @@ describe("advanced experience assignment drafts", () => {
       (view.getByRole("spinbutton", { name: /^Offence/ }) as HTMLInputElement).value,
     ).toBe("10");
     expect(accept).not.toHaveBeenCalled();
+  });
+
+  it("spends every whole point with sliders dragged to their ends over fractional stats", async () => {
+    localStorage.setItem(inputPreferenceKey, "false");
+    const next = vi.fn(async () => {});
+    vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
+      currentStep: { advanceOn: "assignStats" },
+      completeTutorialAction: next,
+    } as unknown as ReturnType<typeof tutorial.useTutorialStep>);
+    const accept = vi.fn(async () => true);
+    const student = {
+      ...trainee,
+      rank: "STUDENT",
+      earnedExperience: 1000,
+      offence: 6.26,
+      defence: 10.48,
+      strength: 3.3,
+      speed: 7.77,
+    } as unknown as NonNullable<UserWithRelations>;
+    const view = render(
+      <DistributeStatsForm
+        showWrapper={false}
+        userData={student}
+        // Fractional cap room (256.26, 504.22) leaves a float remainder for strength.
+        statCaps={{ offence: 262.52, defence: 514.7 }}
+        availableStats={1000}
+        onAccept={accept}
+        isPending={false}
+      />,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Advanced" }));
+    const range = (name: string) =>
+      view.container.querySelector(`input[type="range"]#${name}`) as HTMLInputElement;
+    let placed = 0;
+    for (const stat of ["offence", "defence", "strength"]) {
+      const slider = range(stat);
+      expect(Number.isInteger(Number(slider.max))).toBe(true);
+      expect(slider.step).toBe("1");
+      await act(async () => {
+        fireEvent.change(slider, { target: { value: slider.max } });
+      });
+      placed += Number(range(stat).value);
+    }
+    expect(placed).toBe(1000);
+    fireEvent.click(view.getByRole("button", { name: "Assign points" }));
+    await waitFor(() => expect(next).toHaveBeenCalledWith("assignStats"));
+    expect(accept).toHaveBeenCalledTimes(1);
   });
 });

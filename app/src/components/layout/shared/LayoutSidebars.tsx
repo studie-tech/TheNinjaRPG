@@ -494,47 +494,49 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
   const renderDefaultSidebar = () => (
     <>
       <CollapsibleNotifications notifications={notifications} />
-      {variant !== "sector" && (
-        <SideBannerTitle break={notifications && notifications.length > 0}>
-          Main Menu
-        </SideBannerTitle>
-      )}
-      <div className="theme-menu-grid mt-1 grid grid-cols-2 gap-3">
-        {systems.map((system) => {
-          const disabled = system.requireAwake && userData.status !== "AWAKE";
-          const reason = disabled
-            ? UNAVAILABLE_STATUS_LABELS[userData.status]
-            : undefined;
-          return (
-            <Button
-              key={system.href}
-              asChild
-              decoration={variantClasses.rightMenuDecoration}
-              className={cn(
-                variantClasses.rightMenuButton,
-                disabled
-                  ? variantClasses.rightMenuDisabled
-                  : variantClasses.rightMenuEnabled,
-              )}
-              count={system.notificationCount}
-            >
-              <Link href={system.href} id={system.id} title={reason}>
-                <span className="grow">
-                  {system.name}
-                  {reason && (
-                    <span className="block font-normal text-[0.75rem] leading-tight">
-                      {reason}
-                    </span>
-                  )}
-                </span>
-                <span>{system.icon}</span>
-              </Link>
-            </Button>
-          );
-        })}
+      <div data-spotlight-panel="">
+        {variant !== "sector" && (
+          <SideBannerTitle break={notifications && notifications.length > 0}>
+            Main Menu
+          </SideBannerTitle>
+        )}
+        <div className="theme-menu-grid mt-1 grid grid-cols-2 gap-3">
+          {systems.map((system) => {
+            const disabled = system.requireAwake && userData.status !== "AWAKE";
+            const reason = disabled
+              ? UNAVAILABLE_STATUS_LABELS[userData.status]
+              : undefined;
+            return (
+              <Button
+                key={system.href}
+                asChild
+                decoration={variantClasses.rightMenuDecoration}
+                className={cn(
+                  variantClasses.rightMenuButton,
+                  disabled
+                    ? variantClasses.rightMenuDisabled
+                    : variantClasses.rightMenuEnabled,
+                )}
+                count={system.notificationCount}
+              >
+                <Link href={system.href} id={system.id} title={reason}>
+                  <span className="grow">
+                    {system.name}
+                    {reason && (
+                      <span className="block font-normal text-[0.75rem] leading-tight">
+                        {reason}
+                      </span>
+                    )}
+                  </span>
+                  <span>{system.icon}</span>
+                </Link>
+              </Button>
+            );
+          })}
+        </div>
       </div>
       {location && (
-        <>
+        <div data-spotlight-panel="">
           <SideBannerTitle break={variant !== "sector"}>
             {variant === "sector" ? "Location" : "Location Menu"}
           </SideBannerTitle>
@@ -551,7 +553,7 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
               {location.icon}
             </Link>
           </div>
-        </>
+        </div>
       )}
     </>
   );

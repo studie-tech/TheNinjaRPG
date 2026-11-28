@@ -31,6 +31,7 @@ import NavTabs from "@/layout/NavTabs";
 import OccupationCrafting from "@/layout/OccupationCrafting";
 import OccupationGathering from "@/layout/OccupationGathering";
 import OccupationHunter from "@/layout/OccupationHunter";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import {
   getOccupationChangeAvailableAt,
   getOccupationChangeDaysRemaining,
@@ -202,6 +203,7 @@ function OccupationTools({ navigation }: { navigation: React.ReactNode }) {
       defaultBackHref="/profile"
       topRightContent={navigation}
     >
+      <SystemIntroBanner system="occupation" />
       {(repairAllAction || changeJobAction) && (
         <div className="mb-3 flex flex-wrap justify-end gap-2">
           {repairAllAction}

@@ -41,6 +41,7 @@ import {
   IMG_REGISTRATIN_STEP9,
 } from "@/drizzle/constants";
 import { useNavigationRouter } from "@/hooks/navigation";
+import { resetCharacterPresentation } from "@/hooks/useActivityDock";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CharacterPreview } from "@/layout/CharacterPreview";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -173,6 +174,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
           // Publish the confirmed receipt before cache reconciliation can fail.
           trackConversion("register", data.registrationId ?? userId ?? undefined);
           if (data.isAdClickLinked) markAdClickLinked();
+          if (userId) resetCharacterPresentation(userId);
           await utils.profile.getUser.invalidate();
           createAvatar.mutate();
         } else {
@@ -208,6 +210,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
       musicOn: true,
       sfxOn: true,
       buttonSfxOn: true,
+      playedBefore: false,
     },
   });
 
@@ -744,6 +747,25 @@ const AgreementStep: React.FC<{
                 time
               </FormDescription>
               <FormMessage />
+            </div>
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="playedBefore"
+        render={({ field }) => (
+          <FormItem className="flex flex-row space-x-3 space-y-0 p-4">
+            <FormControl>
+              <Checkbox checked={!!field.value} onCheckedChange={field.onChange} />
+            </FormControl>
+            <div className="space-y-1 leading-none">
+              <FormLabel className="text-base sm:text-lg">
+                I&apos;ve played before
+              </FormLabel>
+              <FormDescription>
+                Fewer pointers, and you can skip the Academy Trials with Express Trials
+              </FormDescription>
             </div>
           </FormItem>
         )}

@@ -38,15 +38,24 @@ import {
   type GlobeCamera,
   globeCameraBasis,
   globeDistanceLimits,
+  globeProject,
   globeSectorAt,
 } from "@/libs/rendering/scenes/globeProjection";
 import {
   createGlobeArc,
   globeJourneyProgress,
 } from "@/libs/rendering/scenes/globeRoute";
+import {
+  travelViewportHeight,
+  watchTravelViewport,
+} from "@/libs/rendering/scenes/travelViewport";
 import { createSectorGenerator } from "@/libs/rendering/sectorGenerationClient";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
-import { getWorldWeather, type WorldWeather } from "@/libs/rendering/worldWeather";
+import {
+  getWorldWeather,
+  type WorldSky,
+  type WorldWeather,
+} from "@/libs/rendering/worldWeather";
 import type { GlobalMapData, GlobalPoint } from "@/libs/sector-map/world-types";
 import { getReadableVillageHexColor } from "@/utils/color";
 import type { GlobeJourney } from "@/validators/travel";
@@ -64,14 +73,24 @@ export const createGlobeScene = async (options: {
   /** Hovered sector, with the pointer and canvas size in CSS pixels when there is one. */
   onHover: (sector: number | null, at: GlobeHoverPoint | null) => void;
   onClick: (sector: number) => void;
+  /**
+   * Where the focused sector sits while a tutorial travel step points at it, in the
+   * same units as `onHover`, or null while it faces away. Called when it moves.
+   */
+  onFocusPoint?: (at: GlobeHoverPoint | null) => void;
+  /** Fit the canvas to the foot of the first screen (the travel page): taller than it is wide on phones only. */
+  fillViewport?: boolean;
 }) => {
   const game = await createGameRenderer({
     ...options,
     surface: "globe",
     height: (width) =>
       options.mount.closest<HTMLElement>("[data-travel-viewport]")?.clientHeight ||
-      width,
+      (options.fillViewport
+        ? travelViewportHeight(options.mount, width * MIN_FILL_ASPECT, width)
+        : width),
   });
+  if (options.fillViewport) game.own(watchTravelViewport(game.fit));
   try {
     let state = options.state;
     const map = state.map,
@@ -267,6 +286,37 @@ export const createGlobeScene = async (options: {
         if (sector !== null) options.onClick(sector);
       },
     );
+    let focusPointKey = "";
+    const reportFocusPoint = (basis: ReturnType<typeof globeCameraBasis>) => {
+      const point =
+        state.isTravelStep &&
+        state.focusSector !== null &&
+        state.focusSector !== undefined
+          ? surfacePoint(map, state.focusSector)
+          : null;
+      const facing =
+        point &&
+        point.x * basis.forward.x +
+          point.y * basis.forward.y +
+          point.z * basis.forward.z >
+          0;
+      const projected = point && facing ? globeProject(point, camera) : null;
+      const key = projected
+        ? `${Math.round(projected.x)}:${Math.round(projected.y)}:${camera.width}:${camera.height}`
+        : "";
+      if (key === focusPointKey) return;
+      focusPointKey = key;
+      options.onFocusPoint?.(
+        projected
+          ? {
+              x: projected.x,
+              y: projected.y,
+              width: camera.width,
+              height: camera.height,
+            }
+          : null,
+      );
+    };
     const updateState = (next: GlobeSceneState) => {
       if (!next.journey && next.focusSector !== state.focusSector)
         aimAt(next.focusSector);
@@ -540,8 +590,8 @@ export const createGlobeScene = async (options: {
         lastClouds = state.layers.clouds;
         const now = Date.now() - state.timeDiff;
         updateLightColors(
-          worldSunlight(new Date(now)).day,
-          getWorldWeather("ground", now),
+          worldSunlight(new Date(now - (state.sky?.shiftMs ?? 0))).day,
+          state.sky?.weather ?? getWorldWeather("ground", now),
         );
       }
       const isRotating =
@@ -588,6 +638,7 @@ export const createGlobeScene = async (options: {
         : (1 - Math.cos(((Date.now() % 2000) / 2000) * Math.PI * 2)) / 2;
       uniforms.uniforms.uPhase = phase;
       uniforms.update();
+      reportFocusPoint(basis);
       // Without rotation, travel or input only water, clouds and marker pulses move; reduced
       // motion freezes those too, leaving the slow sky colour and artwork that loads late.
       game.setAnimating(
@@ -721,6 +772,9 @@ const globeClimate = (protectedSectors: number[]) => {
 
 const climateFields = new Map<string, Promise<Uint8Array>>();
 
+/** A filling globe may turn landscape when a lesson leaves little room, never flatter. */
+const MIN_FILL_ASPECT = 0.75;
+
 /** Where the pointer entered the hovered sector, in the canvas's CSS pixels. */
 export type GlobeHoverPoint = { x: number; y: number; width: number; height: number };
 
@@ -746,6 +800,8 @@ export type GlobeSceneState = {
   questSectors: number[];
   /** Client clock minus server clock, so daylight and weather follow the server's cycle. */
   timeDiff: number;
+  /** The sky a player in the tutorial sees in place of the world's. */
+  sky?: WorldSky | null;
   /** Destination the route arc keeps pointing at when nothing is hovered (a pending trip). */
   routeTarget?: number | null;
   journey?: GlobeJourney | null;

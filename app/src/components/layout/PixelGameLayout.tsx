@@ -295,7 +295,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     // cannot register as a shift, and the scrollbar present from first paint.
                     // Phones also leave room to scroll content clear of an open lesson.
                     isSignedInLayout
-                      ? "min-h-svh p-0 pb-[calc(7rem+var(--activity-dock-space,0px))] md:pb-8"
+                      ? "min-h-svh p-0 pb-[calc(7rem+var(--activity-dock-space,0px))] md:pb-[calc(2rem+var(--activity-dock-space,0px))]"
                       : "p-5 pb-8 md:p-7"
                   }
                 >

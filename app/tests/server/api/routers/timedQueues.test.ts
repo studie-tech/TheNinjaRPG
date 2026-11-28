@@ -9,6 +9,7 @@ import {
   quest,
   questHistory,
   trainingLog,
+  userCookingJob,
   userData,
   userItem,
   userJutsu,
@@ -34,6 +35,8 @@ import type { MasteryTrainingQueueEntry } from "@/validators/train";
 import {
   insertItems,
   insertJutsus,
+  insertQuestHistory,
+  insertQuests,
   insertUserItems,
   insertUsers,
   insertUserVotes,
@@ -1032,6 +1035,92 @@ describeWithDatabase("crafting queue", () => {
     expect(started.reduce((sum, n) => sum + n, 0)).toBe(1);
     expect((await readItems()).filter((row) => row.id !== "busy")).toHaveLength(1);
     expect((await readUser()).craftingExperience).toBe(10);
+  });
+});
+
+describeWithDatabase("queued meal quest progress", () => {
+  beforeEach(async () => {
+    await resetTables(
+      userQueue,
+      userCookingJob,
+      userItem,
+      item,
+      questHistory,
+      quest,
+      userVote,
+      userData,
+    );
+  });
+
+  const queueDueMeal = async () => {
+    await insertItems([
+      {
+        id: "stew",
+        name: "Stew",
+        itemType: "MEAL",
+        canBeCrafted: true,
+        cookingExperience: 5,
+        stackSize: 1,
+      },
+    ]);
+    const database = await getTestDatabase();
+    const startsAt = minutesFromNow(-1);
+    await database.insert(userQueue).values({
+      id: "meal-1",
+      userId: USER_ID,
+      kind: "CRAFT",
+      position: 1,
+      itemId: "stew",
+      quantity: 1,
+      materials: [],
+      durationSeconds: 60,
+      startsAt,
+      finishesAt: new Date(startsAt.getTime() + 60_000),
+    });
+    return database;
+  };
+  const questDataWrites = (statements: string[]) =>
+    statements.filter((sql) => /^update `UserData` set .*`questData`/i.test(sql));
+
+  it("leaves quest data untouched when no quest asks for a cooked meal", async () => {
+    await insertUser(CRAFTER);
+    const database = await queueDueMeal();
+    const { result, statements } = await recordQueries(() =>
+      settleCraftingQueue(database, USER_ID),
+    );
+    expect(result).toBe(1);
+    expect(questDataWrites(statements)).toEqual([]);
+  });
+
+  it("counts the meal for a quest that asks for one", async () => {
+    await insertUser(CRAFTER);
+    await insertQuests([
+      {
+        id: "cook-quest",
+        content: {
+          objectives: [
+            {
+              id: "cook",
+              task: "cook_meal",
+              value: 2,
+              description: "",
+              successDescription: "",
+            },
+          ] as never,
+        },
+      },
+    ]);
+    await insertQuestHistory([{ userId: USER_ID, questId: "cook-quest" }]);
+    const database = await queueDueMeal();
+    const { result, statements } = await recordQueries(() =>
+      settleCraftingQueue(database, USER_ID),
+    );
+    expect(result).toBe(1);
+    expect(questDataWrites(statements)).toHaveLength(1);
+    const tracker = (await readUser()).questData?.find(
+      (row) => row.id === "cook-quest",
+    );
+    expect(tracker?.goals.find((goal) => goal.id === "cook")?.value).toBe(1);
   });
 });
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { QueryClient, QueryClientProvider, useMutation } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { getDefaultStore } from "jotai";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
@@ -21,12 +22,19 @@ import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
 import * as logbook from "@/layout/Logbook";
 import { maskBattle } from "@/libs/combat/masking";
-import type { BattleState, CombatResult, ReturnedBattle } from "@/libs/combat/types";
+import type {
+  BattleState,
+  CombatAction,
+  CombatResult,
+  ReturnedBattle,
+} from "@/libs/combat/types";
+import * as combatScene from "@/libs/rendering/scenes/combat";
 import * as toast from "@/libs/toast";
 import * as tutorialLib from "@/libs/tutorial";
-import * as tutorialSteps from "@/libs/tutorialSteps";
+import type * as tutorialSteps from "@/libs/tutorialSteps";
+import { combatActionIdAtom } from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { makeCompleteBattle, makeUser } from "../setup/combat";
+import { makeCompleteBattle, makeEffect, makeUser } from "../setup/combat";
 import { mockUserContextValue } from "../setup/userContext";
 
 type Profile = {
@@ -251,6 +259,12 @@ const makeBattle = (values: Partial<ReturnedBattle> = {}, lobby = false) => {
   return { ...maskBattle(battle, "player"), ...values } as ReturnedBattle;
 };
 
+/** A battle the tutorial teaches, as initiateBattle marks it. */
+const makeGuidedBattle = (values: Partial<ReturnedBattle> = {}) => {
+  const battle = makeBattle(values);
+  return { ...battle, extraState: { ...battle.extraState, tutorialGuided: true } };
+};
+
 const result = (values: Partial<CombatResult> = {}) =>
   ({
     outcome: "Won",
@@ -259,20 +273,24 @@ const result = (values: Partial<CombatResult> = {}) =>
     ...values,
   }) as unknown as CombatResult;
 
-const mount = (battleState: BattleState, extra: { arenaActions?: ReactNode } = {}) => {
+const mount = (
+  battleState: BattleState,
+  extra: { arenaActions?: ReactNode; showAggro?: boolean } = {},
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
   });
   clients.push(queryClient);
-  const tree = (current: BattleState) => (
+  const tree = (current: BattleState, action?: CombatAction) => (
     <QueryClientProvider client={queryClient}>
       <Combat
         battleState={current}
+        action={action}
         userId="player"
         setBattleState={state.setBattleState}
         config={
           {
-            showAggro: false,
+            showAggro: extra.showAggro ?? false,
             showGridNumbers: false,
             showHexOutlines: false,
             resourceBarsVisibility: "all",
@@ -285,7 +303,11 @@ const mount = (battleState: BattleState, extra: { arenaActions?: ReactNode } = {
     </QueryClientProvider>
   );
   const view = render(tree(battleState));
-  return { view, rerender: (next: BattleState) => view.rerender(tree(next)) };
+  return {
+    view,
+    rerender: (next: BattleState, action?: CombatAction) =>
+      view.rerender(tree(next, action)),
+  };
 };
 
 const buttonTexts = (view: ReturnType<typeof render>) =>
@@ -577,23 +599,23 @@ describe("combat result screen", () => {
   });
 
   it.each([
-    ["Continue tutorial", "/profile", "Won", 50],
-    ["Continue tutorial", "/hospital", "Lost", 0],
-    ["To Map", "/travel", "Won", 50],
+    ["/profile", "Won", 50],
+    ["/hospital", "Lost", 0],
   ] as const)(
-    "waits for the confirmed profile before %s to the next lesson (%s)",
-    async (name, destination, outcome, curHealth) => {
+    "waits for the confirmed profile before returning where the fight began (%s)",
+    async (destination, outcome, curHealth) => {
+      const name = "Continue";
       state.profile = { ...state.profile, tutorialOn: true, tutorialStep: 8 };
       state.currentStep = {
         id: "combat-fight",
-        chapter: "combat",
+        chapter: "academy",
         title: "Fight!",
         description: "",
         page: "/combat",
       };
       const returnPage = vi
         .spyOn(tutorialLib, "getTutorialBattleReturnPage")
-        .mockReturnValue("/next-lesson");
+        .mockReturnValue("/travel");
       spies.push(returnPage);
       let settle!: (profile: Awaited<ReturnType<typeof state.fetchProfile>>) => void;
       state.fetchProfile.mockImplementationOnce(
@@ -603,22 +625,22 @@ describe("combat result screen", () => {
           }),
       );
       const { view } = mount({
-        battle: makeBattle({ battleType: "QUEST" }),
+        battle: makeGuidedBattle({ battleType: "QUEST" }),
         result: result({ outcome, curHealth } as never),
         isPending: false,
       });
+      // A tutorial fight ends with a single way forward.
+      expect(view.getAllByRole("link").map((link) => link.textContent)).toEqual([name]);
       const button = view.getByRole("link", { name });
       const link = button.closest("a")!;
-      expect(link.getAttribute("href")).toBe(
-        destination === "/travel" ? "/travel" : destination,
-      );
+      expect(link.getAttribute("href")).toBe(destination);
       const click = new MouseEvent("click", { bubbles: true, cancelable: true });
       act(() => {
         link.dispatchEvent(click);
       });
       expect(click.defaultPrevented).toBe(true);
       await waitFor(() =>
-        expect(view.getAllByRole("link", { name: "Returning..." }).length).toBe(2),
+        expect(view.getAllByRole("link", { name: "Returning..." }).length).toBe(1),
       );
       expect(state.fetchProfile).toHaveBeenCalledWith(undefined, { staleTime: 0 });
       // A second press while the profile loads does not fetch again.
@@ -632,33 +654,45 @@ describe("combat result screen", () => {
         userData: { tutorialOn: true, tutorialStep: 9, status: "AWAKE" },
       };
       await act(async () => settle(profile));
-      expect(returnPage).toHaveBeenCalledWith(
-        tutorialSteps.TUTORIAL_STEPS,
-        profile.userData,
-        outcome,
-        destination,
-      );
-      expect(state.push).toHaveBeenCalledWith("/next-lesson");
+      expect(returnPage).toHaveBeenCalledWith(profile.userData, "QUEST");
+      expect(state.push).toHaveBeenCalledWith("/travel");
       await waitFor(() => expect(view.getByRole("link", { name })).toBeTruthy());
     },
   );
+
+  it("keeps the shrine follow-up for an ordinary shrine war during the tutorial", () => {
+    state.profile = { ...state.profile, tutorialOn: true, tutorialStep: 8 };
+    state.currentStep = {
+      id: "combat-fight",
+      chapter: "academy",
+      title: "Fight!",
+      description: "",
+      page: "/combat",
+    };
+    const { view } = mount({
+      battle: makeBattle({ battleType: "SHRINE_WAR" }),
+      result: result(),
+      isPending: false,
+    });
+    expect(buttonTexts(view)).toEqual(["Return to Profile", "Back to Shrine"]);
+  });
 
   it("keeps the player on the result screen when the profile cannot load", async () => {
     state.profile = { ...state.profile, tutorialOn: true };
     state.currentStep = {
       id: "combat-fight",
-      chapter: "combat",
+      chapter: "academy",
       title: "Fight!",
       description: "",
       page: "/combat",
     };
     state.fetchProfile.mockRejectedValueOnce(new Error("offline"));
     const { view } = mount({
-      battle: makeBattle(),
+      battle: makeGuidedBattle(),
       result: result(),
       isPending: false,
     });
-    fireEvent.click(view.getByRole("link", { name: "Continue tutorial" }));
+    fireEvent.click(view.getByRole("link", { name: "Continue" }));
     await waitFor(() =>
       expect(toasts).toHaveBeenCalledWith({
         success: false,
@@ -667,23 +701,21 @@ describe("combat result screen", () => {
     );
     expect(state.push).not.toHaveBeenCalled();
     expect(
-      view
-        .getByRole("link", { name: "Continue tutorial" })
-        .hasAttribute("aria-disabled"),
+      view.getByRole("link", { name: "Continue" }).hasAttribute("aria-disabled"),
     ).toBe(false);
   });
 });
 
 describe("combat action notifications", () => {
-  it("titles each settlement notice by its kind and advances the tutorial on a win", async () => {
+  it("leaves settlement notices to the result screen and advances the tutorial on a win", async () => {
     state.currentStep = {
       id: "combat-fight",
-      chapter: "combat",
+      chapter: "academy",
       title: "Fight!",
       description: "",
       page: "/combat",
       onCombatWin: "combat-claim-reward",
-      onCombatLoss: "combat-enter-arena",
+      onCombatLoss: "combat-rematch",
     };
     const battle = makeBattle();
     mount({ battle, result: null, isPending: false });
@@ -711,15 +743,9 @@ describe("combat action notifications", () => {
         {},
       ),
     );
+    // Settlement notices wait for the result screen; only the action's own notice toasts.
     expect(toasts.mock.calls.map(([call]) => call)).toEqual([
       { success: false, message: "Turn passed" },
-      { success: false, title: "Item Broken", message: notifications[0] },
-      { success: false, title: "Low Durability Warning", message: notifications[1] },
-      { success: false, title: "Low Durability Warning", message: notifications[2] },
-      { success: true, title: "War Update", message: notifications[3] },
-      { success: true, title: "War Update", message: notifications[4] },
-      { success: true, title: "Quest Update", message: notifications[5] },
-      { success: true, title: "Quest Update", message: notifications[6] },
     ]);
     expect(state.setBattleState).toHaveBeenLastCalledWith({
       battle: settled,
@@ -756,5 +782,141 @@ describe("combat action notifications", () => {
     expect(findQuest).toHaveBeenCalledWith(state.profile.userQuests, ["chain-1"]);
     expect(view.getByText("Quest update chain-2")).toBeTruthy();
     expect(state.nextStep).not.toHaveBeenCalled();
+  });
+});
+
+describe("action selection after an action", () => {
+  afterEach(() => getDefaultStore().set(combatActionIdAtom, undefined));
+
+  /** Settles an action whose response carries the battle into `round`. */
+  const settle = async (battle: ReturnedBattle, actionId: string, round: number) =>
+    act(() =>
+      state.performOptions.onSuccess(
+        {
+          updateClient: true,
+          battleUpdate: { ...battle, round, version: battle.version + 1 },
+          result: null,
+          logEntries: undefined,
+          updatedQuestIds: [],
+        },
+        { battleId: battle.id, actionId },
+        {},
+      ),
+    );
+
+  it("drops Move once it spent the round's last AP, keeping it within the round", async () => {
+    const battle = makeBattle({ round: 1, activeUserId: "player" });
+    mount({ battle, result: null, isPending: false });
+    const store = getDefaultStore();
+    store.set(combatActionIdAtom, "move");
+    await settle(battle, "move", 1);
+    expect(store.get(combatActionIdAtom)).toBe("move");
+    await settle(battle, "move", 2);
+    expect(store.get(combatActionIdAtom)).toBeUndefined();
+  });
+
+  it("keeps a repeated Basic Attack selected into the next round", async () => {
+    const battle = makeBattle({ round: 1, activeUserId: "player" });
+    mount({ battle, result: null, isPending: false });
+    const store = getDefaultStore();
+    store.set(combatActionIdAtom, "basicAttack");
+    await settle(battle, "basicAttack", 2);
+    expect(store.get(combatActionIdAtom)).toBe("basicAttack");
+  });
+});
+
+describe("battlefield details", () => {
+  /** Builds the scene through Combat's own factory and returns the callbacks it hands the field. */
+  const startScene = () => {
+    let factory: ((...args: unknown[]) => Promise<unknown>) | undefined;
+    let options: Parameters<typeof combatScene.createCombatScene>[0] | undefined;
+    stub(gameScene, "useGameScene", (_name: string, _mount: unknown, build: never) => {
+      factory = build;
+      return { scene: { current: null }, isReady: true, error: false };
+    });
+    stub(combatScene, "createCombatScene", async (sceneOptions: never) => {
+      options = sceneOptions;
+      return {};
+    });
+    return { factory: () => factory, options: () => options };
+  };
+  const opponent = { tileKey: "3,2", userId: "opponent", position: { x: 40, y: 40 } };
+
+  it("closes a tapped fighter's aggro card on a press anywhere, so it never covers the actions", async () => {
+    // The minion faces the two fighters, so their aggro toward it is shown.
+    const base = makeBattle();
+    const battle = {
+      ...base,
+      usersState: base.usersState.map((user) =>
+        user.userId === "minion" ? { ...user, direction: "left" as const } : user,
+      ),
+    };
+    const scene = startScene();
+    const { view, rerender } = mount(
+      { battle, result: null, isPending: false },
+      { showAggro: true },
+    );
+    await act(async () => {
+      await scene.factory()?.(
+        document.createElement("div"),
+        new AbortController().signal,
+        () => {},
+      );
+    });
+    const tap = () =>
+      act(() => scene.options()?.onTap({ col: 3, row: 2 } as never, opponent));
+    tap();
+    expect(view.getByRole("tooltip").textContent).toContain("Aggro");
+    // A press on the action bar or anywhere outside the field closes it.
+    act(() => {
+      fireEvent.pointerDown(document.body);
+    });
+    expect(view.queryByRole("tooltip")).toBeNull();
+    // Choosing an action also clears the card for aiming.
+    tap();
+    expect(view.getByRole("tooltip")).toBeTruthy();
+    rerender({ battle, result: null, isPending: false }, {
+      id: "basicAttack",
+      name: "Basic Attack",
+    } as CombatAction);
+    expect(view.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("lists a tile's ground effects without the visual-only marks attacks leave", async () => {
+    const onTile = (effect: ReturnType<typeof makeEffect>, id: string) =>
+      ({ ...effect, id, longitude: 3, latitude: 2 }) as never;
+    const visuals = [1, 2, 3, 4].map((n) =>
+      onTile(makeEffect("visual"), `visual-${n}`),
+    );
+    const battle = makeBattle({ groundEffects: visuals });
+    const scene = startScene();
+    const { view, rerender } = mount({ battle, result: null, isPending: false });
+    await act(async () => {
+      await scene.factory()?.(
+        document.createElement("div"),
+        new AbortController().signal,
+        () => {},
+      );
+    });
+    act(() => scene.options()?.onHover(opponent as never));
+    expect(view.queryByRole("tooltip")).toBeNull();
+
+    const poison = onTile(makeEffect("poison", { power: 5, rounds: 2 }), "poison-1");
+    rerender({
+      battle: {
+        ...battle,
+        version: battle.version + 1,
+        groundEffects: [...visuals, poison],
+      },
+      result: null,
+      isPending: false,
+    });
+    act(() => scene.options()?.onHover(null as never));
+    act(() => scene.options()?.onHover(opponent as never));
+    // Rows read lower case; CSS capitalizes them.
+    const tooltip = view.getByRole("tooltip").textContent?.toLowerCase() ?? "";
+    expect(tooltip).toContain("ground effects");
+    expect(tooltip.match(/poison/g)).toHaveLength(1);
+    expect(tooltip).not.toContain("visual");
   });
 });

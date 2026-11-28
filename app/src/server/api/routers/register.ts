@@ -267,6 +267,8 @@ export const registerRouter = createTRPCRouter({
         musicOn: input.musicOn ?? true,
         sfxOn: input.sfxOn ?? true,
         buttonSfxOn: input.buttonSfxOn ?? true,
+        playedBefore: !!input.playedBefore,
+        guidanceLevel: input.playedBefore ? "HINTS" : "FULL",
         isBanned: sanctions.some((match) => match.sanction === "BAN"),
         isSilenced: sanctions.some((match) => match.sanction === "SILENCE"),
         // Experience is earned through the Academy Trials rather than handed out

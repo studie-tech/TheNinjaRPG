@@ -15,6 +15,7 @@ import {
   finishItemConsumeRequest,
   getItemConsumeErrorMessage,
 } from "@/libs/itemConsumption";
+import { reportableQuestNotifications } from "@/libs/travel";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 
 const sourceRoot = join(import.meta.dirname, "../../src");
@@ -520,6 +521,7 @@ describe("item-granting flows", () => {
         "updateInventory",
         "getInventoryQuantities",
         "prepareUserUpdate",
+        "reportableQuestNotifications",
         `return (${callbacks});`,
       )(
         {
@@ -550,6 +552,7 @@ describe("item-granting flows", () => {
           ),
         getInventoryQuantities,
         () => 17,
+        reportableQuestNotifications,
       ) as {
         onMutate: () => unknown;
         onSuccess: (

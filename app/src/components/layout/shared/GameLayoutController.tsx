@@ -51,6 +51,9 @@ import { getImageSet, layoutVariantClasses } from "./layoutVariants";
 
 // Lessons and quest scenes load once a character exists; visitors only need the welcome page.
 const TutorialAssistant = dynamic(() => import("@/layout/TutorialAssistant"));
+const ChapterCompleteWatcher = dynamic(() =>
+  import("@/layout/ChapterComplete").then((module) => module.ChapterCompleteWatcher),
+);
 
 /** Share navigation, live notifications and sidebar state across layout variants. */
 const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
@@ -378,6 +381,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
 
   return (
     <GlobalAudioProvider userData={layoutUser}>
+      {layoutUser && <ChapterCompleteWatcher />}
       {layoutUser && (
         <TutorialAssistant
           sidebarBreakpoint={getGameLayout(variant).sidebarBreakpoint}

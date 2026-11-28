@@ -1,11 +1,14 @@
 import { describe, expect, it } from "bun:test";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import {
+  describeGlobalTravelTime,
   filterLiveSectorBattleUsers,
   findGlobalTravelDestination,
   getBiomeAtSectorAnchor,
   isTravelKeyBlocked,
   optimisticGlobalTravelStart,
+  reportableQuestNotifications,
   resolveGlobeJourney,
   SECTOR_BATTLE_STALE_SECONDS,
 } from "@/libs/travel";
@@ -191,5 +194,24 @@ describe("isTravelKeyBlocked", () => {
     expect(isTravelKeyBlocked(press(document.body, { defaultPrevented: true }))).toBe(
       true,
     );
+  });
+});
+
+describe("describeGlobalTravelTime", () => {
+  it("words an instant trip without a zero duration", () => {
+    expect(describeGlobalTravelTime(0)).toBe("You arrive there instantly.");
+    expect(describeGlobalTravelTime(1)).toBe("The trip takes about 1 second.");
+    expect(describeGlobalTravelTime(42)).toBe("The trip takes about 42 seconds.");
+  });
+});
+
+describe("reportableQuestNotifications", () => {
+  it("drops the in-battle refusal of a fight the arrival already started", () => {
+    expect(
+      reportableQuestNotifications([
+        actionStatusMessage("BATTLE"),
+        "You arrived at destination for The Academy Trials.",
+      ]),
+    ).toEqual(["You arrived at destination for The Academy Trials."]);
   });
 });

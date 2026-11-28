@@ -1315,6 +1315,13 @@ describe("travel scene ground depth", () => {
         longitude: 4,
         latitude: 4,
       });
+      // The objective marker's foot anchors the lesson's pointer at its tile.
+      const marker = actors.questMarker();
+      if (kind === "quest") {
+        expect(marker?.size).toBe(tile.height);
+        expect(marker!.x).toBeGreaterThan(root.x);
+        expect(marker!.x).toBeLessThan(root.x + tile.width);
+      } else expect(marker).toBeUndefined();
       root.visible = false;
       expect(actors.hit(point.x, point.y)).toMatchObject({
         type: "avatar",

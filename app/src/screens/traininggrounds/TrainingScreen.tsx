@@ -79,6 +79,7 @@ import {
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useJutsuLoadoutCacheUpdate } from "@/hooks/useJutsuLoadoutCacheUpdate";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
 import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
@@ -88,6 +89,7 @@ import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import { CovertStatCard } from "@/layout/CovertStatCard";
 import { getElementImg } from "@/layout/ElementImage";
+import { EnergyMeter } from "@/layout/EnergyMeter";
 import {
   EnergyTrainingQueue,
   useEnergyTrainingQueue,
@@ -161,15 +163,20 @@ import { getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserInfo, useRequireInVillage } from "@/utils/UserContext";
 import type { BaseServerResponse } from "@/validators/base";
 
+/** Where the last visited training section is remembered for a player. */
+const trainingTabStorageKey = (userId: string) => `trainingTab:${userId}`;
+
 /** Render the traininggrounds screen independently of its route adapter. */
 export function TrainingScreen() {
   // Ensure user is in village
   const { userData, timeDiff, access } = useRequireInVillage("/traininggrounds");
-  const { currentStep } = useTutorialStep();
-  // The tutorial selects the panel containing its highlighted training action.
-  const focusJutsuTraining = isTutorialJutsuPickStep(currentStep);
   // Null until NavTabs restores the last visited section (or falls back to the first).
   const [section, setSection] = useState<string | null>(null);
+  // Links such as a story objective's "Find a sensei" open a section by name.
+  useEffect(() => {
+    const linked = new URLSearchParams(window.location.search).get("section");
+    if (linked) setSection(linked);
+  }, []);
   const { data: sidebarTimers } = api.profile.getSidebarTimers.useQuery(undefined, {
     enabled: !!userData && access,
   });
@@ -184,16 +191,11 @@ export function TrainingScreen() {
   const energyQueueLength = getEnergyQueue(userData).length;
   const trainingSections = getTrainingSections(showSenseiSystem);
 
-  // Tutorial steps select the panel containing their highlighted action.
-  const activeSection = focusJutsuTraining
-    ? "Jutsu"
-    : currentStep?.advanceOn === "trainStats"
-      ? "Stats"
-      : section;
+  const activeSection = section;
 
   // Every user-driven section change is remembered, including Radix keyboard navigation,
   // which bypasses the NavTabs click handler.
-  const sectionStorageKey = `trainingTab:${userData.userId}`;
+  const sectionStorageKey = trainingTabStorageKey(userData.userId);
   const selectSection = (value: string) => {
     safeLocalStorageSetItem(sectionStorageKey, value);
     startTransition(() => setSection(value));
@@ -215,6 +217,10 @@ export function TrainingScreen() {
               current={activeSection}
               onChange={setSection}
               options={trainingSections.options}
+              // The open tab is not the next thing to press, so tutorial rings skip it.
+              itemId={(option) =>
+                option === activeSection ? undefined : `tutorial-${option}`
+              }
               aliases={trainingSections.aliases}
               counts={{
                 Stats: energyQueueLength,
@@ -543,7 +549,9 @@ const StatsTraining: React.FC<
   const needsCaptcha = showCaptcha && captcha?.svg !== null;
 
   // Tutorial management hook
-  const { completeTutorialAction } = useTutorialStep();
+  const { currentStep, completeTutorialAction } = useTutorialStep();
+  const isEnergyLesson = currentStep?.advanceOn === "trainStats";
+  const isQueueLesson = currentStep?.advanceOn === "queueEnergy";
 
   // Mutations
   const { mutate: startTraining, isPending: isStarting } =
@@ -575,9 +583,12 @@ const StatsTraining: React.FC<
     saveQueue: queueStatTraining,
     isPending: isQueueingEnergy,
     error: energyQueueError,
-  } = useEnergyTrainingQueue(async () => {
-    await utils.misc.getCaptcha.invalidate();
-  });
+  } = useEnergyTrainingQueue(
+    async () => {
+      await utils.misc.getCaptcha.invalidate();
+    },
+    () => void completeTutorialAction("queueEnergy"),
+  );
 
   const { mutate: startMasteryTraining, isPending: isStartingMastery } =
     api.train.startMasteryTraining.useMutation({
@@ -720,7 +731,10 @@ const StatsTraining: React.FC<
             // The Energy controls only matter once the captcha check is out of the way
             needsCaptcha ? undefined : (
               <div className="my-2 ml-2 flex flex-col gap-1">
-                <div className="flex items-center justify-end gap-1">
+                <div
+                  id="tutorial-training-amount"
+                  className="flex items-center justify-end gap-1"
+                >
                   <Popover>
                     <PopoverTrigger
                       aria-label="About Energy training"
@@ -754,6 +768,12 @@ const StatsTraining: React.FC<
                       {(["Custom", "Max", "Queue"] as const).map((mode, index) => (
                         <Button
                           key={mode}
+                          // The mode in use is not the next thing to press, so rings skip it.
+                          id={
+                            statTrainingMode === mode
+                              ? undefined
+                              : `tutorial-training-${mode.toLowerCase()}`
+                          }
                           variant={statTrainingMode === mode ? "default" : "outline"}
                           size="sm"
                           className={cn(
@@ -779,6 +799,28 @@ const StatsTraining: React.FC<
             )
           }
         >
+          {/* A filled queue shows the Energy it is waiting for above. */}
+          {!needsCaptcha && energyQueueLength === 0 && (
+            <div className="mb-3">
+              <EnergyMeter
+                id="tutorial-training-energy"
+                available={availableEnergy}
+                total={userData.maxEnergy}
+                label="Energy available for training"
+              />
+            </div>
+          )}
+          {((isEnergyLesson && !isQueueingStats) ||
+            (isQueueLesson && isQueueingStats)) && (
+            <p
+              id="tutorial-training-preview"
+              className="mb-4 rounded-md border border-violet-500/40 bg-violet-500/10 p-2 text-center text-sm"
+            >
+              {isEnergyLesson
+                ? `Spend ${trainingEnergy} Energy for about +${formatTrainingGain(trainingEnergy)} in the stat you pick.`
+                : `Queue ${trainingEnergy} Energy: training continues on its own while you're offline, as your Energy refills.`}
+            </p>
+          )}
           {userData.status === "ASLEEP" && (
             <p className="mb-4 text-muted-foreground text-sm">
               Actions can wake you up when automatic waking is enabled. Existing queues
@@ -1204,12 +1246,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   const { prepareTrainingUpdate, updateTraining, refreshTraining } =
     useJutsuTrainingCacheUpdate();
+  const { prepareLoadoutUpdate, updateEquippedLoadout } = useJutsuLoadoutCacheUpdate();
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
     api.jutsu.startTraining.useMutation({
       onMutate: () => ({
         revision: prepareUserUpdate(),
         training: prepareTrainingUpdate(),
+        loadouts: prepareLoadoutUpdate(),
       }),
       onSuccess: async (result, variables, context) => {
         showMutationToast(result);
@@ -1217,7 +1261,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           await updateUser(result, { revision: context.revision, refetch: false });
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
-          await updateUser(result, { revision: context.revision, refetch: false });
+          await Promise.allSettled([
+            updateUser(result, { revision: context.revision, refetch: false }),
+            // An auto-equipped jutsu joined the active loadout.
+            result.equip && updateEquippedLoadout(result.equip, context.loadouts),
+          ]);
           if (variables.jutsuId === TUTORIAL_JUTSU_ID) {
             void completeTutorialAction("trainJutsu");
           }
@@ -1391,7 +1439,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     } else if (isQueueFull) {
       proceed_label = `Training queue full`;
     } else if (trainTimeLabel && cost) {
-      proceed_label = `${isQueueing ? "Queue" : "Train"}${count > 1 ? ` ${count} levels` : ""} [${trainTimeLabel}, ${cost} ryo]`;
+      proceed_label = `${isQueueing ? "Queue" : level === 0 ? "Learn" : "Train"}${count > 1 ? ` ${count} levels` : ""} [${trainTimeLabel}, ${cost} ryo]`;
     }
   }
 
@@ -1441,6 +1489,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     <>
       {(activeTraining || queuedJobs.length > 0) && (
         <TimedQueue
+          id="tutorial-jutsu-queue"
           title="Jutsu training queue"
           subtitle="Levels that start when the active training ends"
           capacity={trainingQueue?.capacity ?? 1}
@@ -1506,7 +1555,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           {isOpen && jutsu && (
             <Modal
               id="tutorial-traininggrounds-trainJutsu"
-              title="Confirm Purchase"
+              title={level === 0 ? `Learn ${jutsu.name}` : `Train ${jutsu.name}`}
               proceed_label={proceed_label}
               proceedDisabled={!Number.isFinite(levelCount)}
               isOpen={isOpen}
@@ -1548,21 +1597,24 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                     >
                       Levels to {isQueueing ? "queue" : "train"} (Max: {maxLevelCount})
                     </label>
-                    <NumberInput
-                      id="jutsu-level-count"
-                      inputMode="numeric"
-                      min={1}
-                      max={maxLevelCount}
-                      value={levelCount}
-                      onValueChange={setLevelCount}
-                      emptyFallback={1}
-                      className="w-full"
-                    />
-                    <p className="mt-2 text-muted-foreground text-xs">
-                      {count > 1
-                        ? `Levels ${level + 1}-${level + count}, trained one after another. Each level is priced at the level it trains.`
-                        : `Level ${level + 1}. Raise this to queue further levels of the same jutsu.`}
-                    </p>
+                    {/* A short centred count beside its explanation reads as a value, not an empty field. */}
+                    <div className="flex items-center gap-3">
+                      <NumberInput
+                        id="jutsu-level-count"
+                        inputMode="numeric"
+                        min={1}
+                        max={maxLevelCount}
+                        value={levelCount}
+                        onValueChange={setLevelCount}
+                        emptyFallback={1}
+                        className="w-20 shrink-0 text-center text-base tabular-nums"
+                      />
+                      <p className="min-w-0 flex-1 text-muted-foreground text-xs">
+                        {count > 1
+                          ? `Levels ${level + 1}-${level + count}, trained one after another. Each level is priced at the level it trains.`
+                          : `Level ${level + 1}. Raise this to queue further levels of the same jutsu.`}
+                      </p>
+                    </div>
                   </div>
                 )}
                 {!isPending && isRankedFavoritable(jutsu) && (
@@ -2069,3 +2121,7 @@ const buildTrainableJutsuTiles = (input: {
 
   return { alljutsus, userJutsuCounts };
 };
+
+/** Stats gained from an Energy amount before training bonuses, rounded for a preview. */
+const formatTrainingGain = (energy: number) =>
+  Math.max(1, Math.round(energy * STATS_PER_ENERGY)).toLocaleString();

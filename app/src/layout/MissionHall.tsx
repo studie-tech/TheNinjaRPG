@@ -39,6 +39,7 @@ import { PvpWinLocations } from "@/layout/PvpWinLocations";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   filterMissionHallQuests,
+  getMissionHallRewardPreview,
   getMissionHallSettings,
   getMissionHallTileQuests,
   missionHallStartBlockedMessage,
@@ -292,6 +293,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
               availableUserRanks,
             );
             const count = available.length;
+            const rewardPreview = getMissionHallRewardPreview(available);
             const quota = questDailyQuota(setting.type, userData);
             const capped = !!quota && quota.current >= quota.limit;
             // Checks
@@ -408,6 +410,12 @@ export default function MissionHall({ userData }: MissionHallProps) {
                     <AlertDialogTrigger asChild>
                       <button
                         type="button"
+                        // Lessons point at a tile by its kind and rank, such as an errand.
+                        id={
+                          isErrand
+                            ? "tutorial-missionhall-errand"
+                            : `tutorial-missionhall-${setting.type}-${setting.rank.toLowerCase()}`
+                        }
                         disabled={grayScale || isSpecificStartBlocked}
                         className={cn(
                           "disabled:cursor-not-allowed disabled:opacity-60",
@@ -428,6 +436,11 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           {count} available · random
                           {rankInfo && (
                             <span className="text-yellow-500"> {rankInfo}</span>
+                          )}
+                          {rewardPreview && (
+                            <span className="text-muted-foreground text-xs not-italic">
+                              {rewardPreview}
+                            </span>
                           )}
                         </p>
                         {isReducedRewards &&
@@ -452,6 +465,15 @@ export default function MissionHall({ userData }: MissionHallProps) {
                               Are you sure you want to accept a random{" "}
                               {`${setting.rank}-rank ${setting.type}`}? You can only
                               have one active {classifier} at a time.
+                              {rewardPreview && (
+                                <>
+                                  <br />
+                                  <br />
+                                  <span className="font-semibold">
+                                    Base reward: {rewardPreview}
+                                  </span>
+                                </>
+                              )}
                               {isReducedRewards && (
                                 <>
                                   <br />
@@ -477,6 +499,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           </AlertDialogAction>
                         ) : (
                           <AlertDialogAction
+                            id="tutorial-missionhall-accept"
                             disabled={isSpecificStartBlocked}
                             onClick={(e) => {
                               e.preventDefault();

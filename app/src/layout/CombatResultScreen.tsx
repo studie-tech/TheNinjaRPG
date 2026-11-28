@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
-import { CombatRewards } from "@/layout/CombatRewards";
+import { CombatNotices, CombatRewards } from "@/layout/CombatRewards";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import Link from "@/layout/Link";
 import { isPvpEnergyRewardBattle, sendsToHospital } from "@/libs/combat/settlement";
@@ -13,7 +13,7 @@ import { getIsolatedPyramid } from "@/libs/questRun";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialBattleReturnPage } from "@/libs/tutorial";
-import { TUTORIAL_STEPS, type TutorialStepConfig } from "@/libs/tutorialSteps";
+import type { TutorialStepConfig } from "@/libs/tutorialSteps";
 import { useRequiredUserDataSelector, userBattleAtom } from "@/utils/UserContext";
 
 interface CombatResultScreenProps {
@@ -40,8 +40,17 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
     userQuests: u.userQuests,
   }));
 
-  const showShrineAgain = result?.outcome === "Won" && battleType === "SHRINE_WAR";
-  const showTravelBtn = battleType === "QUEST" && !getIsolatedPyramid(userData);
+  // A fight the tutorial teaches ends with one way forward: back where it began.
+  // The battle carries that identity from initiation (isTutorialGuidedBattle), so an
+  // ordinary fight during the tutorial keeps its usual follow-ups.
+  const isTutorialFight =
+    !!currentStep &&
+    !!userData?.tutorialOn &&
+    !!battleRef.current?.extraState?.tutorialGuided;
+  const showShrineAgain =
+    !isTutorialFight && result?.outcome === "Won" && battleType === "SHRINE_WAR";
+  const showTravelBtn =
+    !isTutorialFight && battleType === "QUEST" && !getIsolatedPyramid(userData);
   const toHospital =
     !!battleRef.current &&
     !!result &&
@@ -60,14 +69,11 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
       // Navigation must wait for the confirmed profile: a cached BATTLE status
       // otherwise makes the tutorial redirect back to the fight that just ended.
       const profile = await utils.profile.getUser.fetch(undefined, { staleTime: 0 });
-      router.push(
-        getTutorialBattleReturnPage(
-          TUTORIAL_STEPS,
-          profile.userData,
-          result?.outcome,
-          destination,
-        ),
-      );
+      const page =
+        isTutorialFight &&
+        profile.userData &&
+        getTutorialBattleReturnPage(profile.userData, battleType);
+      router.push(page || destination);
     } catch {
       showMutationToast({
         success: false,
@@ -90,6 +96,7 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
               onStarted={() => setBattleAtom(undefined)}
             />
           )}
+          <CombatNotices notices={result.notifications} />
           <CombatRewards
             result={result}
             isOutlaw={!!userData?.isOutlaw}
@@ -104,6 +111,8 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
           <Button
             asChild
             id="return"
+            size={isTutorialFight ? "xl" : undefined}
+            decoration={isTutorialFight ? "gold" : undefined}
             className={cn("w-full", isReturningFromTutorial && returningClassName)}
           >
             <Link
@@ -128,8 +137,8 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
                 ? "Returning..."
                 : getIsolatedPyramid(userData)
                   ? "Continue Pyramid"
-                  : currentStep && userData?.tutorialOn
-                    ? "Continue tutorial"
+                  : isTutorialFight
+                    ? "Continue"
                     : `Return to ${toHospital ? "Hospital" : "Profile"}`}
             </Link>
           </Button>
@@ -138,7 +147,7 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
               <Link href="/shrine">Back to Shrine</Link>
             </Button>
           )}
-          {props.arenaActions}
+          {!isTutorialFight && props.arenaActions}
           {battleType === "RANKED_PVP" && (
             <Button asChild id="toPvpRank" className="w-full">
               <Link href="/battlearena#PVP%20Rank">Back to PvP Queue</Link>
@@ -150,21 +159,8 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
             </Button>
           )}
           {showTravelBtn && (
-            <Button
-              asChild
-              id="toTravel"
-              className={cn("w-full", isReturningFromTutorial && returningClassName)}
-            >
-              <Link
-                href="/travel"
-                aria-disabled={isReturningFromTutorial || undefined}
-                aria-busy={isReturningFromTutorial || undefined}
-                onClick={(event) => {
-                  void handleTutorialBattleReturn(event, "/travel");
-                }}
-              >
-                {isReturningFromTutorial ? "Returning..." : "To Map"}
-              </Link>
+            <Button asChild id="toTravel" className="w-full">
+              <Link href="/travel">To Map</Link>
             </Button>
           )}
         </div>

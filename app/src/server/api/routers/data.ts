@@ -5,6 +5,7 @@ import {
   BALANCE_EXCLUSION_IDS,
   BattleDataEntryType,
   BattleTypes,
+  BLACKSTEEL_CHAPTERS,
   ItemTypes,
   LetterRanks,
   MAX_PLAYER_LEVEL,
@@ -38,6 +39,7 @@ import { getRankedRank } from "@/libs/ranked_pvp";
 import { collapseRewards } from "@/libs/rewards";
 import { isSkillVisible } from "@/libs/skillRequirements";
 import { summarizeBattleOutcomes } from "@/libs/statistics";
+import { buildStoryChapterFunnel } from "@/libs/storyFunnel";
 import {
   balanceConditions,
   selectBalanceArchivePage,
@@ -87,6 +89,7 @@ import {
   selectQuestForGetQuestRewardStatistics,
   selectQuestForGetRecruitmentMainMetrics2,
   selectQuestHistoryForGetRecruitmentMainMetrics2,
+  selectQuestHistoryForStoryChapters,
   selectUserDataForGetBloodlineBalanceStatistics,
   selectUserDataForGetRankedRankDistributionStatistics,
   selectUserDataForGetRecruitmentDailyCountsBySource,
@@ -230,8 +233,8 @@ export const dataRouter = createTRPCRouter({
       const [
         allVisitorsRowRaw,
         signupsRowRaw,
-        nonStudentSignupsRowRaw,
-        nonStudentGeninSignupsRowRaw,
+        geninPlusSignupsRowRaw,
+        chuninPlusSignupsRowRaw,
         pvpSignupsRowRaw,
         tutorialFinishedSignupsRowRaw,
         totalRevenueRowRaw,
@@ -240,14 +243,15 @@ export const dataRouter = createTRPCRouter({
         completedTierQuestsRaw,
         geninPathQuests,
         geninPathRowsRaw,
+        storyChapterRowsRaw,
       ] = await Promise.all([
         // allVisitorsRow (with userAgent for device splitting)
         selectVisitorLogForGetRecruitmentMainMetrics(ctx.drizzle, visitorWhere),
         // signupsRow: users with an entry in ReferralSource (mapped via historical IP to the visit)
         selectVisitorLogForGetRecruitmentMainMetrics2(ctx.drizzle, visitorWhere, input),
-        // nonStudentSignupsRow: fetch individual users beyond STUDENT rank
+        // geninPlusSignupsRow: users beyond the STUDENT rank
         selectVisitorLogForGetRecruitmentMainMetrics3(ctx.drizzle, visitorWhere),
-        // nonStudentGeninSignupsRow: fetch individual users with userAgent for device splitting
+        // chuninPlusSignupsRow: users beyond the GENIN rank
         selectVisitorLogForGetRecruitmentMainMetrics4(ctx.drizzle, visitorWhere),
         // pvpSignupsRow: fetch individual users with userAgent for device splitting
         selectVisitorLogForGetRecruitmentMainMetrics5(ctx.drizzle, visitorWhere),
@@ -268,6 +272,8 @@ export const dataRouter = createTRPCRouter({
         // geninPath: the path's bounding quests and each tutorial graduate's position on it
         selectQuestForGeninPath(ctx.drizzle),
         selectVisitorLogForGeninPath(ctx.drizzle, visitorWhere, input),
+        // storyChapters: starts and finishes of the Blacksteel story chapters
+        selectQuestHistoryForStoryChapters(ctx.drizzle, visitorWhere, input),
       ]);
 
       // Filter the different rows by device type if specified
@@ -277,8 +283,8 @@ export const dataRouter = createTRPCRouter({
       const signupsRow = signupsRowRaw.filter(inDevices);
       // The referral join requires an account, so every signup has created a character.
       const characterCreationsRow = signupsRow;
-      const nonStudentSignupsRow = nonStudentSignupsRowRaw.filter(inDevices);
-      const nonStudentGeninSignupsRow = nonStudentGeninSignupsRowRaw.filter(inDevices);
+      const geninPlusSignupsRow = geninPlusSignupsRowRaw.filter(inDevices);
+      const chuninPlusSignupsRow = chuninPlusSignupsRowRaw.filter(inDevices);
       const pvpSignupsRow = pvpSignupsRowRaw.filter(inDevices);
       const tutorialFinishedSignupsRow =
         tutorialFinishedSignupsRowRaw.filter(inDevices);
@@ -319,8 +325,14 @@ export const dataRouter = createTRPCRouter({
       }));
 
       // Rank progression metrics
-      const nonStudentSignups = nonStudentSignupsRow.length;
-      const nonStudentGeninSignups = nonStudentGeninSignupsRow.length;
+      const geninPlusSignups = geninPlusSignupsRow.length;
+      const chuninPlusSignups = chuninPlusSignupsRow.length;
+
+      // Story chapters: each graduate's starts and finishes, per chapter
+      const storyChapters = buildStoryChapterFunnel(
+        BLACKSTEEL_CHAPTERS,
+        storyChapterRowsRaw.filter(inDevices),
+      );
 
       // Create a map of userId -> Set of completed tier quest IDs
       const completedTierQuestsMap = new Map<string, Set<string>>();
@@ -386,8 +398,9 @@ export const dataRouter = createTRPCRouter({
         signupValueUsd,
         totalRevenueUsd,
         tutorialSteps,
-        nonStudentSignups,
-        nonStudentGeninSignups,
+        geninPlusSignups,
+        chuninPlusSignups,
+        storyChapters,
         tierQuestCompletions,
         tierQuestDescriptions,
         geninPathSteps: geninPath.steps,

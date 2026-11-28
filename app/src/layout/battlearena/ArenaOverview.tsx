@@ -232,6 +232,7 @@ function ModeCard({
         {card.detail && <p className="text-muted-foreground text-xs">{card.detail}</p>}
         <span className="flex-1" />
         <Button
+          id={`tutorial-battlearena-mode-${card.mode.replace(" ", "-")}`}
           variant={card.quiet ? "outline" : "default"}
           className="mt-2 h-11 @max-[600px]:absolute @max-[600px]:inset-0 @max-[600px]:z-10 @max-[600px]:mt-0 @max-[600px]:h-auto @max-[600px]:rounded-xl @max-[600px]:border-0 @max-[600px]:bg-transparent @max-[600px]:text-transparent @max-[600px]:shadow-none @max-[600px]:hover:bg-black/5"
           onClick={() => onOpen(card.mode)}

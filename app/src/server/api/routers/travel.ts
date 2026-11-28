@@ -6,6 +6,10 @@ import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
 import { getFinishGlobalMoveUserUpdate, getRobPlayerUserUpdate } from "@/deltas/travel";
 import {
+  ARRIVAL_PUP_AI_ID,
+  BLACKSTEEL_COURIER_AI_ID,
+  BLACKSTEEL_DOUBLE_AI_ID,
+  BLACKSTEEL_PROCTOR_AI_ID,
   IMG_AVATAR_DEFAULT,
   MAP_WAKE_ISLAND_SECTOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
@@ -19,7 +23,6 @@ import {
   UserStatuses,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
-import { isCreator } from "@/libs/combat/creatorTrial";
 import {
   anonymousSpriteAppearance,
   resolveSpriteAppearance,
@@ -84,7 +87,6 @@ import { fetchIsolatedPyramid } from "@/queries/quests";
 import {
   fetchSectorWindowData,
   findSectorVillage,
-  findUserDataForCreatorBody,
   findUserDataForGetSectorData,
   findUserDataForGetSectorUsers,
   findUserForGlobalTravelFinish,
@@ -92,6 +94,7 @@ import {
   listQuestHistoryForGetSectorData,
   listQuestHistoryForGetSectorData2,
   listSectorForGetAllSectors,
+  listStoryCast,
   listUserDataForCompleteExpiredGlobalTravel,
   listUserDataForGetSectorUsers,
   listWarForGetSectorData,
@@ -115,6 +118,7 @@ import { breakStealth } from "@/routers/stealth";
 import { fetchActiveWars } from "@/routers/war";
 import {
   baseServerResponse,
+  cdnCachedProcedure,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -163,6 +167,23 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 const pusher = getServerPusher();
 
 export const travelRouter = createTRPCRouter({
+  // Map artwork of the figures in the Academy Trials' opening scene
+  getStoryCast: cdnCachedProcedure
+    .meta({ mcp: { description: "Get artwork of the Academy Trials' map scenes" } })
+    .query(async ({ ctx }) => {
+      const cast = await listStoryCast(ctx.drizzle, [
+        ARRIVAL_PUP_AI_ID,
+        BLACKSTEEL_COURIER_AI_ID,
+        BLACKSTEEL_DOUBLE_AI_ID,
+        BLACKSTEEL_PROCTOR_AI_ID,
+      ]);
+      return Object.fromEntries(
+        cast.map(({ userId, avatar, spriteAnimationBindings }) => [
+          userId,
+          { avatar, sheets: snapshotSpriteAnimations(spriteAnimationBindings) },
+        ]),
+      );
+    }),
   // Rob another player
   robPlayer: protectedProcedure
     .meta({ mcp: { description: "Rob another player for ryo" } })
@@ -530,9 +551,6 @@ export const travelRouter = createTRPCRouter({
         );
       });
 
-      const creatorBody = processedUsers.some(isCreator)
-        ? await findUserDataForCreatorBody(ctx.drizzle)
-        : undefined;
       const activeQuests = getUserQuests({ ...user, userQuests, completedQuests });
       const boundPlacementIds = new Set(
         activeQuests.flatMap((entry) =>
@@ -564,7 +582,7 @@ export const travelRouter = createTRPCRouter({
       );
 
       return {
-        users: withCreatorBody(processedUsers, creatorBody),
+        users: processedUsers,
         protectors: dutyPatrols,
         patrolShiftAt: dutyShift?.startedAt ?? null,
         patrolRevision: dutyShift?.revision ?? 0,
@@ -619,16 +637,12 @@ export const travelRouter = createTRPCRouter({
       ) {
         return [];
       }
-      const participants = toSectorParticipants(
+      return toSectorParticipants(
         viewer,
         users,
         withMercenaryParticipation(fetchedWarData),
         new Set(liveBattles.map((b) => b.id)),
       );
-      const creatorBody = participants.some(isCreator)
-        ? await findUserDataForCreatorBody(ctx.drizzle)
-        : undefined;
-      return withCreatorBody(participants, creatorBody);
     }),
   // Get village & alliance information for a given sector
   getVillageInSector: protectedProcedure
@@ -1396,25 +1410,6 @@ const toSectorParticipants = (
       }
       return participant;
     });
-
-/** Draw the creator with its full-body art; a disguised creator keeps the disguise's name. */
-const withCreatorBody = <T extends { username: string }>(
-  users: T[],
-  creatorBody: Awaited<ReturnType<typeof findUserDataForCreatorBody>>,
-) => {
-  if (!creatorBody?.avatar) return users;
-  const sheets = snapshotSpriteAnimations(creatorBody.spriteAnimationBindings);
-  return users.map((u) =>
-    isCreator(u)
-      ? {
-          ...u,
-          bodyArt: creatorBody.avatar,
-          bodyIdle: sheets?.idle,
-          bodyMove: sheets?.move,
-        }
-      : u,
-  );
-};
 
 /** Quests whose objectives guide where onboarding players land after global travel. */
 const ONBOARDING_QUEST_IDS = new Set([

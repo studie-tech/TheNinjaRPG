@@ -95,6 +95,7 @@ const setup = () => {
     updateUser: vi.fn(),
     refreshMovementPosition: vi.fn(),
     continueMovement: vi.fn(),
+    completeTutorialAction: vi.fn(),
     healTargetUser: null,
     buildStepPayload: vi.fn((from, dest, sector) => ({ from, dest, sector })),
     move: vi.fn(),
@@ -258,6 +259,7 @@ it("enters after a walk that was already accepted when the player clicked Enter"
   expect(test.scope.router.push).toHaveBeenCalledTimes(1);
   expect(test.scope.router.push).toHaveBeenCalledWith("/bank");
   expect(test.scope.buildingEntryRef.current).toBeNull();
+  expect(test.scope.completeTutorialAction).toHaveBeenCalledWith("sectorWalk");
 });
 
 const landed = { sector: 2, longitude: 3, latitude: 5, location: "Field" };

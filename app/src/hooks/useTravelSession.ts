@@ -39,7 +39,7 @@ import {
   optimisticGlobalTravelStart,
   resolveGlobeJourney,
 } from "@/libs/travel";
-import { isTutorialActive } from "@/libs/tutorial";
+import { getTutorialObjectiveSector, isTutorialActive } from "@/libs/tutorial";
 import { MINUTE_S } from "@/utils/time";
 import {
   selectUserWithoutPosition,
@@ -452,14 +452,18 @@ export function useTravelSession(isInteractive = true) {
   // otherwise starts on the player's own sector, which leaves the destination
   // up to 40 degrees around the sphere -- far enough out that it draws
   // edge-on near the limb, with nothing telling a new player the globe turns.
-  // Travel steps are the only ones whose relatedValue is a sector; everywhere
-  // else it names a quest.
-  const tutorialFocusSector =
-    userData?.tutorialOn &&
-    currentStep?.advanceOn === "travelArrive" &&
-    typeof currentStep?.relatedValue === "number"
+  // Travel steps name their sector; a step that names a quest objective in another
+  // sector focuses that objective's sector, on the branch the player chose, until
+  // the trip there starts.
+  const tutorialObjectiveSector = getTutorialObjectiveSector(currentStep, userData);
+  const tutorialFocusSector = !userData?.tutorialOn
+    ? null
+    : currentStep?.advanceOn === "travelArrive" &&
+        typeof currentStep?.relatedValue === "number"
       ? currentStep.relatedValue
-      : null;
+      : tutorialObjectiveSector !== null && tutorialObjectiveSector !== userData.sector
+        ? tutorialObjectiveSector
+        : null;
   const tutorialSetFocusRef = useRef<number | null>(null);
   useEffect(() => {
     if (tutorialFocusSector !== null) {
@@ -667,10 +671,7 @@ export function useTravelSession(isInteractive = true) {
       if (admissionRecovery) return;
       // Guards against global movement
       if (tutorialFocusSector !== null && sector !== tutorialFocusSector) {
-        showMutationToast({
-          success: false,
-          message: `For now, you need to travel to sector ${tutorialFocusSector} first.`,
-        });
+        showTutorialDestinationToast(sectorNames.get(tutorialFocusSector));
         setAutoDestination(null);
         return;
       }
@@ -678,7 +679,7 @@ export function useTravelSession(isInteractive = true) {
       setTargetPosition(null);
       startGlobalMove({ sector });
     },
-    [admissionRecovery, tutorialFocusSector, startGlobalMove],
+    [admissionRecovery, tutorialFocusSector, sectorNames, startGlobalMove],
   );
 
   // Whether world-travel can be started toward a given sector
@@ -701,9 +702,16 @@ export function useTravelSession(isInteractive = true) {
   // Stable identity for the globe click path: MapComponent is memoized to avoid
   // re-renders during countdown updates, so this callback must not change when
   // sector / isStartingTravel change. The guard is read from a ref instead.
-  const travelGuardRef = useRef<{ sector: number | undefined; canTravel: boolean }>({
+  const travelGuardRef = useRef<{
+    sector: number | undefined;
+    canTravel: boolean;
+    focusSector: number | null;
+    focusName: string | undefined;
+  }>({
     sector: undefined,
     canTravel: false,
+    focusSector: null,
+    focusName: undefined,
   });
   const canStartGlobalTravel =
     !admissionRecovery && canAttemptAwakeAction(userData) && !isStartingTravel;
@@ -711,12 +719,25 @@ export function useTravelSession(isInteractive = true) {
     travelGuardRef.current = {
       sector: userData?.sector,
       canTravel: canStartGlobalTravel,
+      focusSector: tutorialFocusSector,
+      focusName:
+        tutorialFocusSector === null ? undefined : sectorNames.get(tutorialFocusSector),
     };
-  }, [userData?.sector, canStartGlobalTravel]);
+  }, [userData?.sector, canStartGlobalTravel, tutorialFocusSector, sectorNames]);
 
   const initiateTravelToSector = useCallback((sector: number) => {
-    const { sector: current, canTravel } = travelGuardRef.current;
+    const {
+      sector: current,
+      canTravel,
+      focusSector,
+      focusName,
+    } = travelGuardRef.current;
     if (!canTravel) return;
+    // A lesson's trip asks for its confirmation only for the lesson's destination.
+    if (focusSector !== null && sector !== focusSector && sector !== current) {
+      showTutorialDestinationToast(focusName);
+      return;
+    }
     if (sector === current) {
       showMutationToast({
         success: false,
@@ -943,6 +964,13 @@ export function useTravelSession(isInteractive = true) {
 
 /** Bootstrap sector windows stay cached this long after travel unmounts. */
 const BOOT_WINDOW_RETENTION_MS = 30 * MINUTE_S * 1000;
+
+/** Tells a player on a lesson's trip where the lesson sends them first. */
+const showTutorialDestinationToast = (destination: string | undefined) =>
+  showMutationToast({
+    success: false,
+    message: `For now, travel to ${destination ?? "the marked sector"} first.`,
+  });
 
 /** A stored per-sector window entry (position within a window comes from the layout) */
 type StoredSectorEntry =

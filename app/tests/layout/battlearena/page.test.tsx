@@ -19,6 +19,7 @@ import * as rankedMode from "@/layout/battlearena/RankedMode";
 import * as sparringMode from "@/layout/battlearena/SparringMode";
 import * as trainingMode from "@/layout/battlearena/TrainingMode";
 import * as contentBox from "@/layout/ContentBox";
+import * as SystemIntroBanner from "@/layout/SystemIntroBanner";
 import * as userContext from "@/utils/UserContext";
 import {
   installBrowserGlobals,
@@ -36,6 +37,8 @@ beforeEach(() => {
   tutorialStep = undefined;
   arenaProps = {};
   // Bun retains module mocks from other suites; navigation requires the real title.
+  // The page is under test, not its one-time intro banner and its profile mutation.
+  vi.spyOn(SystemIntroBanner, "SystemIntroBanner").mockImplementation(() => null);
   vi.spyOn(contentBox, "default").mockImplementation(actualContentBox);
   vi.spyOn(userContext, "useRequireInVillage").mockReturnValue({
     userData: { userId: "me", isBanned: false },
@@ -115,22 +118,17 @@ it("leaves for the village after returning from a mode through the page title", 
   await waitFor(() => expect(window.location.pathname).toBe("/village"));
 });
 
-it("leaves the forced tutorial mode for the village through the page title", async () => {
-  window.history.replaceState({}, "", "/battlearena#Training");
-  window.history.pushState({}, "", "/battlearena#Sparring");
-  tutorialStep = { advanceOn: "arenaStart" };
-  render(<Arena />);
-  expect(screen.getByRole("region", { name: "Arena mode" })).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "Battle Arena" }));
-  await waitFor(() => expect(window.location.pathname).toBe("/village"));
-});
-
-it("opens Arena with the Academy Dummy during the tutorial arena step", () => {
-  window.history.replaceState({}, "", "/battlearena#Sparring");
+it("opens on the overview during the tutorial arena step, with the dummy picked", () => {
+  window.history.replaceState({}, "", "/battlearena");
   window.localStorage.setItem("arenaAI4", JSON.stringify("some-other-ai"));
   tutorialStep = { advanceOn: "arenaStart" };
   act(() => {
     render(<Arena />);
+  });
+  expect(screen.queryByRole("region", { name: "Arena mode" })).toBeNull();
+  act(() => {
+    window.history.pushState({}, "", "/battlearena#Arena");
+    window.dispatchEvent(new Event("hashchange"));
   });
   expect(screen.getByRole("region", { name: "Arena mode" })).toBeDefined();
   expect(arenaProps.aiId).toBe(TUTORIAL_ARENA_DUMMY_ID);

@@ -735,6 +735,25 @@ export const updateUserDataForUpdatePreferences = (
   ctx: { userId: string },
 ) => client.update(userData).set(input).where(eq(userData.userId, ctx.userId));
 
+/**
+ * Record that the player has seen a system's one-time introduction. Guarded on the
+ * id being absent, so two tabs dismissing the same banner add it once.
+ */
+export const updateUserDataForMarkIntroSeen = (
+  client: Pick<DrizzleClient, "update">,
+  ctx: { userId: string },
+  intro: string,
+) =>
+  client
+    .update(userData)
+    .set({ seenIntros: sql`JSON_ARRAY_APPEND(${userData.seenIntros}, '$', ${intro})` })
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        sql`NOT JSON_CONTAINS(${userData.seenIntros}, JSON_QUOTE(${intro}))`,
+      ),
+    );
+
 /** Build the `userBlackList` listing for `getBlacklist`, using predicates on `creatorUserId`. */
 export const listUserBlackListForGetBlacklist = (
   client: Pick<DrizzleClient, "query">,
@@ -2680,3 +2699,50 @@ export const updateUserBanditProfession = (
         enabled ? eq(userData.isOutlaw, true) : undefined,
       ),
     );
+
+/**
+ * Build the completion of a returning player's unfinished Academy Trials for Express
+ * Trials, guarded on the attempt still being open.
+ */
+export const updateQuestHistoryForExpressTrials = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  questId: string,
+) =>
+  client
+    .update(questHistory)
+    .set({ completed: 1, endAt: new Date() })
+    .where(
+      and(
+        eq(questHistory.userId, userId),
+        eq(questHistory.questId, questId),
+        eq(questHistory.completed, 0),
+        isNull(questHistory.endAt),
+      ),
+    );
+
+/**
+ * Build the grant of a jutsu Express Trials hand out in place of its lesson, learned at
+ * level 1 and equipped when `equipped` says so. A jutsu the player already owns stays as
+ * it is and reports no affected row.
+ */
+export const insertUserJutsuForExpressTrials = (
+  client: Pick<DrizzleClient, "insert">,
+  row: { id: string; userId: string; jutsuId: string; equipped: boolean },
+) =>
+  client
+    .insert(userJutsu)
+    .values(row)
+    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+
+/** Build the lookup of whether the player owns any copy of an item, carried or stored. */
+export const selectUserItemForExpressTrials = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  itemId: string,
+) =>
+  client
+    .select({ id: userItem.id })
+    .from(userItem)
+    .where(and(eq(userItem.userId, userId), eq(userItem.itemId, itemId)))
+    .limit(1);

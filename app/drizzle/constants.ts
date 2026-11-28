@@ -5,6 +5,10 @@ export const TAVERN_IMAGE_UPLOAD_DAILY_LIMIT = 50;
 export const AVATAR_UPLOAD_DAILY_LIMIT = 50;
 
 export const OCCUPATIONS = ["GATHERING", "HUNTER", "CRAFTING"] as const;
+
+/** Story guidance: full pointers, hints only, or none beyond "New" badges. */
+export const GuidanceLevels = ["FULL", "HINTS", "OFF"] as const;
+export type GuidanceLevel = (typeof GuidanceLevels)[number];
 export type OccupationType = (typeof OCCUPATIONS)[number];
 
 export const VARIANT_COST_TYPES = [
@@ -1709,15 +1713,154 @@ export type SentimentType = (typeof Sentiment)[number];
 /** Tutorial assistant portrait (Lemu). */
 export const IMG_URL_ASSISTANT =
   "https://uploadthing.b-cdn.net/f/content-NBVEXpYD8aRhwFof6jq45.webp" as const;
+/** The Bondkeeper elder who speaks for the sanctuary in its lessons. */
+export const IMG_BONDKEEPER_ELDER =
+  "https://ui0arpl8sm.ufs.sh/f/bondkeeper-cdd81aa4abf844a5.webp" as const;
 export const IMG_URL_HANDPOINTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIvN7gkJxfOewksxBoS1HQCihpL7c42Ky9uUF.webp" as const;
 export const TUTORIAL_JUTSU_ID = "clh4d6pxd0006tb0h4y1yudi5";
 export const TUTORIAL_ITEM_ID = "VOditPJ3X2id0yC-F5Kz3";
+/** Shuriken Express Trials hand out in place of the skipped shop lesson. */
+export const EXPRESS_TRIALS_SHURIKEN = 3;
 export const TUTORIAL_STARTER_QUEST_ID = "eYDVpL63vPhK3lywMexdv";
 export const TUTORIAL_GENIN_EXAM_QUEST_ID = "9-t1rNWEzXbIfdUfxWrny";
+/** Scene characters that stand for Lemu in quest content; she is drawn as IMG_URL_ASSISTANT. */
+export const LEMU_SCENE_CHARACTER_IDS: readonly string[] = [
+  "UxcxyMdvZoae6zaSMZklT",
+  "alsLzZGTl2s2Tag9zmKVv",
+];
 export const HEAVENLY_SONATA_BLOODLINE_ID = "clh4d6q6s000atb0h0qdqdh1z";
 export const BLUE_BLADE_EYES_BLOODLINE_ID = "clh4d6qo4000itb0hrx8t06wq";
 export const TUTORIAL_ARENA_DUMMY_ID = "ICXb49Z0Jle3GyJ-rosTi";
+/** Navigation intensity of a story chapter: G3 spotlights, G0 only marks it new. */
+export const StoryNavigationLevels = ["G3", "G2", "G1", "G0"] as const;
+export type StoryNavigationLevel = (typeof StoryNavigationLevels)[number];
+
+/** The stronghold operation and the debrief that close chapter 16. */
+export const BLACKSTEEL_PYRAMID_QUEST_ID = "iUnQO8Fek3yJ-tL4Djv99";
+export const BLACKSTEEL_DEBRIEF_QUEST_ID = "jYyTQ5Ead2o3i5kzFSH2m";
+
+/**
+ * The Blacksteel Thread: the story chapters that follow the Academy Trials up to the
+ * Chunin Exams. Every chapter is picked up at the Academy. `navigation` says how much
+ * the dock points at a chapter once it unlocks, fading as the player grows used to
+ * finding chapters themselves. Optional chapters never gate the next one. A chapter's
+ * `followUpQuestIds` continue it in order; the last one closes it.
+ */
+export const BLACKSTEEL_CHAPTERS = [
+  {
+    chapter: 8,
+    questId: "fBl8FVD4ZRDsFiNk4kSC6",
+    title: "The Ledger",
+    level: 5,
+    navigation: "G3",
+    leadQuestIds: ["blacksteel-lead-dockmaster", "blacksteel-lead-ramen-tab"],
+  },
+  {
+    chapter: 9,
+    questId: "skI_tgvM3bxxji1Ok0m7w",
+    title: "Watchtowers",
+    level: 7,
+    navigation: "G2",
+    leadQuestIds: ["blacksteel-lead-escort-ledger", "blacksteel-lead-night-watch"],
+  },
+  {
+    chapter: 10,
+    questId: "khBAD-GDRwvU2q9_UjQ4H",
+    title: "Conductors",
+    level: 10,
+    navigation: "G2",
+    leadQuestIds: ["blacksteel-lead-crate-seals", "blacksteel-lead-false-courier"],
+  },
+  {
+    chapter: 11,
+    questId: "ps9Li4LSfWC1wkz3Evvh6",
+    title: "Proving Grounds",
+    level: 12,
+    navigation: "G1",
+    leadQuestIds: ["blacksteel-lead-raid-site", "blacksteel-lead-arena-whispers"],
+  },
+  {
+    chapter: 12,
+    questId: "XGYnC6bQKNK77wYE4NXCM",
+    title: "The Cold Trail",
+    level: 14,
+    navigation: "G1",
+    leadQuestIds: ["blacksteel-lead-scent-markers"],
+  },
+  {
+    chapter: 13,
+    questId: "blacksteel-ch13-sick-pup",
+    title: "The Sick Pup",
+    level: 16,
+    navigation: "G1",
+    optional: true,
+    leadQuestIds: ["blacksteel-lead-violet-glow"],
+  },
+  {
+    chapter: 14,
+    questId: "kjzWlxhmRqtw8EnvdNPbZ",
+    title: "Active Duty",
+    level: 20,
+    navigation: "G0",
+    leadQuestIds: ["blacksteel-lead-junction-thefts"],
+  },
+  {
+    chapter: 15,
+    questId: "I8UmQH2-Hei-hRrA-vP6f",
+    title: "Sparring Clearance",
+    level: 22,
+    navigation: "G0",
+    leadQuestIds: ["blacksteel-lead-dark-plate"],
+  },
+  {
+    chapter: 16,
+    questId: "KP0__fXg2i6pLOQ95yTWX",
+    title: "Deployment",
+    level: 24,
+    navigation: "G0",
+    leadQuestIds: [],
+    followUpQuestIds: [BLACKSTEEL_PYRAMID_QUEST_ID, BLACKSTEEL_DEBRIEF_QUEST_ID],
+  },
+  {
+    chapter: 17,
+    questId: "blacksteel-ch17-exam-prep",
+    title: "Exam Prep",
+    level: 26,
+    navigation: "G0",
+    optional: true,
+    leadQuestIds: [],
+  },
+] as const satisfies readonly {
+  chapter: number;
+  questId: string;
+  title: string;
+  level: number;
+  navigation: StoryNavigationLevel;
+  optional?: boolean;
+  leadQuestIds: readonly string[];
+  followUpQuestIds?: readonly string[];
+}[];
+export type BlacksteelChapter = (typeof BLACKSTEEL_CHAPTERS)[number];
+export const CHUNIN_EXAM_QUEST_ID = "iB3mdNvAZfBWVhsMEVBBl";
+/** Story side quests from Archivist Sora, offered at the Academy after their chapter. */
+export const BLACKSTEEL_LEAD_QUEST_IDS: readonly string[] = BLACKSTEEL_CHAPTERS.flatMap(
+  (chapter) => chapter.leadQuestIds,
+);
+/** Shinobi Fundamentals dailies that ask for story-onboarding actions. */
+export const ONBOARDING_DAILY_QUEST_IDS: readonly string[] = [
+  "caepucHZEbYSBvLLKObWl",
+  "blacksteel-daily-first-steps",
+  "blacksteel-daily-active-duty",
+];
+/** Opponent of the Academy Trials' first fight: the double the masked courier leaves at Horizon. */
+export const BLACKSTEEL_DOUBLE_AI_ID = "blacksteel-smoke-double";
+/** The masked courier of the Academy Trials. */
+export const BLACKSTEEL_COURIER_AI_ID = "blacksteel-masked-courier";
+/** The pup the courier hunts, as it runs across the sector map. */
+export const ARRIVAL_PUP_AI_ID = "oY4j0GzdZ_VUQSU45lPKx";
+/** Opponent of the Genin exam's practical test. */
+export const BLACKSTEEL_PROCTOR_AI_ID = "blacksteel-proctor-clone";
 /** The seeded training dummy fought from the arena. */
 export const TRAINING_ARENA_DUMMY_ID = "tra93opw09262024jut5ufa8f";
 
@@ -1756,7 +1899,10 @@ export const RecruitmentMetricMax: Record<RecruitmentMetric, number> = {
 
 export const RECRUITMENT_GOALS = {
   SIGNUP_RATE_PERCENT: 20,
-  RANK_RATE_PERCENT: 5,
+  /** Signups that graduated the Academy Trials to Genin or beyond. */
+  GENIN_RATE_PERCENT: 50,
+  /** Signups promoted to Chunin or beyond. */
+  CHUNIN_RATE_PERCENT: 10,
   PVP_RATE_PERCENT: 5,
   TUTORIAL_RATE_PERCENT: 50,
   SIGNUP_VALUE_USD: 0.5,
@@ -1766,7 +1912,7 @@ export const RECRUITMENT_GOALS = {
 export const RECRUITMENT_STALLED_AFTER_DAYS = 7;
 
 // Length of TUTORIAL_STEPS in hooks/tutorial.tsx; tests/libs/tutorial.test.ts enforces it.
-export const TUTORIAL_STEPS_COUNT = 48;
+export const TUTORIAL_STEPS_COUNT = 52;
 
 // Recruitment rewards config
 export const RECRUITMENT_REWARDS = [
@@ -2056,6 +2202,17 @@ export const VILLAGE_REDUCED_GAINS_DAYS = 7;
 export const VILLAGE_REDUCED_GAINS_FACTOR = 0.5;
 // Highest level a Horizon user can reach before joining one of the main villages.
 export const HORIZON_MAX_LEVEL = 10;
+/** Level the Road to Genin exam asks for; Express Trials start returning players at it. */
+export const GENIN_EXAM_LEVEL = 5;
+/**
+ * The Genin exam stops offering a village while its players active this week exceed the
+ * quietest joinable village's by this factor and by at least VILLAGE_CHOICE_FULL_MIN_GAP
+ * players, so new Genin fill the quieter villages. The VILLAGE_CHOICE_MIN_OPEN quietest
+ * villages are always offered.
+ */
+export const VILLAGE_CHOICE_FULL_RATIO = 1.25;
+export const VILLAGE_CHOICE_FULL_MIN_GAP = 20;
+export const VILLAGE_CHOICE_MIN_OPEN = 2;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
 /** Ranks eligible to enroll and provide a village duty defender. */
 export const VILLAGE_DUTY_RANKS = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"] as const;
@@ -2429,8 +2586,8 @@ export const RANKS_RESTRICTED_FROM_PVP: readonly UserRank[] = ["STUDENT", "GENIN
 
 /**
  * The game's creator. Attacking them on the map, or a quest fight naming them, opens a PvE
- * trial instead, so their account never enters combat. The map draws them as the trial's
- * opening form, while still offering the attack.
+ * trial instead, so their account never enters combat. The map offers that attack whatever
+ * their rank and however crowded their tile.
  */
 export const CREATOR_USERNAME = "Terriator";
 /** Sheet an AI plays as it arrives by transformation, from its previous form to its own. */

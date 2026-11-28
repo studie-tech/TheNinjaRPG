@@ -5,10 +5,12 @@ import {
   findCompletedPredecessor,
   findPredecessor,
   getActiveObjective,
+  hasUnclaimedPredecessorReward,
   isQuestComplete,
   isQuestObjectiveAvailable,
   objectiveLinks,
 } from "@/libs/objectives";
+import { GENIN_QUEST_OBJECTIVES } from "@/libs/tutorial";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 
 const battle = {
@@ -38,6 +40,61 @@ describe("findCompletedPredecessor", () => {
     expect(
       findCompletedPredecessor([battle, lost], "lost", tracker([])),
     ).toBeUndefined();
+  });
+});
+
+describe("hasUnclaimedPredecessorReward", () => {
+  // The Road to Genin opens with a rewarded level check, then the exam battle without a
+  // reward, then the dialog the exam-tour lesson asks the player to answer.
+  const { level, exam, proctor, tour, choose } = GENIN_QUEST_OBJECTIVES;
+  const quest = {
+    content: {
+      objectives: [
+        { id: level, task: "user_level", nextObjectiveId: exam, reward_exp: 2500 },
+        { id: exam, task: "move_to_location", nextObjectiveId: proctor },
+        { id: proctor, task: "start_battle", nextObjectiveId: tour },
+        {
+          id: tour,
+          task: "dialog",
+          nextObjectiveId: [{ text: "Choose my village", nextObjectiveId: choose }],
+          reward_exp: 5000,
+        },
+        { id: choose, task: "dialog", nextObjectiveId: [] },
+      ],
+    },
+  } as unknown as Pick<Quest, "content">;
+  const goals = (entries: [string, boolean][]) =>
+    ({
+      goals: entries.map(([id, collected]) => ({ id, done: true, collected })),
+    }) as unknown as QuestTrackerType;
+
+  it("leaves the exam-tour answer open beside an unclaimed User Level reward", () => {
+    const tracker = goals([
+      [level, false],
+      [exam, false],
+      [proctor, false],
+    ]);
+    expect(hasUnclaimedPredecessorReward(quest, tracker, tour)).toBe(false);
+  });
+
+  it("holds the dialog for the reward its predecessor just earned", () => {
+    const tracker = goals([
+      [level, true],
+      [exam, true],
+      [proctor, true],
+      [tour, false],
+    ]);
+    expect(hasUnclaimedPredecessorReward(quest, tracker, choose)).toBe(true);
+  });
+
+  it("releases the dialog once that reward is collected", () => {
+    const tracker = goals([
+      [level, false],
+      [exam, true],
+      [proctor, true],
+      [tour, true],
+    ]);
+    expect(hasUnclaimedPredecessorReward(quest, tracker, choose)).toBe(false);
   });
 });
 

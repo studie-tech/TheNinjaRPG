@@ -195,6 +195,7 @@ export const Modal: React.FC<ModalProps> = (props) => {
     >
       <DialogContent
         id={props.id ? `${props.id}-content` : undefined}
+        data-modal=""
         closeDisabled={props.isLoading}
         className={cn(
           props.className || "",

@@ -1,5 +1,6 @@
 import type { CsStage, CsTraining } from "@/libs/chakraStorm/content";
 import type { CsProgress, CsStageRecord } from "@/libs/chakraStorm/progress";
+import type { DailyDutyReward } from "@/libs/dailyDutyExperience";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 /** Apply a confirmed Training Hall purchase: the new level and the intel it cost. */
@@ -31,7 +32,7 @@ export const getChakraStormClaimUpdate =
  * leaves the profile as it was.
  */
 export const getScoutingReportUserUpdate = (duty: {
-  reward: { ryo: number; prestige: number; villageTokens: number } | null;
+  reward: DailyDutyReward | null;
   villageId: string | null;
   paidAt: Date;
 }): { userDelta: UserDelta; userPatch?: UserCachePatch } =>
@@ -40,6 +41,9 @@ export const getScoutingReportUserUpdate = (duty: {
         userDelta: {
           money: duty.reward.ryo,
           villagePrestige: duty.reward.prestige,
+          ...(duty.reward.experience > 0
+            ? { earnedExperience: duty.reward.experience }
+            : {}),
           ...(duty.villageId
             ? { village: { id: duty.villageId, tokens: duty.reward.villageTokens } }
             : {}),

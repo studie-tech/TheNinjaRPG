@@ -278,8 +278,6 @@ export const createTravelActors = (
             orderB = movementOrder.get(b.key);
           return (
             Number(ownB) - Number(ownA) ||
-            Number(b.user.username === CREATOR_USERNAME) -
-              Number(a.user.username === CREATOR_USERNAME) ||
             Number(b.onScreen) - Number(a.onScreen) ||
             // Visible quest/hostile NPCs retain their controls within the same body budget;
             // ambient wildlife yields to every player.
@@ -805,11 +803,10 @@ export const createTravelActors = (
         // The published edge owns interpolation; its destination consumes any queued snapshot path.
         record.path.length = 0;
         record.tile = recipe.tile;
-        record.facing = lpcFacing(
-          movement.x - record.x,
-          movement.y - record.y,
-          record.facing,
-        );
+        record.facing =
+          movement.direction === null && movement.standing !== undefined
+            ? movement.standing
+            : lpcFacing(movement.x - record.x, movement.y - record.y, record.facing);
         record.heading = headingOf(movement.x - record.x, record.heading);
         record.x = movement.x;
         record.y = movement.y;
@@ -833,7 +830,7 @@ export const createTravelActors = (
       }
       // Players, quest NPCs and orbiting crowds re-sort the moment they cross scenery.
       if (
-        recipe.user?.npcInteractionType !== "AMBIENT" &&
+        (recipe.user?.npcInteractionType !== "AMBIENT" || recipe.user.isStoryActor) &&
         (record.x !== fromX || record.y !== fromY || recipe.spread || recipe.quest)
       )
         urgentDepth = true;
@@ -1014,6 +1011,17 @@ export const createTravelActors = (
       const feet = actorFeet(record);
       return { x: feet.x + container.x, y: feet.y + container.y };
     },
+    /** The viewer's first objective marker, as `stance` describes one actor. */
+    questMarker: () => {
+      for (const [key, record] of records)
+        if (key.startsWith("quest:")) return actorStance(record, container);
+      return undefined;
+    },
+    /** Where an actor stands in window coordinates: its feet, its head and its tile's height. */
+    stance: (key: string) => {
+      const record = records.get(key);
+      return record && actorStance(record, container);
+    },
     /** World-space extent and paint depth of a user's actor; scenery above that depth covers it. */
     body: (userId: string) => {
       const record = records.get(`user:${userId}`);
@@ -1114,6 +1122,23 @@ const actorFeet = (record: ActorRecord) => {
   };
 };
 
+/** An actor's feet and head in window coordinates, steady through its animation frames. */
+const actorStance = (record: ActorRecord, origin: { x: number; y: number }) => {
+  const feet = actorFeet(record);
+  const body = record.recipe.parts.find((part) => part.kind === "avatar");
+  const height = body
+    ? body.character
+      ? body.size * LPC_FIGURE_HEIGHT
+      : body.size * ART_FIGURE_HEIGHT
+    : record.recipe.tile.height;
+  return {
+    x: feet.x + origin.x,
+    y: feet.y + origin.y,
+    top: feet.y + origin.y + height,
+    size: record.recipe.tile.height,
+  };
+};
+
 /**
  * Container-local box of a character's visible figure within its sprite frame, from the feet up;
  * other art uses its live bounds.
@@ -1197,9 +1222,10 @@ export const travelActorRecipes = (
   for (const user of snapshot.users) {
     if (!canShowUser(snapshot, user)) continue;
     // Roaming NPCs only start on their anchor; they never orbit tile mates.
-    const key = user.npcWander
-      ? travelActorKey(user)
-      : `${user.longitude},${user.latitude}`;
+    const key =
+      user.npcWander || user.npcWalk
+        ? travelActorKey(user)
+        : `${user.longitude},${user.latitude}`;
     const group = grouped.get(key) ?? [];
     group.push(user);
     grouped.set(key, group);
@@ -1215,9 +1241,8 @@ export const travelActorRecipes = (
       ? awake.filter((user) => selected.has(travelActorKey(user)))
       : awake;
     shown.forEach((user, index) => {
-      const appearanceUser = user.bodyArt
-        ? { ...user, spriteAppearance: undefined }
-        : !user.spriteAppearance && user.userId === snapshot.viewer?.userId
+      const appearanceUser =
+        !user.spriteAppearance && user.userId === snapshot.viewer?.userId
           ? { ...user, spriteAppearance: resolveSpriteAppearance(snapshot.viewer) }
           : user;
       recipes.push({
@@ -1356,6 +1381,8 @@ const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
 /** A walking LPC figure spans about 24 of its frame's 64 columns and 48 of its rows. */
 const LPC_FIGURE_HALF_WIDTH = 12 / 64;
 const LPC_FIGURE_HEIGHT = 48 / 64;
+/** Full-body art fills most of its frame's height. */
+const ART_FIGURE_HEIGHT = 0.85;
 const NPC_TRAVEL_HEIGHT = 1.3;
 /** Water rings follow a figure's width within this range of an LPC character's. */
 const RING_MIN_SCALE = 0.6;
@@ -1421,9 +1448,6 @@ export const travelActorKey = (user: SectorUser) =>
 const appearanceInputs = (user: SectorUser) => ({
   spriteAppearance: user.spriteAppearance,
   appearanceJson: JSON.stringify(user.spriteAppearance),
-  bodyArt: user.bodyArt,
-  bodyIdle: user.bodyIdle?.id,
-  bodyMove: user.bodyMove?.id,
   npcIdle: user.npcSheets?.idle?.id,
   npcMove: user.npcSheets?.move?.id,
   npcScale: user.npcScale,
@@ -1438,9 +1462,6 @@ const appearanceInputs = (user: SectorUser) => ({
 type AppearanceInputs = ReturnType<typeof appearanceInputs>;
 /** Whether a user still draws the artwork recorded in `inputs`. */
 const sameAppearance = (inputs: AppearanceInputs, user: SectorUser) =>
-  inputs.bodyArt === user.bodyArt &&
-  inputs.bodyIdle === user.bodyIdle?.id &&
-  inputs.bodyMove === user.bodyMove?.id &&
   inputs.npcIdle === user.npcSheets?.idle?.id &&
   inputs.npcMove === user.npcSheets?.move?.id &&
   inputs.npcScale === user.npcScale &&
@@ -1454,15 +1475,17 @@ const sameAppearance = (inputs: AppearanceInputs, user: SectorUser) =>
   // Walking steps carry the same recipe object; a rebuilt one is compared by value.
   (inputs.spriteAppearance === user.spriteAppearance ||
     inputs.appearanceJson === JSON.stringify(user.spriteAppearance));
-const ambientRank = (user: SectorUser) => Number(user.npcInteractionType === "AMBIENT");
+const ambientRank = (user: SectorUser) =>
+  Number(user.npcInteractionType === "AMBIENT" && !user.isStoryActor);
 /** Apply the same visibility policy before body selection and full-roster encounter/count recipes. */
 const canShowUser = (snapshot: TravelActorsSnapshot, user: SectorUser) =>
-  (snapshot.showUsers || user.userId === snapshot.viewer?.userId) &&
-  (snapshot.showAmbient !== false || user.npcInteractionType !== "AMBIENT") &&
-  (user.isNpc ||
-    user.userId === snapshot.viewer?.userId ||
-    user.isVillageDuty ||
-    passesBracketFilter(user, snapshot.bracketFilter));
+  user.isStoryActor ||
+  ((snapshot.showUsers || user.userId === snapshot.viewer?.userId) &&
+    (snapshot.showAmbient !== false || user.npcInteractionType !== "AMBIENT") &&
+    (user.isNpc ||
+      user.userId === snapshot.viewer?.userId ||
+      user.isVillageDuty ||
+      passesBracketFilter(user, snapshot.bracketFilter)));
 
 const part = (
   tile: TerrainHex,
@@ -1495,9 +1518,8 @@ const pin = (tile: TerrainHex, tint: number) => [
   }),
 ];
 const userParts = (user: SectorUser, tile: TerrainHex) => {
-  const fullBody = user.isNpc || !!user.bodyArt;
   const parts =
-    fullBody || user.spriteAppearance
+    user.isNpc || user.spriteAppearance
       ? []
       : pin(
           tile,
@@ -1511,14 +1533,12 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
     part(
       tile,
       "avatar",
-      user.bodyArt ?? travelAvatar(user),
+      travelAvatar(user),
       user.spriteAppearance
         ? LPC_TRAVEL_HEIGHT
-        : user.bodyArt
-          ? NPC_TRAVEL_HEIGHT * 2
-          : user.isNpc
-            ? NPC_TRAVEL_HEIGHT * (user.npcScale ?? 1)
-            : 0.8,
+        : user.isNpc
+          ? NPC_TRAVEL_HEIGHT * (user.npcScale ?? 1)
+          : 0.8,
       0.5,
       user.spriteAppearance ? LPC_TRAVEL_FOOT_Y + LPC_TRAVEL_HEIGHT / 2 : 1,
       user.spriteAppearance
@@ -1529,26 +1549,19 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
             shadow: PLAYER_TRAVEL_SHADOW,
             light: PLAYER_TRAVEL_LIGHT,
           }
-        : fullBody
+        : user.isNpc
           ? {
-              // Double-height body art outgrows a 256px rendition; it keeps its native
-              // source and samples smoothly, so its scale never doubles or drops pixels.
-              rendition: user.bodyArt ? 0 : 256,
+              rendition: 256,
               preserveAspect: true,
-              nearest: !user.bodyArt,
+              nearest: true,
               shadowCaster: "character",
-              // Body art and NPCs stand on the ground like players: grounded and animated, and
-              // lit at night unless they are wildlife.
+              // NPCs stand on the ground like players: grounded and animated, and lit at night
+              // unless they are wildlife.
               shadow: PLAYER_TRAVEL_SHADOW,
-              ...(user.npcInteractionType === "AMBIENT"
+              ...(user.npcInteractionType === "AMBIENT" && !user.isStoryActor
                 ? {}
                 : { light: PLAYER_TRAVEL_LIGHT }),
-              ...(user.bodyArt
-                ? {
-                    loop: user.bodyIdle && sheetLoop(user.bodyIdle),
-                    walk: user.bodyMove && sheetLoop(user.bodyMove),
-                  }
-                : npcLoops(user)),
+              ...npcLoops(user),
             }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },
     ),
@@ -1707,6 +1720,8 @@ export type TravelActorMovement = {
   to?: { x: number; y: number };
   direction: WorldMotionDirection | null;
   facing: number;
+  /** Which way the actor looks while it stands, in place of the way it came. */
+  standing?: LpcDirection;
 };
 
 export type TravelMotionStep = {

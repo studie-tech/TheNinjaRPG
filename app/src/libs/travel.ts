@@ -3,6 +3,7 @@ import {
   MAP_GLOBAL_TRAVEL_TIME_CAP_SECS,
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { isQuestComplete } from "@/libs/objectives";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
@@ -130,6 +131,20 @@ export const calcGlobalTravelTime = (
   }
   return MAP_GLOBAL_TRAVEL_TIME_CAP_SECS;
 };
+
+/** The trip-length sentence of the world-travel confirmation. */
+export const describeGlobalTravelTime = (seconds: number) =>
+  seconds <= 0
+    ? "You arrive there instantly."
+    : `The trip takes about ${seconds} ${seconds === 1 ? "second" : "seconds"}.`;
+
+/**
+ * Location-quest notices worth a toast. A fight the arrival itself started already
+ * moved the player into battle, so a later pass refused with the in-battle status
+ * reports nothing new: the combat screen is the feedback.
+ */
+export const reportableQuestNotifications = (notifications: string[]) =>
+  notifications.filter((message) => message !== actionStatusMessage("BATTLE"));
 
 /**
  * Client cache patch when globe travel starts. Instant journeys (Wake Island

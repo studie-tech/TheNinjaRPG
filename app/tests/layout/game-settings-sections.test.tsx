@@ -53,6 +53,9 @@ beforeEach(() => {
   vi.spyOn(layoutPicker, "GameLayoutPicker").mockReturnValue(null as never);
   vi.spyOn(nativeEntry, "NativeSettingsEntry").mockReturnValue(null as never);
   vi.spyOn(clerk, "UserButton").mockReturnValue(null as never);
+  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
+    data: undefined,
+  } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: {
       updatePreferences: {

@@ -37,6 +37,8 @@ type DialogContentProps = React.ComponentPropsWithRef<
   closeDisabled?: boolean;
   /** Hide the corner close button when the content provides its own. */
   showCloseButton?: boolean;
+  /** Classes for the dimmed backdrop, such as a layer above the Activity dock. */
+  overlayClassName?: string;
 };
 
 const DialogContent = ({
@@ -45,6 +47,7 @@ const DialogContent = ({
   children,
   closeDisabled,
   showCloseButton = true,
+  overlayClassName,
   onInteractOutside,
   onEscapeKeyDown,
   ...props
@@ -52,7 +55,7 @@ const DialogContent = ({
   const container = usePortalContainer();
   return (
     <DialogPortal container={container}>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(

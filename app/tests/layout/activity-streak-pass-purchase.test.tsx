@@ -3,6 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as streaks from "@/hooks/useActivityStreaks";
+import * as claimStreakDay from "@/hooks/useClaimStreakDay";
 import { ActivityStreakPanel } from "@/layout/ActivityStreakPanel";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
@@ -33,7 +34,7 @@ beforeEach(() => {
         isLoading: false,
       }) as never,
   );
-  vi.spyOn(streaks, "useClaimStreakDay").mockImplementation(
+  vi.spyOn(claimStreakDay, "useClaimStreakDay").mockImplementation(
     () => ({ mutate: vi.fn(), isPending: false }) as never,
   );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);

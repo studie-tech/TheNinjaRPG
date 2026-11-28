@@ -5,7 +5,9 @@ export const activityDockStateAtom = atom<{
   userId: string | null;
   panelId: string | null;
   open: boolean;
-}>({ userId: null, panelId: null, open: false });
+  /** Story news waits in the collapsed dock. */
+  hasNews: boolean;
+}>({ userId: null, panelId: null, open: false, hasNews: false });
 
 /** Navigation requests are scoped to the character that owns the mounted dock. */
 export const activityDockRequestAtom = atom({

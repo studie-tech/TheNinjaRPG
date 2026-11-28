@@ -2,14 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
-import { type ReactNode, useMemo } from "react";
+import { type ImgHTMLAttributes, type ReactNode, useMemo } from "react";
 import * as client from "@/app/_trpc/client";
 import * as dialogComponents from "@/components/ui/dialog";
 import * as sortableList from "@/components/ui/sortable-list";
 import type { UserPatch } from "@/deltas/profile";
 import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
-import * as mediaQuery from "@/hooks/useMediaQuery";
-import { BattleFocusView } from "@/layout/BattleFocusView";
 import * as logbook from "@/layout/Logbook";
 import * as objective from "@/layout/Objective";
 import TutorialAssistant from "@/layout/TutorialAssistant";
@@ -49,7 +47,6 @@ function testMocks() {
       rewardHook: ReturnType<typeof vi.fn>;
       step: TutorialStepConfig;
       stepNumber: number;
-      visible: boolean;
       next: ReturnType<typeof vi.fn>;
     };
   };
@@ -63,14 +60,13 @@ function testMocks() {
     rewardHook: vi.fn(),
     step: {
       id: "welcome",
-      chapter: "student",
+      chapter: "arrival",
       title: "Welcome",
       description: "Welcome",
       page: "/profile",
     },
     next: vi.fn(),
     stepNumber: 0,
-    visible: true,
   };
   return globals.__tutorialAssistantMocks;
 }
@@ -105,6 +101,12 @@ function mockApi() {
       },
     },
     gameAsset: { getSceneAssets: { useQuery: () => ({ data: [] }) } },
+    activityStreak: { getUserStreaks: { useQuery: () => ({ data: undefined }) } },
+    quests: {
+      retryBattle: {
+        useMutation: () => ({ mutate: () => undefined, isPending: false }),
+      },
+    },
   });
 }
 vi.mock("next/navigation", () => ({
@@ -114,7 +116,7 @@ vi.mock("@/utils/routing", () => ({ usePublicPathname: () => "/profile" }));
 vi.mock("@/libs/tutorialSteps", () => {
   const step = {
     id: "welcome",
-    chapter: "student",
+    chapter: "arrival",
     title: "Welcome",
     description: "Welcome",
     page: "/profile",
@@ -123,6 +125,7 @@ vi.mock("@/libs/tutorialSteps", () => {
     TUTORIAL_STEPS: [step],
     TUTORIAL_CHAPTERS: [{ id: "student", title: "A New Student" }],
     TUTORIAL_HOSPITALIZED_STEP: step,
+    lessonReadingSeconds: () => 0,
   };
 });
 vi.mock("@/hooks/tutorial", () => {
@@ -130,8 +133,6 @@ vi.mock("@/hooks/tutorial", () => {
     useTutorialStep: () => ({
       currentStep: testMocks().step,
       stepNumber: testMocks().stepNumber,
-      isAssistantVisible: testMocks().visible,
-      setIsAssistantVisible: vi.fn(),
       updateTutorialStep: vi.fn(),
       handleNextStep: testMocks().next,
       handleNextStepAsync: vi.fn(async () => {}),
@@ -142,9 +143,23 @@ vi.mock("@/hooks/tutorial", () => {
 // A bare image, as other suites stub it: Bun module mocks outlive this file, and later
 // suites still look for the rendered <img>.
 vi.mock("@/layout/Image", () => ({
-  default: (props: { src: string; alt: string }) => (
+  default: ({
+    src,
+    alt,
+    className,
+    onLoad,
+    onError,
+    "aria-hidden": ariaHidden,
+  }: ImgHTMLAttributes<HTMLImageElement> & { src: string; alt: string }) => (
     // biome-ignore lint/performance/noImgElement: isolated component test stub
-    <img src={props.src} alt={props.alt} />
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onLoad={onLoad}
+      onError={onError}
+      aria-hidden={ariaHidden}
+    />
   ),
 }));
 const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}</div>;
@@ -206,10 +221,9 @@ beforeEach(() => {
   mocks.client.setQueryData(key, profile());
   mocks.disable.mockResolvedValue({ success: true, message: "Saved" });
   mocks.stepNumber = 0;
-  mocks.visible = true;
   mocks.step = {
     id: "welcome",
-    chapter: "student",
+    chapter: "arrival",
     title: "Welcome",
     description: "Welcome",
     page: "/profile",
@@ -230,66 +244,15 @@ describe("TutorialAssistant highlight activation", () => {
     </>
   );
 
-  it("advances on the completed click so a press cannot activate the next page", () => {
-    mocks.step = {
-      ...mocks.step,
-      elementIds: ["lesson-control"],
-      proceedOnHighlightClick: true,
-    };
-    const view = render(highlightedAssistant());
-    const control = view.getByRole("button", { name: "Continue tutorial" });
-    fireEvent.pointerDown(control);
-    fireEvent.touchStart(control);
-    expect(mocks.next).not.toHaveBeenCalled();
-    fireEvent.click(control);
-    expect(mocks.next).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the next lesson tappable when it highlights the same control", () => {
-    mocks.step = {
-      ...mocks.step,
-      elementIds: ["lesson-control"],
-      proceedOnHighlightClick: true,
-    };
-    const view = render(highlightedAssistant());
-    mocks.step = { ...mocks.step, id: "next-lesson", title: "Next lesson" };
-    view.rerender(highlightedAssistant());
-    expect(view.getByRole("region", { name: "Tutorial: Next lesson" })).toBeTruthy();
-    fireEvent.click(view.getByRole("button", { name: "Continue tutorial" }));
-    expect(mocks.next).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the highlighted tutorial control interactive above battle focus", async () => {
-    for (const spy of dialogSpies.splice(0)) spy.mockRestore();
-    vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(false);
-    mocks.step = {
-      ...mocks.step,
-      elementIds: ["lesson-control"],
-      proceedOnHighlightClick: true,
-    };
-    const view = render(highlightedAssistant());
-    render(
-      <BattleFocusView
-        battle={undefined}
-        renderTimer={(exitButton) => (
-          <div>
-            <p>Timer</p>
-            {exitButton}
-          </div>
-        )}
-        field={<p>Field</p>}
-        dock={<p>Actions</p>}
-        log={<p>Log</p>}
-        timeline={<p>Timeline</p>}
-        onShowLayout={() => {}}
-      />,
+  it("leaves the press to the marked control itself", () => {
+    mocks.step = { ...mocks.step, elementIds: ["lesson-control"] };
+    render(highlightedAssistant());
+    const spotlight = document.body.querySelector(
+      "div[data-battle-focus-layer].inset-0",
     );
-    const control = view.getByRole("button", { name: "Continue tutorial" });
-    await waitFor(() => expect(control.closest("[inert]")).toBeNull());
-    control.focus();
-    expect(document.activeElement).toBe(control);
-    fireEvent.click(control);
-    expect(mocks.next).toHaveBeenCalledTimes(1);
+    expect(spotlight?.querySelector("[data-spotlight-keep]")).toBeTruthy();
+    expect(spotlight?.querySelector("button")).toBeNull();
+    expect(spotlight?.className).toContain("pointer-events-none");
   });
 });
 afterEach(() => {
@@ -532,7 +495,6 @@ describe("TutorialAssistant completion sync", () => {
 
 it("shows a completed tutorial state and still presents available quest guidance", async () => {
   mocks.stepNumber = 100;
-  mocks.visible = false;
   mocks.step = undefined as never;
   const completed = profile();
   completed.userData.tutorialStep = 100;
@@ -541,7 +503,8 @@ it("shows a completed tutorial state and still presents available quest guidance
   mocks.client.setQueryData(key, completed);
   const view = renderAssistant();
   fireEvent.click(view.getByRole("button", { name: "Open Activity" }));
-  fireEvent.mouseDown(view.getByRole("tab", { name: "Tutorial" }), { button: 0 });
+  // Once the trials are over the lesson tab carries the story.
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Story" }), { button: 0 });
   expect(
     view.getByText(
       "Tutorial complete. Quest guidance will appear here when available.",

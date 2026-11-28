@@ -168,7 +168,10 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
           </span>
         </div>
         {selected && (
-          <div className="bg-muted/60 flex items-center gap-3 rounded-lg p-2">
+          <div
+            id="tutorial-battlearena-opponent"
+            className="bg-muted/60 flex items-center gap-3 rounded-lg p-2"
+          >
             <Image
               alt=""
               src={selected.avatar ?? IMG_AVATAR_DEFAULT}

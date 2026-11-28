@@ -59,12 +59,17 @@ const ActivityStreakPopup: React.FC = () => {
 
   // Read off userData rather than a shared atom so the suppression holds from
   // the very first render, with no window where both can be on screen.
-  const tutorialActive = isTutorialActive(userData);
+  const isInTutorial = isTutorialActive(userData);
+  // A player whose tutorial ended in this tab has just claimed day 1 with Lemu; the
+  // dispatch waits for their next visit so it covers neither the farewell nor the story card.
+  const [sawTutorial, setSawTutorial] = useState(false);
+  if (isInTutorial && !sawTutorial) setSawTutorial(true);
+  const tutorialActive = isInTutorial || sawTutorial;
 
   // Only fetch while the dialog is still allowed to open. Tutorial / dismissed-today /
   // session-close already forbid it; querying then is 13KB on every signed-in page
-  // for a popup that cannot appear. Re-enables when those latches clear (tutorial
-  // finished, date rollover) so an unclaimed reward is not dropped.
+  // for a popup that cannot appear. Re-enables when those latches clear (a date
+  // rollover, or the next visit after the tutorial) so an unclaimed reward is not dropped.
   const shouldFetchStreaks = shouldFetchActivityStreaksForPopup({
     hasUser: !!userData && !isSuppressedRoute,
     tutorialActive,

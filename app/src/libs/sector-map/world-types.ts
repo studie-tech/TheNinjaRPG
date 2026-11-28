@@ -6,6 +6,7 @@ import type {
 } from "@/drizzle/constants";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
 import type { VillageDutyPatrol } from "@/libs/villageDuty";
+import type { LpcDirection } from "@/validators/lpc";
 
 type NonEmptyArray<T> = T[] & { 0: T };
 
@@ -57,15 +58,18 @@ export interface GlobalMapData {
   tiles: NonEmptyArray<GlobalTile>;
 }
 
+/** Tiles walked one after another from `startAt`, on the server-corrected clock. */
+export type NpcWalk = {
+  tiles: SectorPoint[];
+  startAt: number;
+  stepMs: number;
+  /** Which way the figure looks while it stands: south, towards the viewer, when left out. */
+  facing?: LpcDirection;
+};
+
 export interface SectorUser {
   /** Viewer-safe resolved art; the sector router substitutes uniforms for masked identities. */
   spriteAppearance?: import("@/validators/lpc").SpriteAppearance;
-  /** Full-body art drawn in place of the layered character, at twice an NPC's height. */
-  bodyArt?: string;
-  /** Idle sheet looped in place of `bodyArt`'s still image. */
-  bodyIdle?: CharacterAnimation;
-  /** Walking sheet played in place of `bodyIdle` while the user moves. */
-  bodyMove?: CharacterAnimation;
   /** A village-duty copy has its own map identity and cannot be attacked or healed as a player. */
   isVillageDuty?: boolean;
   /** Owner ID for profile links, present only when the protector is unmasked. */
@@ -119,6 +123,10 @@ export interface SectorUser {
     /** Shared server pursuit; scenes interpolate it without per-frame requests. */
     pursuit?: NonNullable<VillageDutyPatrol["pursuit"]>;
   };
+  /** A timed walk along tiles, which a figure of a story scene follows and then stands. */
+  npcWalk?: NpcWalk;
+  /** A figure of a story scene only this player sees; the map's filters never hide it. */
+  isStoryActor?: boolean;
   /** Drawn height relative to the default NPC height. */
   npcScale?: number;
   /** Walk and idle sheets that replace the NPC's still artwork on the map. */

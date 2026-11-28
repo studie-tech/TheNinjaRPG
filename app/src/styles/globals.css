@@ -79,6 +79,10 @@
   --animate-home-sleep: home-sleep 3s ease-in-out infinite;
   /* Calls to action pulse a ring around the button and keep full opacity, unlike disabled ones. */
   --animate-cta-pulse: cta-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  /* The tutorial spotlight's ring pulses a fixed 10px outward, whatever the size of the control it surrounds. */
+  --animate-spotlight-ping: spotlight-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  /* A speech bubble pops in from its speaker. */
+  --animate-speech-pop: speech-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   /* Loading placeholders pulse below their resting 20% opacity, on the compositor. */
   --animate-placeholder-pulse: placeholder-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
@@ -92,6 +96,13 @@
     }
   }
 
+  @keyframes speech-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+  }
+
   @keyframes cta-pulse {
     0%,
     100% {
@@ -99,6 +110,16 @@
     }
     50% {
       box-shadow: 0 0 0 5px rgb(249 115 22 / 0);
+    }
+  }
+
+  @keyframes spotlight-ping {
+    0% {
+      box-shadow: 0 0 0 0 rgb(252 211 77 / 0.75);
+    }
+    80%,
+    100% {
+      box-shadow: 0 0 0 10px rgb(252 211 77 / 0);
     }
   }
 
@@ -862,7 +883,77 @@
   }
 }
 
+/* The Academy Trials' opening on the sector map: one swell of violet light from the east,
+   and the puff of smoke a double steps out of. */
+.story-flash {
+  opacity: 0;
+  background: radial-gradient(
+    ellipse at 100% 35%,
+    rgb(196 132 252 / 0.95),
+    rgb(126 34 206 / 0.55) 45%,
+    transparent 80%
+  );
+  animation: story-flash 1.6s ease-out 1;
+}
+
+.story-smoke::before,
+.story-smoke::after {
+  content: "";
+  position: absolute;
+  bottom: -20%;
+  left: -50%;
+  width: 200%;
+  aspect-ratio: 1;
+  opacity: 0;
+  background: radial-gradient(
+    circle closest-side,
+    rgb(59 7 100 / 0.9),
+    rgb(147 51 234 / 0.6) 45%,
+    transparent 70%
+  );
+  animation: story-smoke 1.5s ease-out 1;
+}
+
+.story-smoke::after {
+  bottom: -35%;
+  left: -20%;
+  width: 150%;
+  animation-delay: 0.15s;
+}
+
+@keyframes story-flash {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes story-smoke {
+  0% {
+    opacity: 0;
+    transform: translateY(20%) scale(0.3);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-45%) scale(1.25);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .story-flash,
+  .story-smoke::before,
+  .story-smoke::after {
+    animation: none;
+  }
+
   .tnr-pixel-parallax {
     transform: none !important;
     will-change: auto;

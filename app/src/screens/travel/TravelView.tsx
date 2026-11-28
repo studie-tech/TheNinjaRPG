@@ -72,7 +72,7 @@ import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
 import { hasRequiredRank } from "@/libs/rank";
-import { calcGlobalTravelTime } from "@/libs/travel";
+import { calcGlobalTravelTime, describeGlobalTravelTime } from "@/libs/travel";
 import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import { getReadableVillageHexColor } from "@/utils/color";
 
@@ -207,6 +207,7 @@ export function TravelView({
           journey={globeJourney}
           onTileClick={(sector) => initiateTravelToSector(sector)}
           hexasphere={globe}
+          fillViewport
         />
       )
     );
@@ -719,6 +720,10 @@ export function TravelView({
       options={sectorLink ? [sectorLink, globalLink] : [globalLink]}
       labels={{ [sectorLink]: "Sector" }}
       itemClassName={(option) => (option === globalLink ? "mr-0" : "")}
+      // The open Global tab is not the next thing to press, so tutorial rings skip it.
+      itemId={(option) =>
+        option === globalLink && isGlobal ? undefined : `tutorial-${option}`
+      }
       disabledOptions={isTraveling ? [sectorLink] : undefined}
       setValue={setActiveTab}
       onChange={(value) => {
@@ -758,6 +763,8 @@ export function TravelView({
         createPortal(
           <button
             type="button"
+            // Opens the globe here as the Global tab does in other layouts.
+            id={isGlobal ? undefined : `tutorial-${globalLink}`}
             className="sector-nav-control"
             aria-label={isGlobal ? "Show sector map" : "Show global map"}
             title={isGlobal ? "Show sector map" : "Show global map"}
@@ -839,6 +846,7 @@ export function TravelView({
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
         <div
+          data-spotlight-scene=""
           data-travel-viewport={immersive ? "" : undefined}
           className={userData.travelFinishAt ? "relative min-h-80" : "relative"}
         >
@@ -893,8 +901,9 @@ export function TravelView({
                   {describeSector(targetSector)}.{" "}
                   <p className="py-2">
                     The travel time is estimated to be{" "}
-                    {calcGlobalTravelTime(userData.sector, targetSector, globe)}{" "}
-                    seconds.
+                    {describeGlobalTravelTime(
+                      calcGlobalTravelTime(userData.sector, targetSector, globe),
+                    )}
                   </p>
                   {targetSector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && (
                     <p className="mb-2 rounded-md border border-red-600/40 bg-red-600/10 p-2 text-red-700 text-sm dark:text-red-400">

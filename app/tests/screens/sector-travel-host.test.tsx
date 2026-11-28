@@ -21,6 +21,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 let starts = 0;
 let stops = 0;
@@ -341,6 +342,7 @@ describe("responsive sector menus", () => {
       <button type="button">Destination compass</button>,
     );
     isDesktop = false;
+    mockUserContextValue({});
     vi.spyOn(media, "useMediaQuery").mockImplementation(() => isDesktop);
     vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
     vi.spyOn(queueNotice, "QueueNotice").mockReturnValue(null);

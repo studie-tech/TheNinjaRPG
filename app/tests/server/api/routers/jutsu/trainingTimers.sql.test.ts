@@ -107,7 +107,8 @@ describeWithDatabase("jutsu training progress timestamps", () => {
     expect(started.success, started.message).toBe(true);
     expect(started.userPatch?.jutsus).toEqual([{ jutsuId }]);
     const saved = await profile.getUser();
-    expect(saved.userData?.loadout?.jutsuIds).toEqual([]);
+    // The learned jutsu also joins the active loadout.
+    expect(saved.userData?.loadout?.jutsuIds).toEqual([jutsuId]);
     expect(saved.userData?.jutsus).toEqual([{ jutsuId }]);
     expect(saved.notifications).not.toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
   });

@@ -6,6 +6,7 @@ import {
   getClaimStreakDayUserUpdate,
   getPurchaseEventPassUserUpdate,
 } from "@/deltas/activityStreak";
+import { withOnboardingQuestPatch } from "@/deltas/quests";
 import { ActivityStreakTypes, COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { activityStreakConfig } from "@/drizzle/schema";
 import {
@@ -19,7 +20,6 @@ import {
 import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest/rewards";
 import { reservedContentDeletionError } from "@/libs/reservedContent";
-
 import {
   createRewardsForConfig,
   deleteActivityStreakConfigForDeleteConfig,
@@ -59,6 +59,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { recordOnboardingTask } from "@/server/utils/onboardingTasks";
 import { updateRewards } from "@/server/utils/questRewards";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canChangeContent } from "@/utils/permissions";
@@ -527,6 +528,12 @@ export const activityStreakRouter = createTRPCRouter({
       }
 
       await Promise.all(updatePromises);
+      const questData = await recordOnboardingTask({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        task: "claim_streak",
+        questData: user.questData,
+      });
 
       // Build response message
       const rewardPreview = getRewardPreview({
@@ -547,7 +554,10 @@ export const activityStreakRouter = createTRPCRouter({
         message: `Day ${newCurrentDay} claimed! ${resetMsg}${catchUpMsg}${rewardText}${completeMsg}`,
         // Scalar reward increments leave queued training and its recovery clock alone.
         // The shared cache revision guard reconciles any concurrently completed queue read.
-        ...getClaimStreakDayUserUpdate({ processedRewards, paidCatchUp }),
+        ...withOnboardingQuestPatch(
+          getClaimStreakDayUserUpdate({ processedRewards, paidCatchUp }),
+          questData,
+        ),
         streakUpdate: getClaimedStreakUpdate(
           config,
           progress,

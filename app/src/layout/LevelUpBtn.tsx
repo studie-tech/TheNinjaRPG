@@ -3,7 +3,7 @@
 import { sendGTMEvent } from "@next/third-parties/google";
 import { GraduationCap } from "lucide-react";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { IMG_PROFILE_LEVELUPGUY } from "@/drizzle/constants";
@@ -40,7 +40,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
   const utils = api.useUtils();
 
   // Tutorial hook
-  const { currentStep, completeTutorialAction } = useTutorialStep();
+  const { completeTutorialAction } = useTutorialStep();
 
   // Level-up mutation
   const { mutate: levelUp, isPending: isLevelling } = api.profile.levelUp.useMutation({
@@ -56,7 +56,11 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
           }),
           utils.profile.getDashboard.invalidate(),
         ]);
-        await completeTutorialAction("levelUp");
+        // A level-up lesson finishes once the experience covers no further level.
+        const level = data.userPatch?.level ?? userData.level + 1;
+        if (levelUpBlockMessage({ ...userData, level })) {
+          await completeTutorialAction("levelUp");
+        }
         sendGTMEvent({
           event: "level_up",
           level: userData.level + 1,
@@ -71,13 +75,6 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
 
   // Derived
   const canLevel = !!userData && !levelUpBlockMessage(userData);
-
-  // A level-up step the player cannot take (not enough experience) moves on
-  useEffect(() => {
-    if (userData && currentStep?.advanceOn === "levelUp" && !canLevel) {
-      void completeTutorialAction("levelUp");
-    }
-  }, [currentStep?.advanceOn, userData, canLevel, completeTutorialAction]);
 
   if (!userData) return null;
 

@@ -68,6 +68,8 @@ export type SpriteLayer = {
   mirror?: boolean;
   slot?: string;
   materialColors?: LpcMaterialColors;
+  /** Multiplied into the layer's artwork, for a colour the design has no palette of; tint its white one. */
+  tint?: number;
 };
 /** Serializable public artwork recipe without raw inventory IDs, stats or content URLs. */
 export type SpriteAppearance = { version: 1; body: LpcBody; layers: SpriteLayer[] };

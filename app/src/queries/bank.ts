@@ -30,7 +30,14 @@ import { getBankInterestDateRange } from "@/utils/time";
 export const fetchBankAccount = async (client: DrizzleClient, userId: string) => {
   const user = await client.query.userData.findFirst({
     where: eq(userData.userId, userId),
-    columns: { username: true, money: true, bank: true, isBanned: true, status: true },
+    columns: {
+      username: true,
+      money: true,
+      bank: true,
+      isBanned: true,
+      status: true,
+      questData: true,
+    },
   });
   if (!user) {
     throw serverError("NOT_FOUND", missingUserMessage(userId));

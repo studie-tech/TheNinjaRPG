@@ -180,6 +180,8 @@ export function CombatScreen() {
     return () => setCombatThemeHeld(false);
   }, [results, setCombatThemeHeld]);
   const battle = battleState?.battle;
+  // A selection belongs to its battle: the next fight starts with a choice.
+  useEffect(() => () => setActionId(undefined), [battle?.id, setActionId]);
   const isBattleMissing = isSuccess && data.battle === null;
   const versionId = battle?.version;
   // The actor the human controls right now: themselves, or their piloted summon
@@ -683,7 +685,7 @@ export function CombatScreen() {
       >
         {!isBattleLoading && combat}
         {!isBattleLoading && !resultShown && battle && isAutoCombatActive && (
-          <div className="absolute top-2 left-2 z-20">
+          <div id="battle-ai-control" className="absolute top-2 left-2 z-20">
             <AutoCombatBadge
               isPending={isTogglingAutoCombat}
               onDisable={
@@ -886,7 +888,7 @@ export function CombatScreen() {
     return (
       <ContentBox title="Combat">
         <p>You are not in an active battle.</p>
-        <Button asChild className="mt-3">
+        <Button asChild id="return" className="mt-3">
           <Link href="/profile">Return to Profile</Link>
         </Button>
       </ContentBox>
@@ -961,7 +963,12 @@ export function CombatScreen() {
   const tabbedIds: CombatLayoutComponentId[] = ["actions", "timeline", "battlelog"];
 
   return (
-    <div ref={layoutRef} tabIndex={-1} className="flex flex-col gap-1 sm:container">
+    <div
+      ref={layoutRef}
+      tabIndex={-1}
+      data-spotlight-panel=""
+      className="flex flex-col gap-1 sm:container"
+    >
       {config.useTabs ? (
         // Tabs mode: render non-tabbed components in order, then tabs
         <>

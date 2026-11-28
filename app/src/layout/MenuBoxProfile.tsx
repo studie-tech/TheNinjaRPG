@@ -180,36 +180,38 @@ export const ProfilePools: React.FC<{ compact?: boolean; onInspect?: () => void 
         status={hasBattlePools ? "AWAKE" : userData?.status}
         timeDiff={timeDiff}
       />
-      <StatusBar
-        title="EP"
-        resourceName="Energy"
-        compact={compact}
-        onInspect={onInspect}
-        tooltip="Energy continues recovering during combat and is credited when you leave."
-        combatRegenerationPeriods={
-          userData?.status === "BATTLE" && battle?.id === userData.battleId
-            ? (battle.extraState.energyRegenerationPeriods?.[userData.userId] ?? [])
-            : undefined
-        }
-        timedBuffs={poolRegenerationBuffs}
-        color="bg-violet-500"
-        showText
-        lastRegenAt={userData?.regenAt}
-        regen={
-          userData?.status === "BATTLE" && battle?.id === userData.battleId
-            ? (battle?.extraState.energyRegeneration?.[userData.userId] ??
-              userData.regeneration)
-            : passiveRegeneration
-        }
-        status={
-          userData && ["BATTLE", "HOSPITALIZED", "TRAVEL"].includes(userData.status)
-            ? "AWAKE"
-            : userData?.status
-        }
-        current={userData?.curEnergy}
-        total={userData?.maxEnergy}
-        timeDiff={timeDiff}
-      />
+      <div id="tutorial-sidebar-energy">
+        <StatusBar
+          title="EP"
+          resourceName="Energy"
+          compact={compact}
+          onInspect={onInspect}
+          tooltip="Energy continues recovering during combat and is credited when you leave."
+          combatRegenerationPeriods={
+            userData?.status === "BATTLE" && battle?.id === userData.battleId
+              ? (battle.extraState.energyRegenerationPeriods?.[userData.userId] ?? [])
+              : undefined
+          }
+          timedBuffs={poolRegenerationBuffs}
+          color="bg-violet-500"
+          showText
+          lastRegenAt={userData?.regenAt}
+          regen={
+            userData?.status === "BATTLE" && battle?.id === userData.battleId
+              ? (battle?.extraState.energyRegeneration?.[userData.userId] ??
+                userData.regeneration)
+              : passiveRegeneration
+          }
+          status={
+            userData && ["BATTLE", "HOSPITALIZED", "TRAVEL"].includes(userData.status)
+              ? "AWAKE"
+              : userData?.status
+          }
+          current={userData?.curEnergy}
+          total={userData?.maxEnergy}
+          timeDiff={timeDiff}
+        />
+      </div>
     </>
   );
 };
@@ -321,7 +323,7 @@ export const ProfileBracket: React.FC<{ compact?: boolean }> = ({
             </p>
           )}
         </TooltipTrigger>
-        <TooltipContent>
+        <TooltipContent className="max-w-72">
           {userData.isEliteJonin ? (
             <>
               Elite Jonin use bracket {ELITE_JONIN_BRACKET}. Your fights are limited to

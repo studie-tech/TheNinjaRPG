@@ -54,6 +54,9 @@ const AVATAR_BOX =
 const AvatarImage: React.FC<AvatarImageProps> = (props) => {
   const renditionWidth = useAvatarRenditionWidth(props.size);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  // The last portrait that finished loading; a replacement waits off-screen until it has
+  // loaded, so a new avatar never leaves an empty frame while it downloads.
+  const [shownSrc, setShownSrc] = useState<string>();
   if (props.href === undefined) {
     return (
       <div
@@ -70,20 +73,39 @@ const AvatarImage: React.FC<AvatarImageProps> = (props) => {
     const href = props.href;
     // Players without an avatar, or whose image no longer loads, get the default portrait.
     const src = !href || failedSrc === href ? IMG_AVATAR_DEFAULT : href;
+    const visibleSrc = shownSrc ?? src;
+    const markFailed = () => {
+      if (href && src === href) setFailedSrc(href);
+    };
     return (
-      <Image
-        className={cn(AVATAR_BOX, hover, props.className)}
-        src={src}
-        alt={props.alt ?? "Avatar"}
-        onError={() => {
-          if (href && src === href) setFailedSrc(href);
-        }}
-        width={renditionWidth}
-        height={renditionWidth}
-        priority={props.priority}
-        loading={props.priority ? "eager" : "lazy"}
-        unoptimized={true}
-      />
+      <>
+        <Image
+          className={cn(AVATAR_BOX, hover, props.className)}
+          src={visibleSrc}
+          alt={props.alt ?? "Avatar"}
+          onLoad={() => setShownSrc(visibleSrc)}
+          onError={shownSrc === undefined ? markFailed : undefined}
+          width={renditionWidth}
+          height={renditionWidth}
+          priority={props.priority}
+          loading={props.priority ? "eager" : "lazy"}
+          unoptimized={true}
+        />
+        {visibleSrc !== src && (
+          <Image
+            className="hidden"
+            src={src}
+            alt=""
+            aria-hidden={true}
+            onLoad={() => setShownSrc(src)}
+            onError={markFailed}
+            width={renditionWidth}
+            height={renditionWidth}
+            loading="eager"
+            unoptimized={true}
+          />
+        )}
+      </>
     );
   }
 };

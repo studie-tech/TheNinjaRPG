@@ -3,7 +3,9 @@
 import { AlertCircle, BookOpenText, ChevronRight, LifeBuoy } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import type { GuidanceLevel } from "@/drizzle/constants";
 import Link from "@/layout/Link";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
@@ -16,6 +18,7 @@ export function TutorialSettings() {
     updateUser,
   } = useRequiredUserDataSelector((user) => ({
     tutorialOn: user.tutorialOn,
+    guidanceLevel: user.guidanceLevel,
     userQuests: user.userQuests,
   }));
   const { mutate: toggleTutorial, isPending } =
@@ -66,6 +69,42 @@ export function TutorialSettings() {
               : "Enable Tutorial"}
         </Button>
       </div>
+      <div className="@container space-y-3 rounded-lg border p-4">
+        <div>
+          <p className="font-semibold">Story guidance</p>
+          <p className="text-muted-foreground text-sm">
+            How much the dock points you to the next chapter and to new systems.
+          </p>
+        </div>
+        <fieldset
+          aria-label="Story guidance"
+          className="grid grid-cols-1 gap-2 @lg:grid-cols-3"
+        >
+          {GUIDANCE_OPTIONS.map((option) => {
+            const isSelected = userData.guidanceLevel === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={isSelected}
+                disabled={isPending}
+                onClick={() =>
+                  !isSelected && toggleTutorial({ guidanceLevel: option.value })
+                }
+                className={cn(
+                  "flex min-h-11 flex-col items-start rounded-md border px-3 py-2 text-left text-sm",
+                  isSelected
+                    ? "border-primary bg-primary/10"
+                    : "hover:bg-muted/50 border-border",
+                )}
+              >
+                <span className="font-semibold">{option.label}</span>
+                <span className="text-muted-foreground">{option.description}</span>
+              </button>
+            );
+          })}
+        </fieldset>
+      </div>
       <div className="divide-y rounded-lg border">
         <HelpLink href="/guide" icon={BookOpenText} label="Player guide" />
         <HelpLink href="/support" icon={LifeBuoy} label="Support tickets" />
@@ -103,3 +142,10 @@ export const hasTutorialReminder = (
   userData.userQuests.some(
     (uq) => ["starter", "tier"].includes(uq.quest.questType) && uq.completed === 0,
   );
+
+const GUIDANCE_OPTIONS: { value: GuidanceLevel; label: string; description: string }[] =
+  [
+    { value: "FULL", label: "Full", description: "Point me to each new chapter" },
+    { value: "HINTS", label: "Hints only", description: "Tell me, I'll find the way" },
+    { value: "OFF", label: "Off", description: "Only mark new things" },
+  ];

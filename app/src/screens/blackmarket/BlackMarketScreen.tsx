@@ -41,6 +41,7 @@ import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import { QueryError } from "@/layout/QueryError";
 import Shop from "@/layout/Shop";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { getRyoOfferUnfreezeDate } from "@/libs/blackmarket";
@@ -92,6 +93,7 @@ export function BlackMarketScreen() {
           />
         }
       >
+        <SystemIntroBanner system="blackmarket" />
         <div>
           Welcome to the Black Market. Here you can purchase special abilities, items,
           and currency. You can:

@@ -15,10 +15,13 @@ export const downloadBlob = (blob: Blob, filename: string) => {
 
 /**
  * Scroll behavior honoring the visitor's motion preference. An explicit "smooth" overrides
- * the stylesheet's reduced-motion rules, so scripted scrolls must ask here. Browser only.
+ * the stylesheet's reduced-motion rules, so scripted scrolls must ask here; one that cannot
+ * be asked scrolls at once. Browser only.
  */
 export const getScrollBehavior = (): ScrollBehavior =>
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === false
+    ? "smooth"
+    : "auto";
 
 /** Save rows as a CSV file. Browser only. */
 export const downloadCsv = (rows: readonly (string | number)[][], filename: string) => {

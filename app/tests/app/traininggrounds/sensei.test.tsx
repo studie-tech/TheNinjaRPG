@@ -82,6 +82,8 @@ beforeEach(() => {
     }),
     profile: routerOf({}),
     stealth: routerOf({}),
+    misc: routerOf({}),
+    train: routerOf({}),
     sensei: routerOf({
       getRequests: { useQuery: () => ({ data: [] }) },
       createRequest: capture("createRequest"),
@@ -116,4 +118,22 @@ it("refreshes sensei requests after each request change", async () => {
   expect(invalidateRequests).toHaveBeenCalledTimes(3);
   expect(invalidateStudents).not.toHaveBeenCalled();
   expect(toast.showMutationToast).toHaveBeenCalledTimes(6);
+});
+
+it("leaves the player on the section they opened during the training lessons", () => {
+  vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
+    currentStep: { advanceOn: "queueEnergy" },
+  } as never);
+  render(
+    <AppRouterContext.Provider value={{} as never}>
+      <Training />
+    </AppRouterContext.Provider>,
+  );
+  const selected = screen
+    .getAllByRole("tab")
+    .find((tab) => tab.getAttribute("aria-selected") === "true");
+  expect(selected?.textContent).toContain("Covert & Sensei");
+  // A lesson can point at the tab to open, and never at the one already open.
+  expect(document.getElementById("tutorial-Stats")).toBeTruthy();
+  expect(document.getElementById("tutorial-Covert & Sensei")).toBeNull();
 });

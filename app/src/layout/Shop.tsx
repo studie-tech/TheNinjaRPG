@@ -595,6 +595,7 @@ const Shop: React.FC<ShopProps> = (props) => {
             key={item.id}
             showEdit="item"
             showStatistic="item"
+            shopRyoPrice={getShopStackPrice(item, 1, selectedItemFactor).ryoCost}
           />
           {quantitySlider}
         </>

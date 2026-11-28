@@ -25,6 +25,7 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
 import * as Kitchen from "@/layout/Kitchen";
 import * as Link from "@/layout/Link";
+import * as SystemIntroBanner from "@/layout/SystemIntroBanner";
 import {
   getHomeFurnitureGeometry,
   type HomeFurniture,
@@ -143,6 +144,8 @@ beforeEach(() => {
   replaceRoute = vi.fn((href: string) => {
     searchParams = new URLSearchParams(href.split("?")[1]);
   });
+  // The page is under test, not its one-time intro banner and its profile mutation.
+  vi.spyOn(SystemIntroBanner, "SystemIntroBanner").mockImplementation(() => null);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ replace: replaceRoute } as never);
   vi.spyOn(navigation, "useSearchParams").mockImplementation(
     () => searchParams as never,

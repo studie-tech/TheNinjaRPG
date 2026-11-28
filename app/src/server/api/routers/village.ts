@@ -57,6 +57,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchVillageChoices } from "@/server/utils/villageChoice";
 import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSwapVillage } from "@/utils/permissions";
@@ -78,6 +79,15 @@ export const villageRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       return await fetchVillages(ctx.drizzle);
     }),
+  // Villages a new Genin can join, with the full ones and the quietest one marked
+  getVillageChoices: protectedProcedure
+    .meta({
+      mcp: {
+        description:
+          "Joinable villages, marking those too busy to take new Genin and the one that needs shinobi most",
+      },
+    })
+    .query(async ({ ctx }) => fetchVillageChoices(ctx.drizzle)),
   // Restore village structure points
   restoreStructurePoints: protectedProcedure
     .input(z.object({ structureId: z.string() }))

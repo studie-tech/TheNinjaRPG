@@ -2,12 +2,14 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getQuestChallengeUserUpdate } from "@/deltas/questChallenge";
+import { withOnboardingQuestPatch } from "@/deltas/quests";
 import { getDailyDutyUserUpdate } from "@/deltas/towerDefense";
 import { userData } from "@/drizzle/schema";
+import { dailyDutyReward, describeDailyDutyReward } from "@/libs/dailyDutyExperience";
 import { findQuestChallenge } from "@/libs/quest/challenge";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
 import { decodeTdActions } from "@/libs/towerDefense/actionLog";
-import { tdDailyReward, tdFulfilsDailyDuty } from "@/libs/towerDefense/balance";
+import { tdFulfilsDailyDuty } from "@/libs/towerDefense/balance";
 import {
   TD_DOJO,
   TD_DOJO_INFO,
@@ -43,6 +45,7 @@ import {
   ratelimitMiddleware,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { recordOnboardingTask } from "@/server/utils/onboardingTasks";
 import { recordQuestChallengeWin } from "@/server/utils/questChallenge";
 import { signRunToken, verifyRunToken } from "@/server/utils/runTokens";
 import {
@@ -200,7 +203,12 @@ export const towerDefenseRouter = createTRPCRouter({
         wave: z.number().optional(),
         kills: z.number().optional(),
         dailyReward: z
-          .object({ ryo: z.number(), prestige: z.number(), villageTokens: z.number() })
+          .object({
+            ryo: z.number(),
+            prestige: z.number(),
+            villageTokens: z.number(),
+            experience: z.number(),
+          })
           .optional(),
       }),
     )
@@ -274,13 +282,14 @@ export const towerDefenseRouter = createTRPCRouter({
       if (paid.rowsAffected === 0) return refusedForGood(REPLACED_RUN_MESSAGE);
       const paidAt = new Date();
       const dutyReward = tdFulfilsDailyDuty(token.startWave, result.wave)
-        ? tdDailyReward(claimant.level)
+        ? dailyDutyReward(claimant.rank, claimant.level)
         : null;
       const [duty] = await Promise.all([
         dutyReward
           ? updateUserDataForTowerDefenseDuty(ctx.drizzle, ctx, {
               ryo: dutyReward.ryo,
               prestige: dutyReward.prestige,
+              experience: dutyReward.experience,
               paidAt,
               dayStart: periodStart("daily", paidAt),
             })
@@ -307,19 +316,26 @@ export const towerDefenseRouter = createTRPCRouter({
           reward.villageTokens,
           claimant.villageId,
         );
+      const questData = reward
+        ? await recordOnboardingTask({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            task: "tower_defense_duty",
+            questData: claimant.questData,
+          })
+        : undefined;
       const summary =
         result.points > 0
           ? `Reached wave ${result.wave} and earned ${result.points.toLocaleString()} scroll${result.points === 1 ? "" : "s"}!`
           : `Reached wave ${result.wave}.`;
-      const dutyUpdate = getDailyDutyUserUpdate({
-        reward,
-        villageId: claimant.villageId,
-        paidAt,
-      });
+      const dutyUpdate = withOnboardingQuestPatch(
+        getDailyDutyUserUpdate({ reward, villageId: claimant.villageId, paidAt }),
+        questData,
+      );
       return {
         success: true,
         message: reward
-          ? `${summary} Daily Guard Hall duty done: +${reward.ryo.toLocaleString()} ryo, +${reward.prestige} prestige${claimant.villageId ? ` and +${reward.villageTokens} tokens for your village` : ""}.`
+          ? `${summary} Daily Guard Hall duty done: ${describeDailyDutyReward(reward, !!claimant.villageId)}`
           : summary,
         pointsEarned: result.points,
         wave: result.wave,

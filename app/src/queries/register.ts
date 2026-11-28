@@ -142,6 +142,8 @@ export const executeCreatedUserForCreateCharacter = (
     | "musicOn"
     | "sfxOn"
     | "buttonSfxOn"
+    | "playedBefore"
+    | "guidanceLevel"
   > & {
     earnedExperience?: undefined | number;
     lastIp: string;

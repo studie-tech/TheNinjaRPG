@@ -142,6 +142,7 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
     kageMatch: state?.kageMatch,
     tournamentGameId: state?.tournamentGameId,
     tournamentAiOnly: state?.tournamentAiOnly,
+    tutorialGuided: state?.tutorialGuided,
     encounter: state?.encounter ? { wave: state.encounter.wave } : undefined,
     // Pending wave templates include private loadouts; expose only the party's current progress.
     dungeon: state?.dungeon

@@ -504,7 +504,7 @@ const admissionFlows = [
   { file: "layout/HuntingBoard.tsx", procedure: "hunting.start" },
   { file: "screens/dungeon/DungeonScreen.tsx", procedure: "coop.dungeon.act" },
   { file: "layout/ShrineBattleLobby.tsx", procedure: "shrine.initiateShrineBattle" },
-  { file: "layout/Objective.tsx", procedure: "quests.retryBattle" },
+  { file: "hooks/quest.ts", procedure: "quests.retryBattle" },
   { file: "layout/Sector.tsx", procedure: "overworldAi.interactWithOverworldAi" },
   { file: "layout/RaidBrowser.tsx", procedure: "raids.startRaidBattle" },
   { file: "layout/clan/ClanBattles.tsx", procedure: "clan.initiateClanBattle" },
@@ -624,7 +624,7 @@ it("adds confirmed dungeon navigation once without replaying consumed feedback",
 });
 
 it("keeps a known no-battle retry projection local when no delta is returned", async () => {
-  const test = setup("layout/Objective.tsx", "quests.retryBattle");
+  const test = setup("hooks/quest.ts", "quests.retryBattle");
   try {
     await test.options.onSuccess(
       { success: true, userPatch: {} },

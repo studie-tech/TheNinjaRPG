@@ -39,6 +39,7 @@ import GraphBankLedger from "@/layout/GraphBankLedger";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
@@ -224,6 +225,7 @@ export function BankScreen() {
         {...navigation}
         padding={false}
       >
+        <SystemIntroBanner system="bank" className="m-3" />
         <Image
           alt="welcome"
           src={IMG_BUILDING_BANK}
@@ -237,7 +239,7 @@ export function BankScreen() {
             <Coins className="h-20 w-20" />
             <p className="text-lg">{money.toLocaleString()} ryo</p>
             <h2 className="font-bold text-xl">Money on hand</h2>
-            <div className="w-full px-4 pt-3">
+            <div id="tutorial-bank-deposit" className="w-full px-4 pt-3">
               <AmountForm
                 form={toBankForm}
                 onSubmit={onDeposit}

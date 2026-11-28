@@ -517,6 +517,8 @@ export type ExtraState = {
   tournamentGameId?: string;
   /** Event AI rules cannot be disabled by participants. */
   tournamentAiOnly?: boolean;
+  /** A fight the tutorial teaches by hand: the player's turns have no time limit. */
+  tutorialGuided?: boolean;
   /** Preloaded enemy waves shared by authored co-op encounters. */
   encounter?: EncounterWaveState;
   /** The attacked creator's identity for the trial's achievement credit and log. */

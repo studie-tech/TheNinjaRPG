@@ -18,6 +18,7 @@ import { useCombatInspection } from "@/hooks/useCombatInspection";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
+import { useTutorialSky } from "@/hooks/useTutorialSky";
 import { CombatAggro } from "@/layout/CombatAggro";
 import { CombatLobby } from "@/layout/CombatLobby";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
@@ -27,18 +28,14 @@ import { QuestUpdateModal } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffects";
 import WebGlError from "@/layout/WebGLError";
 import { getAudioPreference } from "@/libs/audioPreferences";
-import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
+import {
+  availableUserActions,
+  calcActiveUser,
+  getActionSelectionId,
+} from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
-import {
-  COMBAT_LOBBY_SECONDS,
-  COMBAT_SECONDS,
-  ITEM_BROKEN_NOTICE,
-  ITEM_DURABILITY_CRITICAL_NOTICE,
-  ITEM_DURABILITY_NOTICE,
-  SHRINE_CAPTURED_NOTICE,
-  SHRINE_RECAPTURED_NOTICE,
-} from "@/libs/combat/constants";
+import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { stillInBattle } from "@/libs/combat/inBattle";
 import { inspectsBattlefieldTap } from "@/libs/combat/inspection";
@@ -183,6 +180,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     updateUser,
     prepareUserUpdate,
   } = useRequiredUserDataSelector(selectCombatViewer);
+  const sky = useTutorialSky(userData, timeDiff);
   const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
   const [isInLobby, setIsInLobby] = useState(
@@ -254,8 +252,10 @@ const Combat: React.FC<CombatProps> = (props) => {
   const detailsEffects = useMemo(() => {
     if (!detailsTarget) return null;
 
-    const groundEffects =
-      battleMaps.groundEffectsByTile.get(detailsTarget.tileKey) || [];
+    // Visual tags only decorate the tile, so they have no row, as in the fighter list.
+    const groundEffects = (
+      battleMaps.groundEffectsByTile.get(detailsTarget.tileKey) ?? []
+    ).filter((effect) => effect.type !== "visual");
     const userEffects = detailsTarget.userId
       ? battleMaps.userEffectsByUserId.get(detailsTarget.userId) || []
       : [];
@@ -438,7 +438,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         showMutationToast({ success: false, message: error.message });
       }
     },
-    onSuccess: async (data, _variables, context) => {
+    onSuccess: async (data, variables, context) => {
       actionInFlightRef.current = false;
       // A resolved action keeps its slot until the field reaches its log entry.
       if (!data.updateClient || !data.battleUpdate || !combat.scene.current)
@@ -471,6 +471,13 @@ const Combat: React.FC<CombatProps> = (props) => {
         const nextControlled = resolveControlledActorId(data.battleUpdate, suid);
         if (prevControlled !== nextControlled) {
           setCombatActionId(undefined);
+        } else if (
+          variables.actionId === "move" &&
+          data.battleUpdate.round !== battleRef.current?.round
+        ) {
+          // A move that spends the round's last AP ends the turn, so the new round
+          // opens with a choice rather than a move.
+          setCombatActionId((current) => (current === "move" ? undefined : current));
         }
       }
       // Physical feedback for the two moments worth feeling: an action landing, and the
@@ -508,31 +515,8 @@ const Combat: React.FC<CombatProps> = (props) => {
           logEntries: data.logEntries,
         });
       }
-      if (data?.result?.notifications.length !== 0) {
-        data?.result?.notifications.forEach((notification) => {
-          // Check if this is a durability warning
-          const isDurabilityWarning =
-            notification.includes(ITEM_DURABILITY_NOTICE) ||
-            notification.includes(ITEM_DURABILITY_CRITICAL_NOTICE) ||
-            notification.includes(ITEM_BROKEN_NOTICE);
-          const isBrokenItem = notification.includes(ITEM_BROKEN_NOTICE);
-          // Check if this is a war notification
-          const isWarNotification =
-            notification.includes(SHRINE_CAPTURED_NOTICE) ||
-            notification.includes(SHRINE_RECAPTURED_NOTICE);
-          showMutationToast({
-            success: !isDurabilityWarning, // Durability warnings are not "success" (they're warnings)
-            title: isDurabilityWarning
-              ? isBrokenItem
-                ? "Item Broken"
-                : "Low Durability Warning"
-              : isWarNotification
-                ? "War Update"
-                : "Quest Update",
-            message: notification,
-          });
-        });
-      }
+      // Battle-end notices (quest progress, equipment, shrines) are read on the result
+      // screen, after the fight has played out.
       // Check for quest updates
       // The tutorial claims its own quest rewards from the assistant panel
       if (data.updatedQuestIds?.length && !isTutorialActive(userData)) {
@@ -637,6 +621,10 @@ const Combat: React.FC<CombatProps> = (props) => {
     };
   }, [suid, timeDiff]);
 
+  const dismissHoverDetails = () => {
+    lastHoverKeyRef.current = null;
+    setHoveredEffect(null);
+  };
   const clearTouchDetailsTimer = () => {
     if (touchDetailsTimerRef.current) clearTimeout(touchDetailsTimerRef.current);
     touchDetailsTimerRef.current = null;
@@ -872,11 +860,6 @@ const Combat: React.FC<CombatProps> = (props) => {
       resultRef.current
     )
       return;
-    setAggroTarget(
-      config.showAggro && character?.userId && aggro.has(character.userId)
-        ? character
-        : null,
-    );
     const battle = battleRef.current,
       action = actionRef.current,
       grid = gridRef.current;
@@ -906,6 +889,15 @@ const Combat: React.FC<CombatProps> = (props) => {
       )
     )
       inspectTapped(character.userId);
+    // A tap that acts leaves the field clear for the result and the next target;
+    // any other tap on a fighter pins its aggro.
+    const acts = !!battle && !!action && isValid;
+    setAggroTarget(
+      !acts && config.showAggro && character?.userId && aggro.has(character.userId)
+        ? character
+        : null,
+    );
+    if (acts) dismissHoverDetails();
     if (!battle || !action || !isValid || !canPerformAction()) return;
     document.body.style.cursor = "wait";
     performAction({
@@ -931,6 +923,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           aggro: config.showAggro ? aggro : undefined,
           timeDiff,
           cycleEnabled: true,
+          sky,
           assets: gameAssetsRef.current.assets,
           requestedIds: gameAssetsRef.current.requestedIds,
           active: isPageActive && !result,
@@ -946,15 +939,24 @@ const Combat: React.FC<CombatProps> = (props) => {
     gridRef.current = combat.scene.current?.grid ?? null;
     const mount = mountRef.current;
     if (!combat.isReady || !mount) return;
-    const dismissAggro = () => setAggroTarget(null);
-    mount.addEventListener("pointerdown", dismissAggro, { passive: true });
+    // Any press closes a pinned aggro card; a press outside the field (the action bar,
+    // the page) also closes effect details a touch or a resting pointer left open.
+    const dismissDetails = (event: PointerEvent) => {
+      setAggroTarget(null);
+      if (!(event.target instanceof Node && mount.contains(event.target)))
+        dismissHoverDetails();
+    };
+    document.addEventListener("pointerdown", dismissDetails, {
+      capture: true,
+      passive: true,
+    });
     mount.addEventListener("touchstart", onDocumentTouchStart, { passive: true });
     mount.addEventListener("touchend", onDocumentTouchEnd, { passive: true });
     mount.addEventListener("touchcancel", onDocumentTouchEnd, { passive: true });
     mount.addEventListener("pointermove", onDocumentPointerMove, { passive: true });
     return () => {
       clearTouchDetailsTimer();
-      mount.removeEventListener("pointerdown", dismissAggro);
+      document.removeEventListener("pointerdown", dismissDetails, { capture: true });
       mount.removeEventListener("touchstart", onDocumentTouchStart);
       mount.removeEventListener("touchend", onDocumentTouchEnd);
       mount.removeEventListener("touchcancel", onDocumentTouchEnd);
@@ -973,11 +975,14 @@ const Combat: React.FC<CombatProps> = (props) => {
     config,
     combat.isReady,
   ]);
+  // Choosing another action starts aiming afresh, so earlier details make way for it.
+  const selectedActionId = props.action
+    ? getActionSelectionId(props.action)
+    : undefined;
   useEffect(() => {
-    lastHoverKeyRef.current = null;
-    setHoveredEffect(null);
+    dismissHoverDetails();
     setAggroTarget(null);
-  }, [battleId, result, config.showAggro]);
+  }, [battleId, result, config.showAggro, selectedActionId]);
 
   // Clear hover state on mouse leave from combat area
   useEffect(() => {

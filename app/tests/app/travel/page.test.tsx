@@ -148,9 +148,8 @@ beforeEach(() => {
     completeTutorialAction: vi.fn(),
   } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(
-    ({ children, headerStartContent, topRightContent, topRightItems }) => (
+    ({ children, topRightContent, topRightItems }) => (
       <div>
-        <div data-header-start>{headerStartContent}</div>
         {topRightContent}
         {topRightItems?.map((item) => (
           <div key={item.key} data-header-item={item.key} data-priority={item.priority}>

@@ -6,6 +6,7 @@ import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { hexGridHeightRatio } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
+import type { MapAnchor, MapAnchors } from "@/libs/mapAnchors";
 import {
   type WanderLeg,
   type WanderTile,
@@ -35,6 +36,10 @@ import {
 } from "@/libs/rendering/scenes/travelActors";
 import { travelSectorKey } from "@/libs/rendering/scenes/travelData";
 import { createTravelPath } from "@/libs/rendering/scenes/travelPath";
+import {
+  travelViewportHeight,
+  watchTravelViewport,
+} from "@/libs/rendering/scenes/travelViewport";
 import { createRenderScope } from "@/libs/rendering/scope";
 import {
   applySectorTiles,
@@ -63,12 +68,14 @@ import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { planVillageWallWindow } from "@/libs/sector-map/village-walls";
+import { npcWalkPose } from "@/libs/storyScene";
 import { getBiomeFromTileType } from "@/libs/travel";
 import {
   villageDutyNavigationMap,
   villageDutyPursuitPosition,
 } from "@/libs/villageDuty";
 import { clamp } from "@/utils/math";
+import type { LpcDirection } from "@/validators/lpc";
 import type { MapLocation } from "@/validators/mapLocation";
 
 /** Neighbouring sectors join seamlessly, so their terrain draws no outline between them. */
@@ -96,6 +103,8 @@ export const createTravelScene = async (options: {
   onTap: (hit: TravelPick, client: { x: number; y: number }) => void;
   onHover: (structureId: string | null, locationId: string | null) => void;
   onZoom: (zoom: number) => void;
+  /** What overlays hold on to; the scene reports where those things stand as they move. */
+  anchors?: MapAnchors;
   initialZoom: number;
   resolution?: number;
 }) => {
@@ -112,8 +121,14 @@ export const createTravelScene = async (options: {
       options.mount.closest<HTMLElement>("[data-travel-viewport]")?.clientHeight ||
       (options.mount.closest('[data-world-expanded="true"]')
         ? window.innerHeight
-        : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600))),
+        : travelViewportHeight(
+            options.mount,
+            width * displayRatio(),
+            Math.min(window.innerHeight * 0.6, 600),
+            { hasRowBelow: true },
+          )),
   });
+  game.own(watchTravelViewport(game.fit));
   game.canvas.style.filter = "none";
   try {
     // The camera moves this group without repacking unchanged descendant transforms.
@@ -361,6 +376,48 @@ export const createTravelScene = async (options: {
       );
     };
     game.setResize(() => transform(true));
+    /** Where an anchor stands in window coordinates, as the actors' `stance` gives it. */
+    const anchorStance = (anchor: MapAnchor) => {
+      if (anchor.kind === "actor") return actors.stance(anchor.key);
+      if (anchor.kind === "objective") return actors.questMarker();
+      const entry = sectors.get(anchor.sector);
+      const tile = entry?.grid.getHex({ col: anchor.x, row: anchor.y });
+      if (!entry || !tile) return undefined;
+      const y = -tile.center.y + standingOffset(tile) + entry.position.y;
+      return {
+        x: -tile.center.x + tile.width / 2 + entry.position.x,
+        y,
+        top: y + tile.height,
+        size: tile.height,
+      };
+    };
+    if (options.anchors) {
+      const stop = options.anchors.onWanted(() => game.invalidate());
+      game.own(() => void stop());
+    }
+    /** Report every anchor an overlay holds on to in the canvas's CSS pixels. */
+    const reportAnchors = () => {
+      const { anchors } = options;
+      if (!anchors) return;
+      const s = scale(),
+        { width, height } = game.renderer;
+      for (const [id, { anchor }] of anchors.wanted()) {
+        const stance = anchorStance(anchor);
+        anchors.report(
+          id,
+          stance
+            ? {
+                x: world.position.x + stance.x * s,
+                foot: world.position.y - stance.y * s,
+                top: world.position.y - stance.top * s,
+                tile: stance.size * s,
+                width,
+                height,
+              }
+            : null,
+        );
+      }
+    };
     const pick = (x: number, y: number): TravelPick => {
       const snapshot = options.getSnapshot(),
         s = scale();
@@ -879,37 +936,50 @@ export const createTravelScene = async (options: {
         wanderWalks.clear();
       }
       const clock = snapshot.weatherTime ?? Date.now();
+      /** Walk an NPC between two tiles; reduced motion stands it on the nearer one. */
+      const walkBetween = (
+        actorKey: string,
+        pose: { from: WanderTile; to: WanderTile; progress: number; isMoving: boolean },
+        standing?: LpcDirection,
+      ) => {
+        const from = entry.grid.getHex({ col: pose.from.x, row: pose.from.y });
+        const to = entry.grid.getHex({ col: pose.to.x, row: pose.to.y });
+        if (!from || !to) return false;
+        const progress = frame.reducedMotion
+          ? Math.round(pose.progress)
+          : pose.progress;
+        movements.set(actorKey, {
+          x: -from.center.x + (-to.center.x + from.center.x) * progress,
+          y:
+            -from.center.y +
+            standingOffset(from) +
+            (-to.center.y + standingOffset(to) + from.center.y - standingOffset(from)) *
+              progress,
+          direction: pose.isMoving && !frame.reducedMotion ? "horizontal" : null,
+          facing: to.center.x > from.center.x ? 1 : -1,
+          standing,
+        });
+        return true;
+      };
       for (const user of wanderMap ? snapshot.users : []) {
+        if (user.npcWalk) {
+          const pose = npcWalkPose(user.npcWalk, clock);
+          if (pose) walkBetween(travelActorKey(user), pose, user.npcWalk.facing ?? 2);
+          continue;
+        }
         const wander = user.npcWander;
         if (!wander || !wanderMap) continue;
         const actorKey = travelActorKey(user);
         if (wander.pursuit) {
           const pose = villageDutyPursuitPosition(wander.pursuit, clock);
-          const from =
-            pose && entry.grid.getHex({ col: pose.from.x, row: pose.from.y });
-          const to = pose && entry.grid.getHex({ col: pose.to.x, row: pose.to.y });
-          if (pose && from && to) {
-            const progress = frame.reducedMotion
-              ? Math.round(pose.progress)
-              : pose.progress;
-            movements.set(actorKey, {
-              x: -from.center.x + (-to.center.x + from.center.x) * progress,
-              y:
-                -from.center.y +
-                standingOffset(from) +
-                (-to.center.y +
-                  standingOffset(to) +
-                  from.center.y -
-                  standingOffset(from)) *
-                  progress,
-              direction:
-                pose.progress > 0 && pose.progress < 1 && !frame.reducedMotion
-                  ? "horizontal"
-                  : null,
-              facing: to.center.x > from.center.x ? 1 : -1,
-            });
+          if (
+            pose &&
+            walkBetween(actorKey, {
+              ...pose,
+              isMoving: pose.progress > 0 && pose.progress < 1,
+            })
+          )
             continue;
-          }
         }
         const key = `${wander.seed}:${wander.anchor.x}:${wander.anchor.y}:${wander.radius}:${wander.wildOnly}:${wander.villageOnly ?? false}`;
         let spots = wanderSpotCache.get(key);
@@ -1185,6 +1255,7 @@ export const createTravelScene = async (options: {
         route.set(points, tile?.width ?? 50);
       }
       route.animate(frame, actors.feet(snapshot.viewer?.userId ?? ""), scale());
+      reportAnchors();
       const currentWeather =
         snapshot.weather ??
         getWorldWeather(
@@ -1244,6 +1315,23 @@ export const createTravelScene = async (options: {
       fit: game.fit,
       updateWindow: requestWindowUpdate,
       setBackground,
+      /** Resolves once the viewer's sector has its scenery, or never had any to wait for. */
+      sceneryReady: () => currentSceneryReady,
+      /** Whether scenery would be painted over a figure standing on a tile of a sector. */
+      isTileCovered: (sector: number, at: { x: number; y: number }) => {
+        const rendered = sectors.get(sector);
+        const tile = rendered?.grid.getHex({ col: at.x, row: at.y });
+        if (!rendered || !tile) return false;
+        const left = -tile.center.x,
+          foot = -tile.center.y + standingOffset(tile);
+        return revealCandidates(rendered.art).some(
+          ({ bounds }) =>
+            bounds.minY <= foot &&
+            bounds.maxY > foot &&
+            bounds.minX < left + tile.width &&
+            bounds.maxX > left,
+        );
+      },
       /** Client-space artwork bounds for DOM actions that follow pan, zoom and resize. */
       structureBounds: (id: string) => {
         const entry = sectors

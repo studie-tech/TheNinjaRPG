@@ -443,6 +443,55 @@ describe("travel session ownership", () => {
     expect(test.result.current.isArrivalRejected).toBe(false);
   });
 
+  it("focuses a quest step's objective sector and refuses trips elsewhere", async () => {
+    const reportQuest = {
+      id: "genin",
+      consecutiveObjectives: true,
+      content: {
+        objectives: [
+          {
+            id: "join",
+            task: "dialog",
+            nextObjectiveId: [
+              { text: "Here", nextObjectiveId: "reportHere" },
+              { text: "There", nextObjectiveId: "reportThere" },
+            ],
+          },
+          { id: "reportHere", task: "move_to_location", sector: 2 },
+          { id: "reportThere", task: "move_to_location", sector: 3 },
+        ],
+      },
+    };
+    currentStep = {
+      relatedValue: "genin",
+      objectiveId: ["reportHere", "reportThere"],
+    } as never;
+    user = {
+      ...user!,
+      tutorialOn: true,
+      userQuests: [{ questId: "genin", quest: reportQuest, endAt: null }],
+      questData: [
+        {
+          id: "genin",
+          goals: [
+            { id: "join", done: true, selectedNextObjectiveId: "reportHere" },
+            { id: "reportHere", done: false },
+            { id: "reportThere", done: false },
+          ],
+        },
+      ],
+    } as unknown as NonNullable<UserWithRelations>;
+    const test = setup();
+    await ready(test);
+    await waitFor(() => expect(test.result.current.focusSector).toBe(2));
+    act(() => test.result.current.handleGlobalMove(3));
+    expect(announce).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(test.read).not.toHaveBeenCalledWith(
+      "travel.startGlobalMove",
+      expect.anything(),
+    );
+  });
+
   it("does not attach an optimistic arrival timer to instant Wake Island travel", async () => {
     const pending = deferred<ReturnType<typeof admission>>();
     const test = setup(() => pending.promise);

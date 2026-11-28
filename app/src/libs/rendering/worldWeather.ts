@@ -219,3 +219,10 @@ export type WorldWeather = {
   kind: "clear" | "clouds" | "rain" | "snow" | "sandstorm";
   intensity: number;
 };
+
+/** A sky of one player's own, drawn in place of the world's. */
+export type WorldSky = {
+  /** How far the drawn clock runs behind the world's. */
+  shiftMs: number;
+  weather: WorldWeather;
+};

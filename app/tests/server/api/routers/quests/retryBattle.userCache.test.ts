@@ -285,15 +285,15 @@ describeWithDatabase("quest retry admission cache", () => {
           expect(response.userDelta).toBeUndefined();
           expect(response.achievementProgress).toBeUndefined();
         } else expect(response.userPatch).toBeDefined();
-        // Execute Objective's actual callback against this real admission result.
+        // Execute the retry hook's actual callback against this real admission result.
         const source = readFileSync(
-          join(import.meta.dirname, "../../../../../src/layout/Objective.tsx"),
+          join(import.meta.dirname, "../../../../../src/hooks/quest.ts"),
           "utf8",
         );
         const call = source.indexOf("api.quests.retryBattle.useMutation(");
         const callbacks = source
           .slice(call)
-          .match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+          .match(/useMutation\((\{[\s\S]*?\n {2}\})\);/)?.[1];
         if (!callbacks) throw new Error("Retry callbacks were not found");
         const transpiler = new (require("bun").Transpiler)({ loader: "tsx" });
         const factory = transpiler.transformSync(

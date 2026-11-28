@@ -1085,3 +1085,93 @@ it("uses stun-adjusted AP for action feedback, deselection and keyboard selectio
   fireEvent.keyDown(document, { key: "h" });
   expect(store.get(userContext.combatActionIdAtom)).toBe("basicHeal");
 });
+
+it("clears a selected End Turn when the player's next round begins, keeping other basic moves", async () => {
+  const battle = makeCompleteBattle({
+    id: "end-turn-selection",
+    version: 1,
+    usersState: [makeUser({ userId: "player", actionPoints: 100 })],
+  });
+  const { view, queryClient } = mount(
+    battle.id,
+    async () => ({ battle, result: null }) as unknown as Response,
+    { layoutOrder: ["battlefield", "actions"] },
+  );
+  const store = getDefaultStore();
+  const nextRound = async (round: number) =>
+    act(async () =>
+      queryClient.setQueryData(["combat", battle.id], {
+        battle: { ...battle, round, version: battle.version + round },
+        result: null,
+      }),
+    );
+  fireEvent.click(await view.findByRole("button", { name: "End Turn" }));
+  expect(store.get(userContext.combatActionIdAtom)).toBe("wait");
+  await nextRound(2);
+  await waitFor(() =>
+    expect(store.get(userContext.combatActionIdAtom)).toBeUndefined(),
+  );
+
+  fireEvent.click(view.getByRole("button", { name: "Move" }));
+  expect(store.get(userContext.combatActionIdAtom)).toBe("move");
+  await nextRound(3);
+  await act(async () => {});
+  expect(store.get(userContext.combatActionIdAtom)).toBe("move");
+});
+
+it("clears a selection that is no longer offered, such as End Turn once its AP is spent", async () => {
+  const battle = makeCompleteBattle({
+    id: "spent-end-turn",
+    version: 1,
+    usersState: [makeUser({ userId: "player", actionPoints: 100 })],
+  });
+  const { view, queryClient } = mount(
+    battle.id,
+    async () => ({ battle, result: null }) as unknown as Response,
+    { layoutOrder: ["battlefield", "actions"] },
+  );
+  const store = getDefaultStore();
+  fireEvent.click(await view.findByRole("button", { name: "End Turn" }));
+  expect(store.get(userContext.combatActionIdAtom)).toBe("wait");
+  await act(async () =>
+    queryClient.setQueryData(["combat", battle.id], {
+      battle: {
+        ...battle,
+        version: battle.version + 1,
+        usersState: [makeUser({ userId: "player", actionPoints: 0 })],
+      },
+      result: null,
+    }),
+  );
+  await waitFor(() =>
+    expect(store.get(userContext.combatActionIdAtom)).toBeUndefined(),
+  );
+});
+
+it("starts each battle and each visit without the previous battle's selection", async () => {
+  const battles = new Map(
+    ["first", "second"].map((id) => [
+      id,
+      makeCompleteBattle({ id, usersState: [makeUser({ userId: "player" })] }),
+    ]),
+  );
+  const { view, changeBattle } = mount(
+    "first",
+    async (id) => ({ battle: battles.get(id)!, result: null }) as unknown as Response,
+  );
+  const store = getDefaultStore();
+  await view.findByText("Active battle first");
+  fireEvent.keyDown(document, { key: "a" });
+  expect(store.get(userContext.combatActionIdAtom)).toBe("basicAttack");
+
+  changeBattle("second");
+  await view.findByText("Active battle second");
+  await waitFor(() =>
+    expect(store.get(userContext.combatActionIdAtom)).toBeUndefined(),
+  );
+
+  fireEvent.keyDown(document, { key: "a" });
+  expect(store.get(userContext.combatActionIdAtom)).toBe("basicAttack");
+  view.unmount();
+  expect(store.get(userContext.combatActionIdAtom)).toBeUndefined();
+});

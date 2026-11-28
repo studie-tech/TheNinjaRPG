@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getScoutingReportUserUpdate } from "@/deltas/chakraStorm";
 import { getQuestChallengeUserUpdate } from "@/deltas/questChallenge";
+import { withOnboardingQuestPatch } from "@/deltas/quests";
 import { decodeCsActions } from "@/libs/chakraStorm/actionLog";
 import {
   CS_DAILY_SECONDS,
@@ -20,8 +21,8 @@ import {
   settleCsRun,
 } from "@/libs/chakraStorm/progress";
 import { CS_SIM_VERSION } from "@/libs/chakraStorm/sim";
+import { dailyDutyReward, describeDailyDutyReward } from "@/libs/dailyDutyExperience";
 import { findQuestChallenge } from "@/libs/quest/challenge";
-import { tdDailyReward } from "@/libs/towerDefense/balance";
 import {
   chakraStormRunIsActive,
   findChakraStormClaimant,
@@ -54,6 +55,7 @@ import {
   reserveChakraStormReplay,
   verifyChakraStormRun,
 } from "@/server/utils/chakraStormClaims";
+import { recordOnboardingTask } from "@/server/utils/onboardingTasks";
 import { recordQuestChallengeWin } from "@/server/utils/questChallenge";
 import { signRunToken, verifyRunToken } from "@/server/utils/runTokens";
 import { getFirstOfThisMonth, periodStart } from "@/utils/time";
@@ -188,7 +190,12 @@ export const chakraStormRouter = createTRPCRouter({
         record: stageRecordSchema.nullable().optional(),
         unlocked: z.enum(CS_STAGES).optional(),
         dailyReward: z
-          .object({ ryo: z.number(), prestige: z.number(), villageTokens: z.number() })
+          .object({
+            ryo: z.number(),
+            prestige: z.number(),
+            villageTokens: z.number(),
+            experience: z.number(),
+          })
           .optional(),
       }),
     )
@@ -271,12 +278,15 @@ export const chakraStormRouter = createTRPCRouter({
       if (paid.rowsAffected === 0) return refusedForGood(REPLACED_RUN_MESSAGE);
       const paidAt = new Date();
       const dutyReward =
-        result.seconds >= CS_DAILY_SECONDS ? tdDailyReward(claimant.level) : null;
+        result.seconds >= CS_DAILY_SECONDS
+          ? dailyDutyReward(claimant.rank, claimant.level)
+          : null;
       const [duty] = await Promise.all([
         dutyReward
           ? updateUserDataForChakraStormDuty(ctx.drizzle, ctx, {
               ryo: dutyReward.ryo,
               prestige: dutyReward.prestige,
+              experience: dutyReward.experience,
               paidAt,
               dayStart: periodStart("daily", paidAt),
             })
@@ -295,16 +305,23 @@ export const chakraStormRouter = createTRPCRouter({
           reward.villageTokens,
           claimant.villageId,
         );
+      const questData = reward
+        ? await recordOnboardingTask({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            task: "chakra_storm_scout",
+            questData: claimant.questData,
+          })
+        : undefined;
       const summary = `${result.won ? "Scouting complete" : "Back from scouting"}: +${settled.intel.toLocaleString()} intel.`;
-      const update = getScoutingReportUserUpdate({
-        reward,
-        villageId: claimant.villageId,
-        paidAt,
-      });
+      const update = withOnboardingQuestPatch(
+        getScoutingReportUserUpdate({ reward, villageId: claimant.villageId, paidAt }),
+        questData,
+      );
       return {
         success: true,
         message: reward
-          ? `${summary} Daily scouting report delivered: +${reward.ryo.toLocaleString()} ryo, +${reward.prestige} prestige${claimant.villageId ? ` and +${reward.villageTokens} tokens for your village` : ""}.`
+          ? `${summary} Daily scouting report delivered: ${describeDailyDutyReward(reward, !!claimant.villageId)}`
           : summary,
         intelEarned: settled.intel,
         record: settled.isBest ? (settled.progress.stages[run.stage] ?? null) : null,

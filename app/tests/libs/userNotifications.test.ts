@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
 import {
   getNoJutsuEquippedNotifications,
   getUserFactionNotifications,
@@ -11,6 +12,7 @@ const notify = (overrides: Record<string, unknown>) =>
     userId: "ninja",
     villageId: "home",
     isAi: false,
+    tutorialOn: false,
     village: { type: "VILLAGE", kageId: "kage" },
     shrineBattles: [],
     activeWars: [],
@@ -203,6 +205,17 @@ describe("getUserFactionNotifications", () => {
       "At war: defending vs Foe",
       "Raid (Sector 1)",
     ]);
+  });
+
+  it("holds raid notices back while the player is still in the tutorial", () => {
+    const activeRaids = [
+      { raidType: "open", sector: 724 },
+      { raidType: "exclusive", sector: 6 },
+    ];
+    expect(names({ activeRaids, tutorialOn: true, tutorialStep: 0 })).toEqual([]);
+    expect(
+      names({ activeRaids, tutorialOn: true, tutorialStep: TUTORIAL_STEPS_COUNT }),
+    ).toEqual(["Raid (Sector 724)", "Village Raid active (Sector 6)"]);
   });
 
   it("returns nothing for a missing user", () => {

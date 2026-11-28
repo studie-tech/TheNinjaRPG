@@ -1263,8 +1263,14 @@ describe("A newer version arriving during a playback", () => {
     expect(table.result.current.holding).toBe(true);
     expect(table.result.current.step).toBe(summary);
     act(() => table.result.current.continuePlayback());
-    await waitFor(() => expect(table.result.current.playing).toBe(false));
-    expect(table.result.current.view).toEqual(v4.payload.view);
+    // The held version's playback ends first; the newest one's plays after it.
+    await waitFor(
+      () => {
+        expect(table.result.current.playing).toBe(false);
+        expect(table.result.current.view).toEqual(v4.payload.view);
+      },
+      { timeout: 4000 },
+    );
   });
 
   it("ends on the newest board when its log arrives late", async () => {

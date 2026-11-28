@@ -1,4 +1,5 @@
 import {
+  BLACKSTEEL_CHAPTERS,
   type GATHERING_RANK,
   GATHERING_RANKS,
   type HUNTING_RANK,
@@ -459,3 +460,27 @@ type AvailabilityObjective = Partial<
 export type UpcomingBlock =
   | { kind: "level"; required: number; current: number }
   | { kind: "mastery"; label: string; required: number; current: number };
+
+/** Level from which tier quests are handed out even without the story reaching them. */
+export const TIER_QUEST_UNLOCK_LEVEL = 12;
+
+/** The story chapter (Proving Grounds) that introduces gear and the tier quests. */
+const TIER_QUEST_STORY_QUEST_ID = BLACKSTEEL_CHAPTERS.find(
+  (chapter) => chapter.chapter === 11,
+)?.questId;
+
+/**
+ * Whether tier quests may be assigned yet: from chapter 11 of the story, where gear is
+ * introduced, or from its level for players who skipped ahead. Earlier, a tier quest
+ * would compete with the story chapters for the player's attention.
+ */
+export const isTierQuestUnlocked = (user: {
+  level: number;
+  userQuests?: readonly { questId: string }[] | null;
+  completedQuests?: readonly { questId: string }[] | null;
+}) =>
+  user.level >= TIER_QUEST_UNLOCK_LEVEL ||
+  (!!TIER_QUEST_STORY_QUEST_ID &&
+    [...(user.userQuests ?? []), ...(user.completedQuests ?? [])].some(
+      (entry) => entry.questId === TIER_QUEST_STORY_QUEST_ID,
+    ));

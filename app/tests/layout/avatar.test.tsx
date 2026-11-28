@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type React from "react";
 import { renderToString } from "react-dom/server";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
@@ -61,5 +61,26 @@ describe("AvatarImage", () => {
         view.getByRole("img", { name: "Kakashi" }).getAttribute("src") ?? "",
       ),
     ).toContain(defaultFile);
+  });
+
+  it("keeps the loaded portrait until its replacement has loaded", async () => {
+    const view = render(
+      <AvatarImage href="https://example.com/first.webp" alt="Kakashi" size={100} />,
+    );
+    const shown = () => view.getByRole("img", { name: "Kakashi" }).getAttribute("src");
+    // next/image reports a load once the image has decoded.
+    const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 10)));
+    fireEvent.load(view.getByRole("img", { name: "Kakashi" }));
+    await settle();
+    view.rerender(
+      <AvatarImage href="https://example.com/second.webp" alt="Kakashi" size={100} />,
+    );
+    expect(shown()).toContain("first.webp");
+    const preload = view.container.querySelector("img.hidden");
+    expect(preload?.getAttribute("src")).toContain("second.webp");
+    if (preload) fireEvent.load(preload);
+    await settle();
+    expect(shown()).toContain("second.webp");
+    expect(view.container.querySelector("img.hidden")).toBeNull();
   });
 });

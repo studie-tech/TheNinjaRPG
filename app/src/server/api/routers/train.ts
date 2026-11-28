@@ -3,6 +3,7 @@ import { eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import { getUserProgressionUpdate } from "@/deltas/profile";
+import { withOnboardingQuestPatch } from "@/deltas/quests";
 import {
   getSavedTrainingQueueUserUpdate,
   getSelectTrainedElementUserUpdate,
@@ -24,7 +25,11 @@ import { userData } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { activeTrainedElement } from "@/libs/elementalMastery";
 import { petExperienceGainSql } from "@/libs/pets/experience";
-import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import {
+  filterQuestTrackersForDbPersist,
+  getNewTrackers,
+  hasOpenTask,
+} from "@/libs/quest";
 import {
   getEnergyQueue,
   getMasteryQueue,
@@ -69,6 +74,7 @@ import {
   elementalSnapshotConditions,
   masteryGainUpdates,
 } from "@/server/utils/masteryProgression";
+import { recordOnboardingTask } from "@/server/utils/onboardingTasks";
 import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { flushSafe } from "@/server/utils/sentry";
 import { editTrainingQueue } from "@/server/utils/userQueue";
@@ -212,12 +218,30 @@ export const trainRouter = createTRPCRouter({
           cleared: "Training queue cleared",
         },
       });
+      // Queuing energy (not clearing or reordering it) is a story lesson; the loaded
+      // quests show whether any objective still asks for it.
+      const questData =
+        result.success &&
+        input.entries.length > input.expectedEntries.length &&
+        hasOpenTask(user, "queue_energy")
+          ? await recordOnboardingTask({
+              client: ctx.drizzle,
+              userId: ctx.userId,
+              task: "queue_energy",
+              questData: user.questData,
+            })
+          : undefined;
+      // A withheld progression patch reads the profile again, trackers included; a
+      // quest-only patch would read as a complete update and skip that read.
       return actionReadinessResponse(
-        withSavedQueue(
-          result,
-          user,
-          requiresProgressionRefresh,
-          publishedAchievementIds,
+        withOnboardingQuestPatch(
+          withSavedQueue(
+            result,
+            user,
+            requiresProgressionRefresh,
+            publishedAchievementIds,
+          ),
+          requiresProgressionRefresh ? undefined : questData,
         ),
         result.success ? readiness : undefined,
         ctx.drizzle,

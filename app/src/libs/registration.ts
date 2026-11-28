@@ -21,6 +21,7 @@ export const REGISTRATION_FIELD_STEPS: Record<RegistrationField, number> = {
   musicOn: 3,
   sfxOn: 3,
   buttonSfxOn: 3,
+  playedBefore: 3,
 };
 
 /** Player-facing name of each registration field */
@@ -42,6 +43,7 @@ export const REGISTRATION_FIELD_LABELS: Record<RegistrationField, string> = {
   musicOn: "Music",
   sfxOn: "Sound effects",
   buttonSfxOn: "Button sounds",
+  playedBefore: "Played before",
 };
 
 /**

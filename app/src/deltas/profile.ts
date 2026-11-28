@@ -7,7 +7,7 @@ import {
   UserRanks,
   VOTE_REWARD_REPUTATION,
 } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
+import type { UserData, UserItemWithRelations } from "@/drizzle/schema";
 import { activeDungeonNotification } from "@/libs/dungeon";
 import { GLOBAL_GAME_BOOSTS } from "@/libs/gameSettingBoost";
 import { effectiveMasteries } from "@/libs/mastery";
@@ -657,3 +657,58 @@ export const getTavernColorPatch = (
 
 /** Loaded energy queue pointers used to decide whether a profile delta needs reconciliation. */
 export type UserQueueState = Pick<UserData, "energyQueueHead" | "energyQueueTail">;
+
+/**
+ * Add a system to the player's seen introductions, optimistically before the server
+ * records it; already-seen intros need no patch.
+ */
+export const getSeenIntroPatch = (current: Pick<User, "seenIntros">, intro: string) =>
+  current.seenIntros.includes(intro)
+    ? undefined
+    : { seenIntros: [...current.seenIntros, intro] };
+
+/**
+ * Project what Express Trials saved: the player's progression with the Road to Genin it
+ * handed out and the experience granted to spend at graduation, plus the graduation step
+ * the tutorial resumes at, the Wake Island sector and guidance at hints only. `items` is the
+ * equipment with the granted shuriken when they took a slot, and `learnedJutsu` the granted
+ * jutsu appended to the active loadout whose saved order matched `loadoutJutsuIds`. Without
+ * a confirmed `progression` the update is withheld, so the profile is read again instead of
+ * resuming the tutorial without the exam quest or the granted gear.
+ */
+export const getExpressTrialsUserUpdate = (input: {
+  step: number;
+  sector: number;
+  progression: ReturnType<typeof getUserProgressionUpdate> | undefined;
+  items?: UserItemWithRelations[];
+  learnedJutsu?: { loadoutJutsuIds: string[]; jutsuId: string };
+  /** Every jutsu the player has equipped once the trials' one stayed equipped. */
+  equippedJutsuIds?: string[];
+}) =>
+  input.progression
+    ? {
+        achievementProgress: input.progression.achievementProgress,
+        userPatch: {
+          ...input.progression.userPatch,
+          ...(input.items ? { items: input.items } : {}),
+          ...(input.learnedJutsu
+            ? {
+                loadout: {
+                  jutsuIds: [
+                    ...new Set([
+                      ...input.learnedJutsu.loadoutJutsuIds,
+                      input.learnedJutsu.jutsuId,
+                    ]),
+                  ],
+                },
+              }
+            : {}),
+          ...(input.equippedJutsuIds
+            ? { jutsus: input.equippedJutsuIds.map((jutsuId) => ({ jutsuId })) }
+            : {}),
+          tutorialStep: input.step,
+          sector: input.sector,
+          guidanceLevel: "HINTS" as const,
+        },
+      }
+    : {};

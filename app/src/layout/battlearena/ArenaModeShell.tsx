@@ -48,6 +48,14 @@ export function ArenaModeShell({ mode, onSelect, children }: ArenaModeShellProps
               value={encodeURIComponent(option)}
               className="hover:text-foreground relative flex h-14 min-w-0 flex-col gap-1.5 px-0 text-[11px] font-semibold @min-[600px]:h-10 @min-[600px]:flex-row @min-[600px]:px-3.5 @min-[600px]:text-sm"
             >
+              {/* A lesson's target; Radix owns the trigger's own id. */}
+              {option !== mode && (
+                <span
+                  id={`tutorial-battlearena-tab-${option.replace(" ", "-")}`}
+                  className="pointer-events-none absolute inset-0"
+                  aria-hidden
+                />
+              )}
               <Icon className="h-4 w-4 shrink-0" aria-hidden />
               {ARENA_MODE_LABELS[option]}
               {option === "Sparring" && waiting > 0 && (

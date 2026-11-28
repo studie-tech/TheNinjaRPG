@@ -9,6 +9,7 @@ import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { PetAcquisition } from "@/layout/PetAcquisition";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import { useRequireInVillage } from "@/utils/UserContext";
 
 /** Village-gated sanctuary entry point, pairing its lore with the adoption workflow. */
@@ -25,6 +26,7 @@ export function PetSanctuaryScreen() {
         padding={false}
         defaultBackHref="/village"
       >
+        <SystemIntroBanner system="pets" className="m-3" />
         <Image
           src={IMG_BUILDING_PET_SANCTUARY}
           alt="The Bondkeeper Sanctuary beneath Wake Island's cedars"

@@ -189,6 +189,26 @@ describe("travel actor snapshots", () => {
       recipes([deer(0), player()], { showAmbient: false }).map((recipe) => recipe.key),
     ).toEqual(["user:other"]);
   });
+  it("keeps a story scene's figures on the map whatever its filters hide", () => {
+    const story = player({
+      isNpc: true,
+      isStoryActor: true,
+      npcInteractionType: "AMBIENT",
+      npcPlacementId: "story-double",
+      npcWalk: { tiles: [{ x: 5, y: 5 }], startAt: 0, stepMs: 1 },
+    });
+    const shown = recipes([story, player()], {
+      showUsers: false,
+      showAmbient: false,
+      bracketFilter: [],
+    });
+    expect(shown.map((recipe) => recipe.key)).toEqual(["npc:story-double:0:0"]);
+    expect(shown[0]?.parts.map((part) => part.kind)).toEqual(["avatar"]);
+    // Unlike wildlife, a figure the story is about is lit at night.
+    expect(shown[0]?.parts[0]).toHaveProperty("light");
+    const hostile = recipes([{ ...story, npcInteractionType: "HOSTILE" }]);
+    expect(hostile[0]?.parts.map((part) => part.kind)).toEqual(["avatar", "attack"]);
+  });
   it("omits restricted attack actions while preserving healing and profile details", () => {
     expect(
       recipes([player({ rank: "STUDENT" })])[0]?.parts.map((part) => part.kind),
@@ -241,65 +261,6 @@ describe("travel actor snapshots", () => {
     const result = recipes([creator, challenger]);
     expect(result.map((recipe) => recipe.key)).toEqual(["user:creator"]);
     expect(result[0]?.parts.some((part) => part.kind === "attack")).toBe(true);
-  });
-  it("draws full-body art in place of the layered character, for the viewer too", () => {
-    const appearance = { bodyStyle: "male" } as never;
-    for (const userId of ["creator", "self"]) {
-      const creator = player({
-        userId,
-        username: CREATOR_USERNAME,
-        bodyArt: "robot.webp",
-        spriteAppearance: appearance,
-      });
-      const [recipe] = recipes([creator]);
-      expect(recipe?.user?.spriteAppearance).toBeUndefined();
-      expect(recipe?.parts.some((part) => part.kind === "marker")).toBe(false);
-      const body = recipe?.parts.find((part) => part.kind === "avatar");
-      // Twice an NPC's height on the 10px test tile, from the native source, sampled smoothly.
-      expect(body).toMatchObject({
-        image: "robot.webp",
-        rendition: 0,
-        nearest: false,
-        size: 26,
-      });
-      expect(body).not.toHaveProperty("character");
-      // Grounded and lit as players are, still when no idle sheet is bound.
-      expect(body).toMatchObject({ shadow: 0.16, light: 0.65 });
-      expect(body?.loop).toBeUndefined();
-    }
-  });
-  it("loops the body art's idle sheet, and its walk while moving, from full-size cells", () => {
-    const sheet = (id: string, rows: number, facing: "left" | "right") => ({
-      id,
-      name: id,
-      url: `https://example.com/${id}.png`,
-      smallUrl: `https://example.com/${id}-small.png`,
-      columns: 8,
-      rows,
-      frameCount: rows * 8,
-      fps: 12.5,
-      facing,
-    });
-    const [recipe] = recipes([
-      player({
-        username: CREATOR_USERNAME,
-        bodyArt: "robot.webp",
-        bodyIdle: sheet("idle", 3, "left"),
-        bodyMove: sheet("move", 2, "right"),
-      }),
-    ]);
-    const body = recipe?.parts.find((part) => part.kind === "avatar");
-    const clip = (id: string, rows: number) => ({
-      images: [`https://example.com/${id}.png`],
-      columns: 8,
-      rows,
-      frameCount: rows * 8,
-      frameDurationMs: 80,
-      loop: true,
-    });
-    expect(body?.loop).toEqual({ clip: clip("idle", 3), facing: "left" });
-    // The walk keeps its own facing, so it mirrors independently of the idle sheet.
-    expect(body?.walk).toEqual({ clip: clip("move", 2), facing: "right" });
   });
   it("still pins a battle beside an ordinary player, and once the creator has left the tile", () => {
     const challenger = player({

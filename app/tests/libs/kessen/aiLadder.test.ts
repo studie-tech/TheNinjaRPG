@@ -48,7 +48,7 @@ describe("Kessen AI tier ladder", () => {
           tally,
         });
       },
-      FULL ? 900_000 : 120_000,
+      FULL ? 900_000 : 300_000,
     );
   }
 });

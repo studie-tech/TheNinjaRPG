@@ -60,6 +60,7 @@ import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import {
   createWorldWeather,
   getWorldWeather,
+  type WorldSky,
   type WorldWeather,
 } from "@/libs/rendering/worldWeather";
 import { sampleShadowWind, sampleWorldWind } from "@/libs/rendering/worldWind";
@@ -695,10 +696,14 @@ export const createCombatScene = async (options: {
       art.animate(frame, scale(), null, breeze);
       const lightDate =
         snapshot.lightDate ??
-        (snapshot.cycleEnabled ? new Date(Date.now() - snapshot.timeDiff) : null);
+        (snapshot.cycleEnabled
+          ? new Date(Date.now() - snapshot.timeDiff - (snapshot.sky?.shiftMs ?? 0))
+          : null);
       weather.update(
         sourceFrame,
         snapshot.weather ??
+          // A field without weather, such as an arena indoors, has none of the tutorial's.
+          (snapshot.battle.background === "default" ? null : snapshot.sky?.weather) ??
           getWorldWeather(
             snapshot.battle.background,
             snapshot.weatherTime ?? Number.NaN,
@@ -845,6 +850,8 @@ export type CombatSceneSnapshot = {
   /** Authorized local previews affect scenery without advancing battle time. */
   lightDate?: Date | null;
   weather?: WorldWeather | null;
+  /** The sky a player in the tutorial sees in place of the world's. */
+  sky?: WorldSky | null;
   /** Live weather is independent of the day/night preference; static previews omit this clock. */
   weatherTime?: number;
   assets: GameAsset[];

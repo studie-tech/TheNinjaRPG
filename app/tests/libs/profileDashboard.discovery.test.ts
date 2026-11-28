@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { MAP_WAKE_ISLAND_SECTOR, MISSIONS_PER_DAY } from "@/drizzle/constants";
+import {
+  BLACKSTEEL_LEAD_QUEST_IDS,
+  MAP_WAKE_ISLAND_SECTOR,
+  MISSIONS_PER_DAY,
+} from "@/drizzle/constants";
 import {
   buildDashboardCatalogue,
   dashboardContentHref,
@@ -244,6 +248,35 @@ describe("dashboard auto-travel destinations", () => {
       expect(dashboardContentHref(entry!)).toBe("/travel?sector=40");
     },
   );
+
+  it("sends Leads to the home Academy instead of the Global ANBU HQ", () => {
+    const leadId = BLACKSTEEL_LEAD_QUEST_IDS[0]!;
+    const home = {
+      ...user().village!,
+      sector: 40,
+      structures: [{ route: "/academy", allyAccess: 0 }],
+    } as User["village"];
+    const [remote] = resolveDashboardContent(
+      [candidate({ id: leadId })],
+      user({ sector: 12, status: "AWAKE", village: home }),
+    );
+    expect(remote).toMatchObject({
+      location: "Home Academy",
+      destination: "/academy",
+      availability: "travel",
+      travelSector: 40,
+      availabilityReason: null,
+    });
+    expect(dashboardContentHref(remote!)).toBe("/travel?sector=40");
+    const [atHome] = resolveDashboardContent(
+      [candidate({ id: leadId })],
+      user({ sector: 40, status: "AWAKE", village: home }),
+    );
+    expect(atHome).toMatchObject({
+      destination: "/academy",
+      availability: "available",
+    });
+  });
 
   it.each(["ASLEEP", "BATTLE", "TRAVEL", "QUEUED"] as const)(
     "blocks auto-travel while %s",

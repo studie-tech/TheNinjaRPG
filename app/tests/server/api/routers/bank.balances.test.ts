@@ -23,6 +23,7 @@ describe("fetchBankAccount", () => {
       bank: 1100,
       isBanned: false,
       status: "AWAKE" as const,
+      questData: null,
     };
     const findFirst = vi.fn().mockResolvedValue(account);
     const client = { query: { userData: { findFirst } } };

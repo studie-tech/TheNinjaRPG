@@ -54,7 +54,12 @@ afterEach(() => {
 });
 
 /** Render a consecutive quest whose active step is a dialog, optionally bound to an NPC. */
-const renderDialogStep = (overworldPlacementId?: string) => {
+const renderDialogStep = (
+  overworldPlacementId?: string,
+  /** A finished training objective before the dialog, with its reward claimed or not. */
+  trainingCollected?: boolean,
+) => {
+  const training = trainingCollected !== undefined;
   mockUserContextValue({
     data: { userId: "viewer", role: "USER", status: "AWAKE", dailyMissions: 0 },
     prepareUserUpdate: () => 1,
@@ -68,6 +73,17 @@ const renderDialogStep = (overworldPlacementId?: string) => {
     consecutiveObjectives: true,
     content: {
       objectives: [
+        ...(training
+          ? [
+              {
+                id: "train",
+                task: "stats_trained",
+                value: 1,
+                reward_exp: 1000,
+                nextObjectiveId: "greet",
+              },
+            ]
+          : []),
         {
           id: "greet",
           task: "dialog",
@@ -90,7 +106,22 @@ const renderDialogStep = (overworldPlacementId?: string) => {
           completed: 0,
         } as never
       }
-      tracker={{ id: "larry", goals: [] } as never}
+      tracker={
+        {
+          id: "larry",
+          goals: training
+            ? [
+                {
+                  id: "train",
+                  done: true,
+                  collected: trainingCollected,
+                  value: 1,
+                  selectedNextObjectiveId: "greet",
+                },
+              ]
+            : [],
+        } as never
+      }
       hideTitle
     />,
   );
@@ -117,6 +148,174 @@ describe("logbook dialog steps", () => {
     renderDialogStep("larry-placement");
     expect(screen.queryByRole("button", { name: "Tell me more" })).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("continues in person");
+  });
+
+  it("holds the next answer until the finished objective's reward is claimed", () => {
+    renderDialogStep(undefined, false);
+    expect(screen.queryByRole("button", { name: "Tell me more" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Claim 1,000 XP" })).toBeTruthy();
+    cleanup();
+    renderDialogStep(undefined, true);
+    expect(screen.getByRole("button", { name: "Tell me more" })).toBeTruthy();
+  });
+});
+
+/** Render an entry of `objectives` with these finished goals, as the dock shows it. */
+const renderCompactEntry = (
+  objectives: Record<string, unknown>[],
+  goals: Record<string, unknown>[],
+  reward: Record<string, unknown> = {},
+) => {
+  mockUserContextValue({
+    data: { userId: "viewer", role: "USER", status: "AWAKE", dailyMissions: 0 },
+    prepareUserUpdate: () => 1,
+    updateUser: vi.fn(),
+  } as never);
+  const quest = {
+    id: "road",
+    name: "Road",
+    questType: "starter",
+    description: "",
+    consecutiveObjectives: true,
+    content: { objectives, reward },
+  };
+  return render(
+    <logbook.LogbookEntry
+      userQuest={
+        {
+          id: "road",
+          questId: "road",
+          quest,
+          startedAt: new Date(0),
+          completed: 0,
+        } as never
+      }
+      tracker={{ id: "road", goals } as never}
+      hideTitle
+      compact
+    />,
+  );
+};
+
+describe("claims in the dock", () => {
+  it("leads with an older unclaimed reward, ahead of the next answer", () => {
+    renderCompactEntry(
+      [
+        {
+          id: "level",
+          task: "user_level",
+          value: 5,
+          reward_exp: 2500,
+          nextObjectiveId: "exam",
+        },
+        { id: "exam", task: "stats_trained", value: 1, nextObjectiveId: "tour" },
+        {
+          id: "tour",
+          task: "dialog",
+          nextObjectiveId: [{ text: "Choose my village", nextObjectiveId: "choose" }],
+        },
+      ],
+      [
+        {
+          id: "level",
+          done: true,
+          collected: false,
+          value: 5,
+          selectedNextObjectiveId: "exam",
+        },
+        {
+          id: "exam",
+          done: true,
+          collected: true,
+          value: 1,
+          selectedNextObjectiveId: "tour",
+        },
+      ],
+    );
+    const claim = screen.getByRole("button", { name: "Claim 2,500 XP" });
+    const answer = screen.getByRole("button", { name: "Choose my village" });
+    expect(
+      claim.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The answer wears the same style as the claims around it.
+    expect(answer.className).not.toContain("bg-blue-600");
+  });
+
+  it("puts the answer before the objectives behind the player and the quest's reward", () => {
+    renderCompactEntry(
+      [
+        {
+          id: "level",
+          task: "user_level",
+          value: 5,
+          reward_exp: 2500,
+          nextObjectiveId: "arrive",
+        },
+        {
+          id: "arrive",
+          task: "move_to_location",
+          sector: 222,
+          nextObjectiveId: "tour",
+        },
+        {
+          id: "tour",
+          task: "dialog",
+          nextObjectiveId: [{ text: "Choose my village", nextObjectiveId: "choose" }],
+        },
+      ],
+      [
+        {
+          id: "level",
+          done: true,
+          collected: false,
+          value: 5,
+          selectedNextObjectiveId: "arrive",
+        },
+        {
+          id: "arrive",
+          done: true,
+          collected: false,
+          value: 0,
+          sector: 222,
+          selectedNextObjectiveId: "tour",
+        },
+      ],
+      { reward_exp: 5000 },
+    );
+    const claim = screen.getByRole("button", { name: "Claim 2,500 XP" });
+    const answer = screen.getByRole("button", { name: "Choose my village" });
+    const arrived = screen.getByText(
+      (_, element) =>
+        element?.tagName === "P" && element.textContent === "Objective: Travel",
+    );
+    const rewards = screen.getByText("Rewards");
+    const follows = (first: Node, second: Node) =>
+      !!(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(claim, answer)).toBe(true);
+    expect(follows(answer, arrived)).toBe(true);
+    expect(follows(arrived, rewards)).toBe(true);
+    // The finished trip takes one line: no location or map details in the dock.
+    expect(screen.queryByText("Sector:")).toBeNull();
+    expect(arrived.querySelector('[aria-label="Done"]')).toBeTruthy();
+  });
+
+  it("puts the finished quest's claim first, named like the objective claims", () => {
+    renderCompactEntry(
+      [{ id: "train", task: "stats_trained", value: 1 }],
+      [{ id: "train", done: true, collected: true, value: 1 }],
+      { reward_exp: 5000, reward_money: 20000, reward_rank: "GENIN" },
+    );
+    const claim = screen.getByRole("button", {
+      name: "Claim Genin rank + 5,000 XP + 20,000 ryo",
+    });
+    const rewards = screen.getByText("Rewards");
+    expect(
+      claim.compareDocumentPosition(rewards) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Its long label wraps in the narrow dock instead of pushing the card sideways.
+    expect(claim.className).toContain("whitespace-normal");
+    expect(claim.className).not.toContain("whitespace-nowrap");
+    expect(claim.className).toContain("h-auto");
   });
 });
 
@@ -168,32 +367,36 @@ const renderLongConversation = (compact?: boolean) => {
 };
 
 describe("logbook earlier dialogue", () => {
-  it("keeps earlier dialogue in a capped scroll area, newest first", () => {
+  it("keeps earlier dialogue folded behind a link until the player opens it", () => {
     renderLongConversation();
-    const region = screen.getByRole("region", { name: "Earlier dialogue (3)" });
-    const toggle = screen.getByRole("button", { name: "Hide" });
-    expect(toggle.getAttribute("aria-controls")).toBe(region.id);
-    expect(region.getAttribute("tabindex")).toBe("0");
-    expect(region.className).toContain("max-h-96");
-    expect(region.className).toContain("overflow-y-auto");
-    expect(region.textContent).toMatch(/third words.*second words.*first words/);
+    const toggle = screen.getByRole("button", { name: "Show dialogue (3)" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("first words")).toBeNull();
     expect(
       screen.getByRole("region", { name: "Quest dialogue" }).textContent,
     ).toContain("fourth words");
   });
 
-  it("lets the player fold earlier dialogue away and open it again", () => {
+  it("opens earlier dialogue in a capped scroll area, oldest first", () => {
     renderLongConversation();
-    fireEvent.click(screen.getByRole("button", { name: "Hide" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show dialogue (3)" }));
+    const region = screen.getByRole("region", { name: "Earlier quest dialogue" });
+    const toggle = screen.getByRole("button", { name: "Hide dialogue" });
+    expect(toggle.getAttribute("aria-controls")).toBe(region.id);
+    expect(region.getAttribute("tabindex")).toBe("0");
+    expect(region.className).toContain("max-h-96");
+    expect(region.className).toContain("overflow-y-auto");
+    expect(region.textContent).toMatch(/first words.*second words.*third words/);
+    fireEvent.click(toggle);
     expect(screen.queryByText("first words")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show" }));
-    expect(screen.getByText("first words")).toBeTruthy();
   });
 
-  it("starts folded in the compact dock", () => {
+  it("keeps it folded in the compact dock too", () => {
     renderLongConversation(true);
     expect(
-      screen.getByRole("button", { name: "Show" }).getAttribute("aria-expanded"),
+      screen
+        .getByRole("button", { name: "Show dialogue (3)" })
+        .getAttribute("aria-expanded"),
     ).toBe("false");
     expect(screen.queryByText("first words")).toBeNull();
   });

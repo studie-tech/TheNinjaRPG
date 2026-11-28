@@ -493,14 +493,19 @@ export const useRequireInVillage = (
     enabled = true,
     redirectTo,
     onAccessDenied,
+    stayWhenDenied = false,
   }: {
     enabled?: boolean;
     redirectTo?: string;
+    /** Replaces the redirect home after the denial toast. */
     onAccessDenied?: () => void;
+    /** Keep the player on the page with `deniedMessage` instead of leaving it. */
+    stayWhenDenied?: boolean;
   } = {},
 ) => {
   // Access state
   const [access, setAccess] = useState<boolean>(false);
+  const [deniedMessage, setDeniedMessage] = useState<string | undefined>();
   // Get user information
   const {
     data: userData,
@@ -520,30 +525,33 @@ export const useRequireInVillage = (
       return;
     }
     if (userData && isSectorKnown) {
-      if (!userData.isOutlaw) {
-        // Check structure access
-        const access = canAccessStructure(userData, structureRoute, sectorVillage);
-        // Redirect user
-        if (!sectorVillage || !access) {
-          setAccess(false);
-          showMutationToast({
-            success: false,
-            title: "Not reachable from here",
-            message: structureAccessDeniedMessage(
-              userData,
-              structureRoute,
-              sectorVillage,
-            ),
-            id: "structure-access-denied",
-          });
-          if (onAccessDenied) onAccessDenied();
-          else void router.replace("/");
-        } else {
-          setAccess(true);
-        }
-      } else {
+      const isDenied =
+        !userData.isOutlaw &&
+        (!sectorVillage ||
+          !canAccessStructure(userData, structureRoute, sectorVillage));
+      if (!isDenied) {
         setAccess(true);
+        setDeniedMessage(undefined);
+        return;
       }
+      const message = structureAccessDeniedMessage(
+        userData,
+        structureRoute,
+        sectorVillage,
+      );
+      setAccess(false);
+      if (stayWhenDenied) {
+        setDeniedMessage(message);
+        return;
+      }
+      showMutationToast({
+        success: false,
+        title: "Not reachable from here",
+        message,
+        id: "structure-access-denied",
+      });
+      if (onAccessDenied) onAccessDenied();
+      else void router.replace("/");
     }
   }, [
     userData,
@@ -554,6 +562,7 @@ export const useRequireInVillage = (
     enabled,
     redirectTo,
     onAccessDenied,
+    stayWhenDenied,
   ]);
   return {
     userData,
@@ -563,5 +572,6 @@ export const useRequireInVillage = (
     ownVillage,
     timeDiff,
     access,
+    deniedMessage,
   };
 };

@@ -15,7 +15,11 @@ import {
   type QuestRewardType,
   rewardPayloads,
 } from "@/validators/rewardPackages";
-import { ObjectiveReward } from "@/validators/rewards";
+import {
+  hasReward,
+  ObjectiveReward,
+  type ObjectiveRewardType,
+} from "@/validators/rewards";
 
 /**
  * Content id a dialog choice reports. A terminal branch has no follow-up objective, so it
@@ -60,6 +64,76 @@ const objectiveActionGuides: Partial<Record<string, ObjectiveActionGuide>> = {
     href: "/farm",
     label: "Open your farm",
     hint: `Go to Home and press Farm, then press Harvest all once crops are ready. ${FARM_HINT}`,
+  },
+  bank_deposit: {
+    href: "/bank",
+    label: "Go to the bank",
+    hint: "Deposit ryo at your village bank. Banked ryo is safe from robbers and earns interest every day.",
+  },
+  queue_energy: {
+    href: "/traininggrounds",
+    label: "Open the training grounds",
+    hint: "Pick the Queue mode when training a stat. Queued energy keeps training while you are offline.",
+  },
+  claim_streak: {
+    href: "/profile?tab=dashboard",
+    label: "Open your dashboard",
+    hint: "Claim today's activity streak reward under Right now on your profile dashboard.",
+  },
+  tower_defense_duty: {
+    href: "/towerDefense",
+    label: "Go to the Guard Hall",
+    hint: "Defend the village once in Shuriken Siege at the Guard Hall. The daily duty pays out once per day.",
+  },
+  chakra_storm_scout: {
+    href: "/chakraStorm",
+    label: "Go to the Scout Post",
+    hint: "Survive a Chakra Storm scouting run long enough to file today's report.",
+  },
+  send_message: {
+    href: "/tavern",
+    label: "Open the tavern",
+    hint: "Say hello to your villagers in the tavern.",
+  },
+  cook_meal: {
+    href: "/home",
+    label: "Go to your kitchen",
+    hint: "Cook any meal in your home kitchen.",
+  },
+  feed_pet: {
+    href: "/profile?tab=pet",
+    label: "Open your companion",
+    hint: "Feed your companion a meal from its profile tab.",
+  },
+  roll_element: {
+    href: "/blackmarket",
+    label: "Go to the black market",
+    hint: "Roll your primary element at the black market. Elements decide which elemental jutsu you can train.",
+  },
+  equip_item: {
+    href: "/items",
+    label: "Open your items",
+    hint: "Equip a piece of armor or a weapon from your inventory.",
+  },
+  get_sensei: {
+    href: "/traininggrounds?section=Covert%20%26%20Sensei",
+    label: "Find a sensei",
+    hint: "Request a Jonin as your sensei at the training grounds. Students with a sensei gain extra training experience.",
+  },
+  choose_occupation: {
+    href: "/occupation",
+    label: "Choose a job",
+    hint: "Pick a job: gathering, hunting or crafting.",
+  },
+  join_clan: {
+    href: "/clanhall",
+    label: "Visit the clan hall",
+    hint: "Send a join request to a clan, or found one of your own.",
+  },
+  job_contract_completed: {
+    href: "/occupation",
+    label: "Open your job",
+    hint: "Finish one contract of your job: a hunting or gathering contract, or a crafted item.",
   },
 };
 
@@ -241,6 +315,69 @@ export const isQuestObjectiveAvailable = (
   if (!currentObjective) return false;
 
   return selectedObjectivePath(objectives, tracker).ids.includes(currentObjective.id);
+};
+
+/**
+ * Whether the finished objective leading to `objectiveId` still holds a reward the player
+ * has not claimed. Any reward check collects it, including a dialog answer, so the
+ * conversation waits for the reward just earned. Older unclaimed rewards elsewhere in the
+ * quest, such as an opening level check, do not hold it.
+ */
+export const hasUnclaimedPredecessorReward = (
+  quest: Pick<Quest, "content">,
+  tracker: QuestTrackerType,
+  objectiveId: string,
+) => {
+  const predecessor = findCompletedPredecessor(
+    quest.content.objectives,
+    objectiveId,
+    tracker,
+  );
+  if (!predecessor) return false;
+  const goal = tracker.goals.find((g) => g.id === predecessor.id);
+  return !!goal?.done && !goal.collected && hasReward(predecessor);
+};
+
+/** Text of a claim button naming the reward's rank, experience and ryo: "Claim Genin rank + 1,200 XP + 300 ryo". */
+export const getRewardClaimLabel = (
+  reward: Partial<
+    Pick<ObjectiveRewardType, "reward_rank" | "reward_exp" | "reward_money">
+  >,
+) => {
+  const parts = [
+    reward.reward_rank && reward.reward_rank !== "NONE"
+      ? `${capitalizeFirstLetter(reward.reward_rank.toLowerCase())} rank`
+      : "",
+    reward.reward_exp ? `${reward.reward_exp.toLocaleString()} XP` : "",
+    reward.reward_money ? `${reward.reward_money.toLocaleString()} ryo` : "",
+  ].filter(Boolean);
+  return parts.length ? `Claim ${parts.join(" + ")}` : "Claim reward";
+};
+
+/**
+ * The reward of one objective, or of the whole quest for the objective that wins it:
+ * whether it waits to be claimed, and what the claim says.
+ */
+export const getQuestClaim = (
+  quest: Pick<Quest, "content" | "consecutiveObjectives">,
+  tracker: QuestTrackerType,
+  objectiveId: string | undefined,
+) => {
+  const objective = quest.content.objectives.find((entry) => entry.id === objectiveId);
+  if (!objective) return undefined;
+  const goal = tracker.goals.find((entry) => entry.id === objective.id);
+  // Winning collects itself; what is left to claim is the finished quest.
+  const isQuestWin = objective.task === "win_quest";
+  return {
+    isReady: isQuestWin
+      ? isQuestComplete(quest, tracker)
+      : !!goal?.done && !goal.collected,
+    text: objective.description,
+    // A won quest pays out from its Quests entry's claim, named the same here.
+    label: getRewardClaimLabel(
+      isQuestWin ? collapseRewards(rewardPayloads(quest.content.reward)) : objective,
+    ),
+  };
 };
 
 /**
