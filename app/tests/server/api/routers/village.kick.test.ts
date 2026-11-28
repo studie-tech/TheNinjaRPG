@@ -18,7 +18,13 @@ const rejectionClient = (
         findFirst: async () =>
           reads++ === 0
             ? { userId: "kage", villageId: "home", ...actor }
-            : { userId: "member", villageId: "home", tutorialOn: false, ...target },
+            : {
+                userId: "member",
+                villageId: "home",
+                rank: "JONIN",
+                tutorialOn: false,
+                ...target,
+              },
       },
       village: { findFirst: async () => ({ id: "home", type: "VILLAGE", kageId }) },
     },
@@ -65,6 +71,36 @@ describe("Kage expulsion admission", () => {
           })
         ).success,
       ).toBe(false);
+      expect(client.writes()).toBe(0);
+    }
+  });
+
+  it("protects elders and ranks below the village-leaving requirement before writing", async () => {
+    for (const rank of ["ELDER", "NONE", "STUDENT", "GENIN"] as const) {
+      const client = rejectionClient({ rank });
+      const result = await client.caller.kickMember({
+        userId: "member",
+        reason: "Repeated harassment of village members",
+      });
+      expect(result.success).toBe(false);
+      expect(result.message).toContain(rank === "ELDER" ? "elders" : "chunin");
+      expect(client.writes()).toBe(0);
+    }
+  });
+
+  it("requires clan and ANBU members to leave their affiliations before expulsion", async () => {
+    for (const target of [
+      { clanId: "clan" },
+      { anbuId: "squad" },
+      { clanId: "clan", anbuId: "squad" },
+    ]) {
+      const client = rejectionClient(target);
+      const result = await client.caller.kickMember({
+        userId: "member",
+        reason: "Repeated harassment of village members",
+      });
+      expect(result.success).toBe(false);
+      expect(result.message).toContain(target.anbuId ? "ANBU" : "clan");
       expect(client.writes()).toBe(0);
     }
   });

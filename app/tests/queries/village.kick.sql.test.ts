@@ -49,6 +49,7 @@ describeWithDatabase("Kage village expulsion", () => {
         status: "AWAKE",
         tutorialOn: false,
         isOutlaw: false,
+        createdAt: new Date(NOW.getTime() - 30 * 86400000),
       })),
     );
   });
@@ -90,6 +91,44 @@ describeWithDatabase("Kage village expulsion", () => {
       (await kickVillageMember(db, "kage", "member", "home", NOW, REASON)).rowsAffected,
     ).toBe(0);
     expect((await requireUser("kage")).lastKageKickAt).toBeNull();
+  });
+
+  it("protects elders and ranks below the village-leaving requirement without consuming the cooldown", async () => {
+    const db = await getTestDatabase();
+    for (const rank of ["ELDER", "NONE", "STUDENT", "GENIN"] as const) {
+      await db.update(userData).set({ rank }).where(eq(userData.userId, "member"));
+      expect(
+        (await kickVillageMember(db, "kage", "member", "home", NOW, REASON))
+          .rowsAffected,
+      ).toBe(0);
+      expect(await requireUser("member")).toMatchObject({
+        rank,
+        villageId: "home",
+        isOutlaw: false,
+      });
+      expect((await requireUser("kage")).lastKageKickAt).toBeNull();
+    }
+  });
+
+  it("guards clan and ANBU affiliations in the expulsion statement without consuming the cooldown", async () => {
+    const db = await getTestDatabase();
+    for (const affiliations of [
+      { clanId: "clan", anbuId: null },
+      { clanId: null, anbuId: "squad" },
+      { clanId: "clan", anbuId: "squad" },
+    ]) {
+      await db.update(userData).set(affiliations).where(eq(userData.userId, "member"));
+      expect(
+        (await kickVillageMember(db, "kage", "member", "home", NOW, REASON))
+          .rowsAffected,
+      ).toBe(0);
+      expect(await requireUser("member")).toMatchObject({
+        ...affiliations,
+        villageId: "home",
+        isOutlaw: false,
+      });
+      expect((await requireUser("kage")).lastKageKickAt).toBeNull();
+    }
   });
 
   it("enforces the exact fourteen-day cooldown boundary", async () => {

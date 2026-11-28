@@ -30,7 +30,12 @@ export const useVillageKick = (villageId: string) => {
     },
     onError: async (_error, _input, snapshot) => {
       // An unconfirmed response may follow a committed expulsion and consumed cooldown.
-      if (snapshot) await updateUser(undefined, { revision: snapshot.user });
+      if (snapshot) {
+        await Promise.all([
+          updateUser(undefined, { revision: snapshot.user }),
+          utils.profile.getPublicUsers.invalidate({ village: snapshot.villageId }),
+        ]);
+      }
     },
   });
   const lastKick = user?.lastKageKickAt;

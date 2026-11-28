@@ -252,6 +252,18 @@ export const villageRouter = createTRPCRouter({
         return errorResponse("This player is not a member of your village");
       if (target.userId === actor.userId)
         return errorResponse("You cannot expel yourself");
+      if (target.anbuId)
+        return errorResponse(
+          "This player must leave their ANBU squad before being expelled",
+        );
+      if (target.clanId)
+        return errorResponse("This player must leave their clan before being expelled");
+      if (target.rank === "ELDER")
+        return errorResponse("Village elders cannot be expelled");
+      if (!hasRequiredRank(target.rank, VILLAGE_LEAVE_REQUIRED_RANK))
+        return errorResponse(
+          `Players must be at least ${VILLAGE_LEAVE_REQUIRED_RANK.toLowerCase()} to be expelled`,
+        );
       if (isTutorialActive(target))
         return errorResponse("Players completing the tutorial cannot be expelled");
       if (target.status === "BATTLE" || target.status === "QUEUED")
@@ -286,7 +298,6 @@ export const villageRouter = createTRPCRouter({
           home.id,
         ),
         detachFromVillageRelations({ drizzle: ctx.drizzle, userId: target.userId }),
-        fetchUpdatedUser({ client: ctx.drizzle, userId: target.userId }),
       ]);
       scheduleDiscordSync(ctx.drizzle, target.userId);
       // The saved reason remains visible in the village screen if realtime delivery fails.

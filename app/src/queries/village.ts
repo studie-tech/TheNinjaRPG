@@ -28,7 +28,9 @@ import {
   KAGE_KICK_COOLDOWN_DAYS,
   KAGE_WAR_DECLARE_COST,
   TUTORIAL_STEPS_COUNT,
+  USER_RANK_ORDER,
   VILLAGE_KICK_REJOIN_DAYS,
+  VILLAGE_LEAVE_REQUIRED_RANK,
   VILLAGE_SYNDICATE_ID,
   WAR_FUNDS_COST,
 } from "@/drizzle/constants";
@@ -44,6 +46,7 @@ import {
   villageStructure,
   war,
 } from "@/drizzle/schema";
+import { hasRequiredRank } from "@/libs/rank";
 import { activeWarAllyWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
@@ -732,12 +735,19 @@ export const kickVillageMember = (
       target.villageDutyVillageId = NULL,
       target.villageDutyStartedAt = NULL,
       target.senseiId = NULL,
-      target.rank = IF(target.rank = 'ELDER', 'JONIN', target.rank),
       actor.lastKageKickAt = ${now}
   WHERE actor.userId = ${actorId} AND target.userId = ${targetId}
     AND actor.userId <> target.userId AND home.id = ${villageId} AND home.type = 'VILLAGE'
     AND actor.villageId = home.id AND actor.isOutlaw = false AND actor.isBanned = false
     AND target.isOutlaw = false AND target.isAi = false
+    AND target.clanId IS NULL AND target.anbuId IS NULL
+    AND target.rank <> 'ELDER'
+    AND ${inArray(
+      sql`target.rank`,
+      USER_RANK_ORDER.filter((rank) =>
+        hasRequiredRank(rank, VILLAGE_LEAVE_REQUIRED_RANK),
+      ),
+    )}
     AND (target.tutorialOn = false OR target.tutorialStep >= ${TUTORIAL_STEPS_COUNT})
     AND target.status NOT IN ('BATTLE', 'QUEUED')
     AND (actor.lastKageKickAt IS NULL OR actor.lastKageKickAt <= ${new Date(now.getTime() - KAGE_KICK_COOLDOWN_DAYS * 86400000)})

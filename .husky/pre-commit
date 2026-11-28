@@ -1,1 +1,1 @@
-cd app && node node_modules/lint-staged/bin/lint-staged.js
+cd app && bunx lint-staged
