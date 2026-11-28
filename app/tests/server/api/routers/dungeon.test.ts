@@ -34,7 +34,7 @@ import {
 } from "@/server/utils/dungeon";
 import { ObjectiveReward } from "@/validators/rewards";
 import { afterTasks } from "../../../setup/after";
-import { makeCompleteBattle, makeUser } from "../../../setup/combat";
+import { makeCompleteBattle, makeJutsu, makeUser } from "../../../setup/combat";
 import { dungeonBattleState, dungeonContent } from "../../../setup/dungeon";
 import {
   insertDefaultAiProfile,
@@ -1183,6 +1183,18 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   it("settles a party floor once, revives everyone and preserves incomplete reward gates", async () => {
     const db = await getTestDatabase();
     const meta = dungeonBattleState();
+    const definitions = await insertJutsus([
+      { id: "used" },
+      { id: "unused" },
+      { id: "unknown" },
+    ]);
+    await db.insert(userJutsu).values([
+      { id: "a-used", userId: "a", jutsuId: "used" },
+      { id: "b-used", userId: "b", jutsuId: "used" },
+      { id: "unused", userId: "a", jutsuId: "unused" },
+      { id: "unknown", userId: "a", jutsuId: "unknown" },
+      { id: "outsider-used", userId: "outsider", jutsuId: "used" },
+    ]);
     const immunityAt = Date.now();
     const pausedAt = new Date(immunityAt - 3600000);
     const liftedUntil = new Date(immunityAt - 1800000);
@@ -1237,23 +1249,76 @@ describeWithDatabase("Dungeon parties and settlement", () => {
       roundStartAt: new Date(),
       background: "default",
       usersState: [
-        makeUser({ userId: "a", direction: "left" }),
-        makeUser({ userId: "b", direction: "left", curHealth: 0 }),
+        makeUser({
+          userId: "a",
+          direction: "left",
+          pvpBoostPercent: 15,
+          usedActions: ["used", "used", "unknown"].map((id) => ({ id, type: "jutsu" })),
+        }),
+        makeUser({
+          userId: "b",
+          direction: "left",
+          curHealth: 0,
+          usedActions: [{ id: "used", type: "jutsu" }],
+        }),
         makeUser({ userId: "c", direction: "left" }),
+        makeUser({
+          userId: "outsider",
+          direction: "left",
+          usedActions: [{ id: "used", type: "jutsu" }],
+        }),
+        makeUser({
+          userId: "a",
+          direction: "left",
+          isSummon: true,
+          usedActions: [{ id: "used", type: "jutsu" }],
+        }),
         makeUser({ userId: "enemy", direction: "right", isAi: true, curHealth: 0 }),
       ],
       extraState: {
         dungeon: meta,
+        jutsus: Object.fromEntries(
+          definitions
+            .filter((j) => j.id !== "unknown")
+            .map((j) => [j.id, makeJutsu(j)]),
+        ),
+        settings: [
+          {
+            id: "boost",
+            name: "jutsuExpMultiplier",
+            value: 1.53,
+            time: new Date(Date.now() + 60000),
+          },
+        ],
         energyRegeneration: { a: 2, b: 3, c: 4 },
         energyCapacity: { a: 100, b: 100, c: 100 },
       },
     });
     await db.insert(battle).values(fight);
+    // XP has already been written when revival fails; the floor claim rolls it back too.
+    await expect(
+      settleDungeonBattle(
+        inTransactions(db, (tx) => failStatements(tx, userData)),
+        structuredClone(fight),
+        0,
+      ),
+    ).rejects.toThrow("Statement failed on purpose");
+    expect(
+      (await db.query.userJutsu.findMany()).every((row) => row.experience === 0),
+    ).toBe(true);
+    expect(
+      await db.query.battle.findFirst({ where: eq(battle.id, fight.id) }),
+    ).toBeDefined();
     const results = await Promise.all([
       settleDungeonBattle(db, structuredClone(fight), 0),
       settleDungeonBattle(db, structuredClone(fight), 0),
     ]);
     expect(results.filter(Boolean)).toHaveLength(1);
+    const awards = await db.query.userJutsu.findMany();
+    expect(awards.find((row) => row.id === "a-used")?.experience).toBe(27);
+    expect(awards.find((row) => row.id === "b-used")?.experience).toBe(24);
+    for (const id of ["unused", "unknown", "outsider-used"])
+      expect(awards.find((row) => row.id === id)?.experience).toBe(0);
     expect((await db.query.dungeonRun.findFirst())?.state.floor).toBe(1);
     const users = await db.query.userData.findMany({
       where: eq(userData.battleId, "fight"),
@@ -1294,6 +1359,64 @@ describeWithDatabase("Dungeon parties and settlement", () => {
       }),
     );
   });
+  it.each(["wipe", "ended"] as const)(
+    "awards only bound members of a completed floor fight (%s)",
+    async (outcome) => {
+      const db = await getTestDatabase();
+      const meta = dungeonBattleState();
+      if (outcome === "ended") meta.expiresAt = 0;
+      const definitions = await insertJutsus([{ id: "used" }]);
+      await db
+        .insert(userJutsu)
+        .values(["a", "b"].map((userId) => ({ id: userId, userId, jutsuId: "used" })));
+      await db
+        .update(userData)
+        .set({ battleId: "fight", status: "BATTLE" })
+        .where(eq(userData.userId, "a"));
+      await db.insert(dungeonRun).values({
+        id: "run",
+        dungeonId: "definition",
+        leaderId: "a",
+        content: dungeonContent(),
+        state: meta.runState,
+        status: "FIGHTING",
+        version: 1,
+        battleId: "fight",
+        createdAt: new Date(),
+      });
+      const fight = makeCompleteBattle({
+        id: "fight",
+        battleType: "QUEST",
+        version: 0,
+        rewardScaling: 0,
+        usersState: [
+          ...["a", "b"].map((userId) =>
+            makeUser({
+              userId,
+              direction: "left",
+              curHealth: 0,
+              usedActions: [{ id: "used", type: "jutsu" }],
+            }),
+          ),
+          makeUser({ userId: "enemy", direction: "right", isAi: true }),
+        ],
+        extraState: {
+          dungeon: meta,
+          jutsus: Object.fromEntries(definitions.map((j) => [j.id, makeJutsu(j)])),
+        },
+      });
+      await db.insert(battle).values(fight);
+      expect(await settleDungeonBattle(db, fight, 0)).toBe(true);
+      const saved = await db.query.userJutsu.findMany();
+      expect(saved.find((row) => row.userId === "a")?.experience).toBe(
+        outcome === "wipe" ? 16 : 0,
+      );
+      expect(saved.find((row) => row.userId === "b")?.experience).toBe(0);
+      expect(await settleDungeonBattle(db, fight, 0)).toBe(false);
+      expect(await db.query.userJutsu.findMany()).toEqual(saved);
+    },
+  );
+
   it("compensates competing partial starts without transactions and reopens once", async () => {
     const { db, original } = await interruptedStart();
     const immunityAt = Date.now();

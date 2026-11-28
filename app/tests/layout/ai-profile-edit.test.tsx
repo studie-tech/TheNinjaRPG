@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
+import { NPC_AI_PROFILE_MAX_RULES } from "@/drizzle/constants";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import * as ContentBox from "@/layout/ContentBox";
 import * as toast from "@/libs/toast";
@@ -16,6 +17,7 @@ import {
   type AiRuleType,
   ConditionDistanceHigherThan,
   ConditionPlayerWithinRange,
+  ConditionSpecificRound,
   getBackupRules,
 } from "@/validators/ai";
 import {
@@ -177,6 +179,48 @@ const custom = (count: number): AiRuleType[] =>
   Array.from({ length: count }, () =>
     AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) }),
   );
+
+it("counts NPC fallback rules toward the total limit and stops adding at 50", () => {
+  mocks.profile.rules = [
+    ...custom(NPC_AI_PROFILE_MAX_RULES - getBackupRules().length - 1),
+    ...getBackupRules(),
+  ];
+  const view = render(
+    <AiProfileEdit
+      userData={{ aiProfileId: "custom", userId: "bot", jutsus: [], items: [] }}
+      maxTotalRules={NPC_AI_PROFILE_MAX_RULES}
+    />,
+  );
+  expect(view.getByText("49 / 50 rules")).toBeDefined();
+  fireEvent.click(view.getByRole("button", { name: "Add Rule" }));
+  expect(view.getByText("50 / 50 rules")).toBeDefined();
+  expect(
+    (view.getByRole("button", { name: "Add Rule" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(
+    (view.getByRole("button", { name: "Add Group" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(save(view).rules).toHaveLength(50);
+});
+
+it("rejects an NPC draft exceeding the total limit", () => {
+  mocks.profile.rules = [
+    ...custom(NPC_AI_PROFILE_MAX_RULES - getBackupRules().length + 1),
+    ...getBackupRules(),
+  ];
+  const view = render(
+    <AiProfileEdit
+      userData={{ aiProfileId: "custom", userId: "bot", jutsus: [], items: [] }}
+      maxTotalRules={NPC_AI_PROFILE_MAX_RULES}
+    />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Save Profile" }));
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(toast.showMutationToast).toHaveBeenCalledWith({
+    success: false,
+    message: "Maximum of 50 rules allowed",
+  });
+});
 
 it("keeps the staff CatchAll switch off limits while the rules are locked", () => {
   const component = (locked: boolean) => (
@@ -618,6 +662,173 @@ const changeCoordinate = (
   const input = view.getByRole("spinbutton", { name });
   fireEvent.input(input, { target: { value } });
 };
+
+describe("AI rounds editor", () => {
+  beforeEach(() => {
+    mocks.profile.rules[0]!.conditions = [ConditionSpecificRound.parse({ value: [3] })];
+  });
+
+  it("preserves unfinished input and saves sorted unique rounds", () => {
+    const view = mount();
+    fireEvent.click(headers(view)[0]!);
+    const rounds = view.getByRole("textbox", { name: "Rounds" }) as HTMLInputElement;
+    fireEvent.change(rounds, { target: { value: "5, " } });
+    expect(rounds.value).toBe("5, ");
+    expect(view.getByRole("alert")).toBeDefined();
+    fireEvent.change(rounds, { target: { value: "5, 1, 3, 1" } });
+    expect(save(view).rules[0]!.conditions[0]).toMatchObject({ value: [1, 3, 5] });
+  });
+
+  it.each(["", "0", "-1, 3", "1.5", "1,", "1,,3", "1, abc"])(
+    "blocks saving invalid rounds %s and permits correction",
+    (value) => {
+      const view = mount();
+      fireEvent.click(headers(view)[0]!);
+      const rounds = view.getByRole("textbox", { name: "Rounds" });
+      fireEvent.change(rounds, { target: { value } });
+      expect(view.getByRole("alert").textContent).toContain(
+        "positive whole round number",
+      );
+      fireEvent.click(view.getByRole("button", { name: "Save Profile" }));
+      expect(mocks.save).not.toHaveBeenCalled();
+      fireEvent.change(rounds, { target: { value: "2, 4" } });
+      expect(save(view).rules[0]!.conditions[0]).toMatchObject({ value: [2, 4] });
+    },
+  );
+
+  it("loads existing scalar rules and discards round edits", () => {
+    Object.assign(mocks.profile.rules[0]!.conditions[0]!, { value: 3 });
+    const view = mount();
+    fireEvent.click(headers(view)[0]!);
+    expect(
+      (view.getByRole("textbox", { name: "Rounds" }) as HTMLInputElement).value,
+    ).toBe("3");
+    fireEvent.change(view.getByRole("textbox", { name: "Rounds" }), {
+      target: { value: "2, 4" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Discard changes" }));
+    fireEvent.click(headers(view)[0]!);
+    expect(
+      (view.getByRole("textbox", { name: "Rounds" }) as HTMLInputElement).value,
+    ).toBe("3");
+    expect(save(view).rules[0]!.conditions[0]).toMatchObject({ value: [3] });
+  });
+
+  it("makes rounds read-only when the editor is locked", () => {
+    const view = render(
+      <AiProfileEdit
+        userData={{ aiProfileId: "custom", userId: "editor", jutsus: [], items: [] }}
+        locked
+      />,
+    );
+    fireEvent.click(headers(view)[0]!);
+    expect(
+      (view.getByRole("textbox", { name: "Rounds" }) as HTMLInputElement).disabled,
+    ).toBe(true);
+  });
+
+  it("copies round lists from another loadout", async () => {
+    mocks.role = "USER";
+    mocks.fetchProfile.mockResolvedValue({
+      id: "pvp",
+      includeDefaultRules: true,
+      rules: [
+        AiRule.parse({
+          conditions: [ConditionSpecificRound.parse({ value: [1, 3, 5] })],
+          action: ActionEndTurn.parse({}),
+        }),
+        ...getBackupRules(),
+      ],
+    });
+    const view = render(
+      <AiProfileEdit
+        userData={{ aiProfileId: "custom", userId: "editor", jutsus: [], items: [] }}
+        maxCustomRules={2}
+        copySources={[{ id: "pvp", name: "PvP" }]}
+      />,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: "Discard changes" })).toBeDefined(),
+    );
+    expect(save(view).rules[0]!.conditions[0]).toMatchObject({ value: [1, 3, 5] });
+  });
+});
+
+describe("AI enmity rank editor", () => {
+  it.each(["HIGHEST_ENMITY_OPPONENT", "LOWEST_ENMITY_OPPONENT"])(
+    "loads an omitted rank as 1 and saves an edited %s rank",
+    (target) => {
+      mocks.profile.rules[0]!.action = ActionMoveTowardsOpponent.parse({ target });
+      const view = mount();
+      fireEvent.click(headers(view)[0]!);
+      expect(
+        (view.getByRole("spinbutton", { name: "Enmity rank" }) as HTMLInputElement)
+          .value,
+      ).toBe("1");
+      changeCoordinate(view, "Enmity rank", "3");
+      expect(save(view).rules[0]!.action).toMatchObject({ target, enmityRank: 3 });
+    },
+  );
+
+  it("edits a condition rank independently from the action", () => {
+    mocks.profile.rules[0]!.conditions = [
+      ConditionDistanceHigherThan.parse({
+        target: "LOWEST_ENMITY_OPPONENT",
+        enmityRank: 2,
+      }),
+    ];
+    const view = mount();
+    fireEvent.click(headers(view)[0]!);
+    changeCoordinate(view, "Enmity rank", "3");
+    expect(save(view).rules[0]!.conditions[0]).toMatchObject({ enmityRank: 3 });
+    expect(save(view).rules[0]!.action).not.toHaveProperty("enmityRank");
+  });
+
+  it.each(["", "0", "-1", "1.5"])("blocks saving rank %s until corrected", (value) => {
+    mocks.profile.rules[0]!.action = ActionMoveTowardsOpponent.parse({
+      target: "HIGHEST_ENMITY_OPPONENT",
+    });
+    const view = mount();
+    fireEvent.click(headers(view)[0]!);
+    changeCoordinate(view, "Enmity rank", value);
+    expect(view.getByRole("alert").textContent).toContain("positive whole number");
+    fireEvent.click(view.getByRole("button", { name: "Save Profile" }));
+    expect(mocks.save).not.toHaveBeenCalled();
+    changeCoordinate(view, "Enmity rank", "2");
+    expect(save(view).rules[0]!.action).toMatchObject({ enmityRank: 2 });
+  });
+
+  it("copies saved ranks from another loadout", async () => {
+    mocks.role = "USER";
+    mocks.fetchProfile.mockResolvedValue({
+      id: "pvp",
+      includeDefaultRules: true,
+      rules: [
+        AiRule.parse({
+          conditions: [],
+          action: ActionMoveTowardsOpponent.parse({
+            target: "LOWEST_ENMITY_OPPONENT",
+            enmityRank: 3,
+          }),
+        }),
+        ...getBackupRules(),
+      ],
+    });
+    const view = render(
+      <AiProfileEdit
+        userData={{ aiProfileId: "custom", userId: "editor", jutsus: [], items: [] }}
+        copySources={[{ id: "pvp", name: "PvP" }]}
+        maxCustomRules={2}
+      />,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: "Discard changes" })).toBeDefined(),
+    );
+    expect(save(view).rules[0]!.action).toMatchObject({ enmityRank: 3 });
+  });
+});
 
 describe("AI coordinate editor", () => {
   beforeEach(() => {

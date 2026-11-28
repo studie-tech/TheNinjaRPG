@@ -4,6 +4,7 @@ import { MapPin } from "lucide-react";
 import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { NPC_AI_PROFILE_MAX_RULES } from "@/drizzle/constants";
 import { useAiEditForm } from "@/hooks/ai";
 import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
@@ -171,7 +172,10 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
 
       {props.canSave && (
         <>
-          <AiProfileEdit userData={props.user} />
+          <AiProfileEdit
+            userData={props.user}
+            maxTotalRules={NPC_AI_PROFILE_MAX_RULES}
+          />
           <AiSpriteAnimations userId={processedUser.userId} />
           <AiTransformationEdit
             userId={processedUser.userId}

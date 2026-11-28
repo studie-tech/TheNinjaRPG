@@ -103,7 +103,7 @@ describe("AI prepares paths only for rules that consume them", () => {
     const { grid, run } = setup([
       {
         conditions: [
-          ConditionSpecificRound.parse({ value: 99 }),
+          ConditionSpecificRound.parse({ value: [99] }),
           ConditionDistanceHigherThan.parse({ target: "CLOSEST_OPPONENT" }),
         ],
         action: ActionMoveTowardsOpponent.parse({}),

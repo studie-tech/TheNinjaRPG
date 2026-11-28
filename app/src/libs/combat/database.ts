@@ -4,14 +4,9 @@ import { buildCombatProfileUpdate, canCacheCombatCompletion } from "@/deltas/com
 import type { BattleType } from "@/drizzle/constants";
 import {
   BALANCE_EXCLUSION_IDS,
-  ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL,
-  ELITE_JONIN_JUTSU_LEVEL_CAP,
-  ELITE_JONIN_JUTSU_XP_TO_LEVEL,
   ENERGY_PVP_LOSS_REWARD,
   ENERGY_PVP_WIN_REWARD,
   ITEM_XP_TO_LEVEL,
-  JUTSU_TRAIN_LEVEL_CAP,
-  JUTSU_XP_TO_LEVEL,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MPVP_QUEUE_BATTLE_TYPES,
   REGEN_SECONDS,
@@ -20,7 +15,7 @@ import {
   WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
-import { type Battle, userData, userJutsu, war } from "@/drizzle/schema";
+import { type Battle, userData, war } from "@/drizzle/schema";
 import { getBalanceExclusion } from "@/libs/combat/balance";
 import {
   ITEM_BROKEN_NOTICE,
@@ -96,6 +91,7 @@ import {
   insertNotificationForUpdateRaidProgress,
   insertRaidParticipationForUpdateRaidProgress,
   insertWarKillForUpdateWars,
+  jutsuXpToLevelSql,
   selectMpvpBattleQueueForCreateAction,
   updateAnbuSquadForUpdateVillageAnbuClan,
   updateBattleForUpdateBattleState,
@@ -381,6 +377,9 @@ export const updateBattle = async (
               newBattle,
               teammate,
               needsHospital(teammate),
+              newBattle.battleType === "RAID"
+                ? prepareBattleJutsuXp(newBattle, teammate)
+                : undefined,
             );
             // Raid deletion prevents teammates from polling their own settlement.
             // The battle claim and guarded release exclude stale or prior claims.
@@ -1600,17 +1599,6 @@ export const updateUser = async (
     // A kage cannot also be an elder, so only the winning challenger loses ELDER
     const tookKageSeat = didUserTakeKageSeat(curBattle, userId);
 
-    const jExp = Math.floor(
-      boostPvpGain(
-        battleJutsuExp(
-          curBattle.battleType,
-          result.eloDiff,
-          curBattle.extraState.settings,
-        ),
-        user.pvpBoostPercent ?? 0,
-      ),
-    );
-    const jutsuXpGroups = groupJutsuXp(curBattle, user);
     // Equipped items gain XP from eligible PvP battles (win vs loss amounts + event multiplier)
     const iExp = Math.floor(
       boostPvpGain(
@@ -1784,19 +1772,10 @@ export const updateUser = async (
         ? [() => updateBountyForUpdateUser(client, userId, result)]
         : []),
       // Jutsu experience & level from experience
-      ...(jExp > 0
-        ? [...jutsuXpGroups.entries()].map(([cap, ids]) => {
-            const xpToLevel =
-              cap === ELITE_JONIN_JUTSU_LEVEL_CAP
-                ? sql`IF(${userJutsu.level} < ${JUTSU_TRAIN_LEVEL_CAP}, ${ELITE_JONIN_JUTSU_XP_TO_LEVEL}, ${ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL})`
-                : sql`${JUTSU_XP_TO_LEVEL}`;
-            // Drizzle orders SET by schema columns (level first). This single-table
-            // statement must reset XP using the old level before changing that level.
-            // With a positive gain, only a level-up leaves experience at zero.
-            return () =>
-              executeRowsForUpdateUser(client, jExp, xpToLevel, user, cap, ids);
-          })
-        : []),
+      () =>
+        updateUsedJutsuExperience(client, curBattle, user, result.eloDiff, {
+          sequential: settlingHunt,
+        }),
       ...(drops.length === 0 ? [saveUserSettlement] : []),
       // A drop's top-up scans the player's stacks, so dropped items follow the battle's own
       // item writes instead of running beside them, where both would lock the same rows.
@@ -1943,8 +1922,51 @@ const durabilityNotifications = (battle: CompleteBattle, user: BattleUserState) 
   return notifications;
 };
 
-/** Group a user's used jutsu by progression cap from the preloaded definitions. */
-const groupJutsuXp = (battle: CompleteBattle, user: BattleUserState) => {
+/** Award used-jutsu XP after settlement claims, preserving serial execution inside transactions. */
+export const updateUsedJutsuExperience = async (
+  client: Pick<DrizzleClient, "execute">,
+  battle: CompleteBattle,
+  user: BattleUserState,
+  experienceGain = 0,
+  options: { sequential?: boolean; battleId?: string } = {},
+) => {
+  const { experience, groups } = prepareBattleJutsuXp(battle, user, experienceGain);
+  if (experience <= 0) return;
+  const writes = [...groups].map(
+    ([cap, ids]) =>
+      () =>
+        executeRowsForUpdateUser(
+          client,
+          experience,
+          jutsuXpToLevelSql(cap),
+          user,
+          cap,
+          ids,
+          options.battleId,
+        ),
+  );
+  if (options.sequential) {
+    for (const write of writes) await write();
+  } else await Promise.all(writes.map((write) => write()));
+};
+
+/** Prepare distinct used-jutsu awards from preloaded definitions and player boosts. */
+export const prepareBattleJutsuXp = (
+  battle: CompleteBattle,
+  user: BattleUserState,
+  experienceGain = 0,
+) => {
+  const experience = Math.floor(
+    boostPvpGain(
+      battleJutsuExp(
+        battle.battleType,
+        experienceGain,
+        battle.extraState.settings,
+        !!battle.extraState.dungeon,
+      ),
+      user.pvpBoostPercent ?? 0,
+    ),
+  );
   const jUsage = user.usedActions.filter((a) => a.type === "jutsu").map((a) => a.id);
   const groups = new Map<number, string[]>();
   for (const id of new Set(jUsage)) {
@@ -1955,7 +1977,7 @@ const groupJutsuXp = (battle: CompleteBattle, user: BattleUserState) => {
     ids.push(id);
     groups.set(cap, ids);
   }
-  return groups;
+  return { experience, groups };
 };
 
 /**

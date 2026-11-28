@@ -2386,6 +2386,7 @@ export const MAX_STORED_POOL = 5_000_000;
  * count; other profiles count every rule.
  */
 export const AI_PROFILE_MAX_RULES = 20;
+export const NPC_AI_PROFILE_MAX_RULES = 50;
 
 // Training config
 export const JUTSU_XP_TO_LEVEL = 1000;

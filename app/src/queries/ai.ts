@@ -60,6 +60,13 @@ export const fetchAiProfileById = async (client: DrizzleClient, id: string) => {
   return profile;
 };
 
+/** Load the saved owner classification alongside rules for enforcing profile limits. */
+export const fetchAiProfileForUpdate = (client: DrizzleClient, id: string) =>
+  client.query.aiProfile.findFirst({
+    where: eq(aiProfile.id, id),
+    with: { user: { columns: { isAi: true } } },
+  });
+
 /** The AI profile of a staff AI, which belongs to no jutsu loadout, or undefined when none exists. */
 export const fetchUnlinkedAiProfileByUserId = (client: DrizzleClient, userId: string) =>
   client.query.aiProfile.findFirst({

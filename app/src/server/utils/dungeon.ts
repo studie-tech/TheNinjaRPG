@@ -1,7 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 import { DUNGEON_LOBBY_SECONDS } from "@/drizzle/constants";
 import { type DungeonRun, userData } from "@/drizzle/schema";
-import { combatEnergyRecoverySql } from "@/libs/combat/database";
+import {
+  combatEnergyRecoverySql,
+  updateUsedJutsuExperience,
+} from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { dungeonBattleOutcome, dungeonNextState } from "@/libs/dungeon";
 import { deleteBattleById, deleteBattleIfVersionMatches } from "@/queries/combat";
@@ -97,6 +100,21 @@ export const settleDungeonBattle = async (
       );
       if (run.rowsAffected !== 1)
         throw new Error("Dungeon run changed during floor settlement");
+      // Only finished floor fights earn XP; administrative expiry also has a cleanup path.
+      if (outcome !== "ended") {
+        for (const member of current.usersState) {
+          if (
+            member.isAi ||
+            member.isSummon ||
+            !meta.runState.memberIds.includes(member.userId)
+          )
+            continue;
+          await updateUsedJutsuExperience(tx, current, member, 0, {
+            sequential: true,
+            battleId: current.id,
+          });
+        }
+      }
       await updateUserDataForReviveDungeonMembers(
         tx,
         dungeonEnergyRecoverySql,

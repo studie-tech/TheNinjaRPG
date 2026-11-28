@@ -14,6 +14,7 @@ import {
   makeBattleUser,
   makeBattleUserItem,
   makeCompleteBattle,
+  makeJutsu,
 } from "../../setup/combat";
 import {
   insertItems,
@@ -311,6 +312,74 @@ describeWithDatabase("combat player settlement rewards", () => {
     });
     expect(saved.map((row) => row.experience > 0)).toEqual([true, true, true]);
   });
+
+  it.each([false, true])(
+    "awards distinct owned raid jutsu at live progression thresholds (boosted=%s)",
+    async (boosted) => {
+      const database = await getTestDatabase();
+      const definitions = await insertJutsus([
+        { id: "plain" },
+        { id: "progress" },
+        { id: "capped" },
+        { id: "unused" },
+        { id: "unknown" },
+        { id: "unowned" },
+        { id: "elite", requiredRank: "ELITE JONIN" },
+        { id: "advanced", requiredRank: "ELITE JONIN" },
+        { id: "elite-capped", requiredRank: "ELITE JONIN" },
+      ]);
+      const rows = [
+        { jutsuId: "plain", level: 24, experience: 990 },
+        { jutsuId: "progress", level: 1, experience: 0 },
+        { jutsuId: "capped", level: 25, experience: 7 },
+        { jutsuId: "elite", level: 24, experience: 4990 },
+        { jutsuId: "advanced", level: 25, experience: 9990 },
+        { jutsuId: "elite-capped", level: 30, experience: 8 },
+        { jutsuId: "unused", level: 1, experience: 9 },
+        { jutsuId: "unknown", level: 1, experience: 10 },
+      ];
+      await database
+        .insert(userJutsu)
+        .values(rows.map((row) => ({ ...row, id: row.jutsuId, userId: "player" })));
+      const state = scenario("RAID", {
+        pvpBoostPercent: boosted ? 15 : 0,
+        usedActions: [
+          ...rows
+            .filter((row) => row.jutsuId !== "unused")
+            .map(({ jutsuId }) => ({ id: jutsuId, type: "jutsu" as const })),
+          { id: "plain", type: "jutsu" },
+          { id: "unowned", type: "jutsu" },
+        ],
+      });
+      state.rewardScaling = 0;
+      state.extraState.jutsus = Object.fromEntries(
+        definitions.filter((j) => j.id !== "unknown").map((j) => [j.id, makeJutsu(j)]),
+      );
+      if (boosted)
+        state.extraState.settings = [
+          {
+            id: "boost",
+            name: "jutsuExpMultiplier",
+            value: 1.53,
+            time: new Date(Date.now() + 60000),
+          },
+        ];
+      await settle(state);
+      const saved = await database.query.userJutsu.findMany();
+      for (const id of ["plain", "elite", "advanced"])
+        expect(saved.find((row) => row.jutsuId === id)).toMatchObject({
+          level: id === "advanced" ? 26 : 25,
+          experience: 0,
+        });
+      for (const row of rows.filter((row) =>
+        ["capped", "elite-capped", "unused", "unknown"].includes(row.jutsuId),
+      ))
+        expect(saved.find((entry) => entry.jutsuId === row.jutsuId)).toMatchObject(row);
+      expect(saved.find((row) => row.jutsuId === "progress")?.experience).toBe(
+        boosted ? 27 : 16,
+      );
+    },
+  );
 
   it("groups equipped item experience by level curve and credits the source row", async () => {
     await insertItems([

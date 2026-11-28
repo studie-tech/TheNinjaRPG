@@ -30,7 +30,13 @@ import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { getRandomElement } from "@/utils/array";
 import { secureRandomInt } from "@/utils/math";
 import type { ZodAllAiAction, ZodAllAiCondition } from "@/validators/ai";
-import { ActionEndTurn, enforceExtraRules, getBackupRules } from "@/validators/ai";
+import {
+  ActionEndTurn,
+  aiRoundNumbersSchema,
+  enforceExtraRules,
+  getBackupRules,
+  isEnmityTarget,
+} from "@/validators/ai";
 import type { ZodAllTags } from "@/validators/combat";
 
 type ActionWithTarget = {
@@ -191,16 +197,14 @@ export const performAIaction = (
     const getClosestAlly = () => (closestAlly ??= closestTarget(allies));
     const metricTarget = (
       candidates: typeof allies,
-      metric: "current" | "max" | "enmity",
+      metric: "current" | "max",
       highest: boolean,
     ) =>
       candidates.reduce<(typeof allies)[number] | undefined>((best, candidate) => {
         const value = (target: (typeof allies)[number]) =>
-          metric === "enmity"
-            ? (target.enmity ?? 0)
-            : metric === "max"
-              ? getEffectiveMaxPool(target, nextBattle.usersEffects, "Health")
-              : getEffectiveCurPool(target, "Health");
+          metric === "max"
+            ? getEffectiveMaxPool(target, nextBattle.usersEffects, "Health")
+            : getEffectiveCurPool(target, "Health");
         if (!best) return candidate;
         return (
           highest
@@ -340,12 +344,15 @@ export const performAIaction = (
         case "CLOSEST_ALLY":
           return getClosestAlly();
         case "HIGHEST_ENMITY_OPPONENT":
-        case "LOWEST_ENMITY_OPPONENT":
-          return metricTarget(
-            enemies,
-            "enmity",
-            entry.target === "HIGHEST_ENMITY_OPPONENT",
-          );
+        case "LOWEST_ENMITY_OPPONENT": {
+          const rank = entry.enmityRank ?? 1;
+          if (!Number.isSafeInteger(rank) || rank < 1) return undefined;
+          // Stable sorting preserves battle order for ties without mutating enemies.
+          const direction = entry.target === "HIGHEST_ENMITY_OPPONENT" ? -1 : 1;
+          return [...enemies].sort(
+            (a, b) => direction * ((a.enmity ?? 0) - (b.enmity ?? 0)),
+          )[rank - 1];
+        }
         case "HIGHEST_MAX_HEALTH_ALLY":
           return metricTarget(allies, "max", true);
         case "HIGHEST_MAX_HEALTH_OPPONENT":
@@ -387,6 +394,8 @@ export const performAIaction = (
       const effects = nextBattle.usersEffects;
       const checked = rule.conditions.every((condition) => {
         const target = getTarget(condition);
+        if ("target" in condition && isEnmityTarget(condition.target) && !target)
+          return false;
         switch (condition.type) {
           case "health_below": {
             const curHealth = getEffectiveCurPool(user, "Health");
@@ -411,8 +420,11 @@ export const performAIaction = (
                 return distance >= condition.minRange && distance <= condition.maxRange;
               })
             );
-          case "specific_round":
-            return nextBattle.round === condition.value;
+          case "specific_round": {
+            // Stored battle snapshots can carry a scalar single-round condition.
+            const rounds = aiRoundNumbersSchema.safeParse(condition.value);
+            return rounds.success && rounds.data.includes(nextBattle.round);
+          }
           case "round_greater_than":
             return nextBattle.round > condition.value;
           case "round_lower_than":

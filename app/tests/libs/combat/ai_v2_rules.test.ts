@@ -15,6 +15,8 @@ import {
   ActionUseSpecificJutsu,
   AiRule,
   type AvailableTarget,
+  ConditionDistanceHigherThan,
+  ConditionDistanceLowerThan,
   ConditionHasEffect,
   ConditionHealthBelow,
   ConditionPlayerWithinRange,
@@ -154,6 +156,90 @@ const setup = (
 };
 
 describe("AI targeting and clauses", () => {
+  it.each([
+    ["HIGHEST_ENMITY_OPPONENT", 2, "minion"],
+    ["LOWEST_ENMITY_OPPONENT", 2, "boss"],
+    ["LOWEST_ENMITY_OPPONENT", 3, "third"],
+  ] as const)("%s rank %s selects %s", (target, enmityRank, expected) => {
+    const { battle, run } = setup(target);
+    if (enmityRank === 3) {
+      battle.usersState.push(
+        mkUser({
+          userId: "third",
+          direction: "left",
+          longitude: 5,
+          latitude: 1,
+          enmity: 1000,
+        }),
+      );
+    }
+    Object.assign(battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action, {
+      enmityRank,
+    });
+    const result = run();
+    const before = battle.usersState.find((u) => u.userId === expected)!;
+    expect(result.nextActionId).toBe(DAMAGE_JUTSU);
+    expect(
+      result.nextBattle.usersState.find((u) => u.userId === expected)!.curHealth,
+    ).toBeLessThan(before.curHealth);
+  });
+
+  it.each(["HIGHEST_ENMITY_OPPONENT", "LOWEST_ENMITY_OPPONENT"] as const)(
+    "%s counts tied opponents individually in battle order and excludes unavailable ones",
+    (target) => {
+      const { battle, run } = setup(target);
+      for (const user of battle.usersState) delete user.enmity;
+      battle.usersState.push(
+        mkUser({ userId: "dead", curHealth: 0, direction: "left" }),
+      );
+      battle.usersState.push(
+        mkUser({ userId: "fled", fledBattle: true, direction: "left" }),
+      );
+      Object.assign(battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action, {
+        enmityRank: 2,
+      });
+      expect(
+        run().nextBattle.usersState.find((u) => u.userId === "minion")!.curHealth,
+      ).toBeLessThan(800);
+      Object.assign(battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action, {
+        enmityRank: 3,
+      });
+      expect(run().nextActionId).toBe("wait");
+    },
+  );
+
+  it.each([
+    ConditionDistanceHigherThan,
+    ConditionDistanceLowerThan,
+    ConditionTargetHasEffect,
+  ])("skips missing ranked targets for condition %#", (schema) => {
+    const { run } = setup("CLOSEST_OPPONENT", [
+      schema.parse({
+        target: "HIGHEST_ENMITY_OPPONENT",
+        enmityRank: 3,
+        threshold: 0,
+      }),
+    ]);
+    expect(run().nextActionId).toBe("wait");
+  });
+
+  it("checks the effect on the ranked condition target independently from the action target", () => {
+    const { battle, run } = setup("HIGHEST_ENMITY_OPPONENT", [
+      ConditionTargetHasEffect.parse({
+        target: "HIGHEST_ENMITY_OPPONENT",
+        enmityRank: 2,
+        effectType: "damage",
+        threshold: 1,
+      }),
+    ]);
+    battle.usersEffects.push(
+      makeEffect("damage", { power: 10 }, { targetId: "minion" }),
+    );
+    expect(run().nextActionId).toBe(DAMAGE_JUTSU);
+    battle.usersEffects = [];
+    expect(run().nextActionId).toBe("wait");
+  });
+
   it.each([
     ["HIGHEST_ENMITY_OPPONENT", "boss"],
     ["LOWEST_ENMITY_OPPONENT", "minion"],
@@ -413,11 +499,37 @@ describe("AI targeting and clauses", () => {
     [1, 10, false],
   ])("AND clauses round=%s health=%s", (round, health, matches) => {
     const { battle, run } = setup("CLOSEST_OPPONENT", [
-      ConditionSpecificRound.parse({ value: round }),
+      ConditionSpecificRound.parse({ value: [round, round + 2] }),
       ConditionHealthBelow.parse({ value: health }),
     ]);
     battle.usersState[0]!.curHealth = 2500;
     expect(run().nextActionId).toBe(matches ? DAMAGE_JUTSU : "wait");
+  });
+
+  it.each([1, 2, 3, 4, 5, 6])(
+    "round list matches round %s only when included",
+    (round) => {
+      const { battle, run } = setup("CLOSEST_OPPONENT", [
+        ConditionSpecificRound.parse({ value: [1, 3, 5] }),
+      ]);
+      battle.round = round;
+      expect(run().nextActionId).toBe(
+        [1, 3, 5].includes(round) ? DAMAGE_JUTSU : "wait",
+      );
+    },
+  );
+
+  it("evaluates a scalar round from an existing battle snapshot", () => {
+    const { battle, run } = setup("CLOSEST_OPPONENT", [
+      ConditionSpecificRound.parse({ value: [3] }),
+    ]);
+    Object.assign(battle.extraState.aiProfiles[PROFILE]!.rules[0]!.conditions[0]!, {
+      value: 3,
+    });
+    battle.round = 3;
+    expect(run().nextActionId).toBe(DAMAGE_JUTSU);
+    battle.round = 4;
+    expect(run().nextActionId).toBe("wait");
   });
 
   it.each([
