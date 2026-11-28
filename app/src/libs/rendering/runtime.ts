@@ -9,6 +9,11 @@ import { setGameSceneVisible } from "@/libs/gameSceneVisibility";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { createCharacterComposites } from "@/libs/rendering/characterComposites";
+import {
+  CHARACTER_COMPOSITE_CELL,
+  CHARACTER_COMPOSITE_PAGE_SIZE,
+  CHARACTER_PIXELS_PER_UNIT,
+} from "@/libs/rendering/characterFrame";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop, MAX_FRAME_RATE } from "@/libs/rendering/frameLoop";
 import { releaseRenderer, takeParkedRenderer } from "@/libs/rendering/rendererPool";
@@ -144,8 +149,9 @@ export const createGameRenderer = async (options: {
   stage.eventMode = "none";
   const assets = createSceneAssets();
   const characterComposites = createCharacterComposites(renderer, {
-    cellSize: 192,
-    pixelsPerUnit: 100,
+    cellSize: CHARACTER_COMPOSITE_CELL,
+    pixelsPerUnit: CHARACTER_PIXELS_PER_UNIT,
+    pageSize: CHARACTER_COMPOSITE_PAGE_SIZE,
   });
   const canvas = renderer.canvas as HTMLCanvasElement;
   canvas.style.display = "block";

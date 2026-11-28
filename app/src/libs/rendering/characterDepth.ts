@@ -7,6 +7,10 @@ export const composeCharacterPixels = (
   pixelsPerUnit: number,
 ) => {
   const output = new Uint8Array(size * size * 4);
+  let left = size,
+    top = size,
+    right = 0,
+    bottom = 0;
   const mapped = layers.map((layer) => {
     if (
       layer.pixels.length !== layer.width * layer.height * 4 ||
@@ -24,16 +28,23 @@ export const composeCharacterPixels = (
       const y = Math.floor(frame.size / 2 + local - origin.y * layer.pixelsPerUnit);
       const sourceX = x - (frame.trim?.x ?? 0);
       const sourceY = y - (frame.trim?.y ?? 0);
-      if (sourceX >= 0 && sourceX < frame.width)
+      if (sourceX >= 0 && sourceX < frame.width) {
         columns[index] = Math.floor(frame.x) + sourceX;
-      if (sourceY >= 0 && sourceY < frame.height)
+        left = Math.min(left, index);
+        right = Math.max(right, index + 1);
+      }
+      if (sourceY >= 0 && sourceY < frame.height) {
         rows[index] = (Math.floor(frame.y) + sourceY) * layer.width;
+        top = Math.min(top, index);
+        bottom = Math.max(bottom, index + 1);
+      }
     }
     return { ...layer, columns, rows };
   });
   const transparent: { depth: number; z: number; index: number; layer: number }[] = [];
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
+  // Overscan protects weapon swings; pixels outside every source crop stay transparent.
+  for (let y = top; y < bottom; y++) {
+    for (let x = left; x < right; x++) {
       let closest = Number.POSITIVE_INFINITY;
       let frontZ = Number.NEGATIVE_INFINITY;
       let opaqueLayer = -1;

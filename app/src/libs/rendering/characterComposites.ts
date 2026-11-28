@@ -273,5 +273,5 @@ export type CompositeCell = {
 export const COMPOSITE_CELL = 64;
 /** 4 MB pages hold 256 frames each (about two dozen walking characters); every WebGL device supports the size. */
 export const COMPOSITE_PAGE_SIZE = 1024;
-/** Eight pages hold every on-screen frame of a 100-player crowd within 32 MB. */
+/** Default pages use 32 MiB; each renderer can supply native frame and page dimensions. */
 export const COMPOSITE_MAX_PAGES = 8;

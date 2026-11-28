@@ -1,6 +1,12 @@
 /** Unit-square actors expose this stable foot contact to scenery, shadows and minigames. */
 export const CHARACTER_FOOT_Y = 28 / 64;
 
+/** Native character density retains roughly 128 painted pixels of height at the same world scale. */
+export const CHARACTER_PIXELS_PER_UNIT = 500 / 3;
+export const CHARACTER_COMPOSITE_CELL = 320;
+/** Four cells per row keep a 100-player crowd within the existing eight-page limit. */
+export const CHARACTER_COMPOSITE_PAGE_SIZE = 1280;
+
 /** Align an authored ground point without changing the actor's unit-space placement contract. */
 export const characterFrameOffset = (
   frame: { size: number; ground?: { x: number; y: number } },

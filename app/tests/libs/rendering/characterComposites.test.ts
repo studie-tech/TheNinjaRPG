@@ -1,6 +1,24 @@
 import { expect, it, vi } from "bun:test";
 import { Container, type Renderer, Sprite } from "pixi.js";
 import { createCharacterComposites } from "@/libs/rendering/characterComposites";
+import {
+  CHARACTER_COMPOSITE_CELL,
+  CHARACTER_COMPOSITE_PAGE_SIZE,
+  CHARACTER_PIXELS_PER_UNIT,
+} from "@/libs/rendering/characterFrame";
+
+it("retains distinct native poses for a 100-player crowd without evicting visible actors", () => {
+  const cache = createCharacterComposites({ render: vi.fn() } as unknown as Renderer, {
+    cellSize: CHARACTER_COMPOSITE_CELL,
+    pixelsPerUnit: CHARACTER_PIXELS_PER_UNIT,
+    pageSize: CHARACTER_COMPOSITE_PAGE_SIZE,
+  });
+  const rigs = Array.from({ length: 100 }, () => new Container());
+  const cells = rigs.map((rig, index) => cache.acquire(`crowd-${index}`, rig));
+  for (const [index, cell] of cells.entries()) expect(cell?.key).toBe(`crowd-${index}`);
+  cache.destroy();
+  for (const rig of rigs) rig.destroy();
+});
 
 it("uploads a rasterized pose once, shares it, and redraws it after a context reset", () => {
   const sources: Sprite[] = [];

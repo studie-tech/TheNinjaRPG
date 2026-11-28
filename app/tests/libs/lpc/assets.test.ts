@@ -4,6 +4,7 @@ import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { lpcAtlasResources } from "@/libs/lpc/atlases";
 import { lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
 import { lpcAtlasFrame } from "@/libs/lpc/frames";
+import { CHARACTER_PIXELS_PER_UNIT } from "@/libs/rendering/characterFrame";
 import { isBunnyCdnUrl } from "@/utils/image";
 import { lpcAnimations } from "@/validators/lpc";
 import credits from "../../../drizzle/data/lpc/credits.json";
@@ -61,9 +62,12 @@ describe("published character artwork", () => {
   });
   it("keeps cropped frames inside bounded atlases and aligned to one scale and foot point", () => {
     for (const layout of lpcCatalog.layouts) {
-      expect([128, 192]).toContain(layout.cell);
-      expect(layout.pixelsPerUnit).toBe(100);
-      expect(layout.ground).toEqual({ x: layout.cell / 2, y: layout.cell / 2 + 41 });
+      expect([256, 320]).toContain(layout.cell);
+      expect(layout.pixelsPerUnit).toBe(CHARACTER_PIXELS_PER_UNIT);
+      expect(layout.ground).toEqual({
+        x: layout.cell / 2,
+        y: layout.cell / 2 + (41 * 5) / 3,
+      });
       expect(layout.facings).toHaveLength(6);
       expect(layout.facings?.map((facing) => facing.mirror)).toEqual([
         false,
@@ -93,7 +97,7 @@ describe("published character artwork", () => {
     }
   });
   it("pins attribution and revision for every published design", () => {
-    expect(lpcCatalog.revision).toMatch(/^[a-f0-9]{64}-[a-f0-9]{12}$/);
+    expect(lpcCatalog.revision).toMatch(/^[a-f0-9]{64}$/);
     for (const asset of lpcAssets) {
       expect(asset.lpcConfig.sourceRevision).toBe(lpcCatalog.revision);
       expect(asset.lpcConfig.attributions.length).toBeGreaterThan(0);
@@ -155,7 +159,7 @@ describe("published character artwork", () => {
       );
       expect(
         [...resources.values()].reduce((sum, bytes) => sum + bytes, 0),
-      ).toBeLessThan(10 * 1024 * 1024);
+      ).toBeLessThan(24 * 1024 * 1024);
     }
   });
 });

@@ -4,7 +4,9 @@ import {
   composeCharacterPixels,
 } from "@/libs/rendering/characterDepth";
 import {
+  CHARACTER_COMPOSITE_CELL,
   CHARACTER_FOOT_Y,
+  CHARACTER_PIXELS_PER_UNIT,
   characterFrameOffset,
 } from "@/libs/rendering/characterFrame";
 
@@ -32,6 +34,36 @@ const layer = (
 };
 
 describe("character camera-depth composition", () => {
+  it("preserves adjacent native detail pixels instead of collapsing them to the lower density", () => {
+    const pixels = new Uint8Array(4 * 4 * 4);
+    const depth = new Uint8Array(pixels.length);
+    for (let i = 0; i < 16; i++) {
+      pixels.set([i * 16, 255 - i * 16, 64, 255], i * 4);
+      depth.set([0, 1, 0, 255], i * 4);
+    }
+    const source: CharacterDepthLayer = {
+      pixels,
+      depth,
+      width: 4,
+      height: 4,
+      pixelsPerUnit: CHARACTER_PIXELS_PER_UNIT,
+      mirror: false,
+      z: 0,
+      frame: { x: 0, y: 0, width: 4, height: 4, size: 320, trim: { x: 158, y: 158 } },
+    };
+    const native = composeCharacterPixels(
+      [source],
+      CHARACTER_COMPOSITE_CELL,
+      CHARACTER_PIXELS_PER_UNIT,
+    );
+    for (let y = 0; y < 4; y++)
+      expect(
+        native.slice(((158 + y) * 320 + 158) * 4, ((158 + y) * 320 + 162) * 4),
+      ).toEqual(pixels.slice(y * 16, (y + 1) * 16));
+    const lower = composeCharacterPixels([source], 192, 100);
+    expect([...lower].filter((v, i) => i % 4 === 3 && v).length).toBeLessThan(16);
+    expect(CHARACTER_COMPOSITE_CELL / CHARACTER_PIXELS_PER_UNIT).toBeCloseTo(192 / 100);
+  });
   it("aligns an authored ground contact in colour and depth without changing the unit actor footer", () => {
     const source = layer([255, 0, 0, 255], [16, 16, 16, 16]);
     source.frame.ground = { x: 1, y: 1 + CHARACTER_FOOT_Y * 2 - 1 };

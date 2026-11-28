@@ -49,10 +49,16 @@ const directions = z
 /** Authored frame indices can be sparse; cell and columns locate them in the packed atlas. */
 export const lpcLayoutValidator = z
   .object({
-    cell: z.union([z.literal(64), z.literal(128), z.literal(192)]),
+    cell: z.union([
+      z.literal(64),
+      z.literal(128),
+      z.literal(192),
+      z.literal(256),
+      z.literal(320),
+    ]),
     columns: z.number().int().min(1).max(2048),
     /** Logical character scale is independent of an oversized weapon's cell dimensions. */
-    pixelsPerUnit: z.union([z.literal(64), z.literal(100), z.literal(128)]).optional(),
+    pixelsPerUnit: z.number().positive().max(512).optional(),
     /** Authored neutral ground contact, measured inside the untrimmed logical cell. */
     ground: z.object({ x: z.number().min(0), y: z.number().min(0) }).optional(),
     clips: z.partialRecord(z.enum(lpcAnimations), directions),
