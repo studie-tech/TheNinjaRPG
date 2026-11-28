@@ -6,6 +6,7 @@ import {
   lpcOppositeFacing,
   spriteBodyPartMasks,
   spriteLayerSheets,
+  visibleSpriteLayers,
 } from "@/libs/lpc/catalog";
 import { readTexturePixels, sharedFrameTexture } from "@/libs/rendering/assets";
 import type { CompositeCell } from "@/libs/rendering/characterComposites";
@@ -31,16 +32,7 @@ export const createLpcCharacter = async (
 ) => {
   const lpcCatalog = game.lpcCatalog;
   if (!lpcCatalog) throw new Error("Character catalog unavailable");
-  const replacementSlots = new Set<string>(
-    appearance.layers.flatMap((layer) => {
-      return (lpcCatalog.designs[layer.profile]?.replacementSlots ?? []).filter(
-        (slot) => layer.slot !== slot,
-      );
-    }),
-  );
-  const visibleLayers = appearance.layers.filter(
-    (layer) => !layer.slot || !replacementSlots.has(layer.slot),
-  );
+  const visibleLayers = visibleSpriteLayers(lpcCatalog, appearance);
   const bodyMasks = spriteBodyPartMasks(lpcCatalog, visibleLayers);
   const parts = visibleLayers.flatMap((layer) => {
     const selected = spriteLayerSheets(lpcCatalog, appearance, layer, mode);
@@ -382,11 +374,14 @@ export const createLpcCharacter = async (
           pixelsPerUnit: layout?.pixelsPerUnit ?? 64,
           mirror: mirrored,
           z: entry.sheet.z,
+          ...(entry.sheet.intensityTint
+            ? { intensityTint: entry.sheet.intensityTint }
+            : {}),
           ...(entry.bodyRegions ? { bodyRegions: entry.bodyRegions } : {}),
           frame: sample,
         });
       if (texture)
-        key += `${texture.uid}${mirrored ? "m" : ""}:${entry.depthTexture?.source.uid ?? ""}:${entry.sheet.z}:${layout?.pixelsPerUnit ?? 64}:${origin.x}:${origin.y}:${entry.bodyRegions ? [...entry.bodyRegions].join(".") : "-"},`;
+        key += `${texture.uid}${mirrored ? "m" : ""}:${entry.depthTexture?.source.uid ?? ""}:${entry.sheet.z}:${layout?.pixelsPerUnit ?? 64}:${origin.x}:${origin.y}:${entry.bodyRegions ? [...entry.bodyRegions].join(".") : "-"}:${entry.sheet.intensityTint?.join("/") ?? "-"},`;
     }
     return { textures, mirrors, offsets, depthLayers, key };
   };

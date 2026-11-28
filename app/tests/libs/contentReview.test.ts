@@ -29,9 +29,10 @@ import {
   leadingRowsWithin,
   resolveFocus,
 } from "@/libs/contentReview/snapshot";
-import { canonicalJson, contentVersion, sameValue } from "@/libs/contentReview/version";
+import { contentVersion, sameValue } from "@/libs/contentReview/version";
 import * as replicate from "@/libs/replicate";
 import type { DrizzleClient } from "@/server/db";
+import { canonicalJson } from "@/utils/canonicalJson";
 import { agentAuditOutputSchema } from "@/validators/contentReview";
 
 describe("content versions", () => {

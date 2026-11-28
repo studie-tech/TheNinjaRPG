@@ -26,6 +26,61 @@ const layout = lpcLayoutValidator.parse({
   },
 });
 
+it("samples independently cropped native portrait poses and rejects missing or oversized cells", async () => {
+  const native = {
+    cell: 640,
+    columns: 1,
+    pixelsPerUnit: 128000 / 381,
+    clips: {
+      walk: [
+        [0, 1],
+        [0, 1],
+        [0, 1],
+        [0, 1],
+      ],
+    },
+    frameMs: { walk: 100 },
+    cells: [
+      { x: 1, y: 1, trim: { x: 300, y: 310, width: 2, height: 3 } },
+      { x: 5, y: 1, trim: { x: 340, y: 350, width: 1, height: 4 } },
+    ],
+  };
+  const parsed = lpcLayoutValidator.parse(native);
+  const image = await sharp({
+    create: { width: 7, height: 6, channels: 4, background: "white" },
+  })
+    .png()
+    .toBuffer();
+  await validateLpcAtlas(image, parsed);
+  expect(lpcAtlasFrame(parsed, "walk", 0)).toMatchObject({
+    x: 1,
+    y: 1,
+    width: 2,
+    height: 3,
+    trim: native.cells[0]!.trim,
+  });
+  expect(lpcAtlasFrame(parsed, "walk", 1)).toMatchObject({
+    x: 5,
+    y: 1,
+    width: 1,
+    height: 4,
+    trim: native.cells[1]!.trim,
+  });
+  expect(
+    lpcLayoutValidator.safeParse({ ...native, cells: native.cells.slice(0, 1) })
+      .success,
+  ).toBe(false);
+  expect(
+    lpcLayoutValidator.safeParse({
+      ...native,
+      cells: [
+        { ...native.cells[0], trim: { x: 639, y: 0, width: 2, height: 1 } },
+        native.cells[1],
+      ],
+    }).success,
+  ).toBe(false);
+});
+
 it("samples animation-specific atlas crops, local frame indices and a correctly located neutral fallback", () => {
   const catalog: LpcCatalog = { entries: {}, designs: {}, layouts: [layout] };
   const sheet = { image: "https://example.com/sprites.png", layout: 0, z: 0 };

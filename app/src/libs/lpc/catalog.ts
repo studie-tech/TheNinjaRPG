@@ -18,6 +18,7 @@ export const LPC_IDLE_FRAME_MS = 200;
 /** A layer's full poses and its optional movement-only atlas share the same visual selection. */
 export type LpcSheet = {
   image: string;
+  intensityTint?: [number, number, number];
   depth?: string;
   bodyRegions?: boolean;
   palette?: number;
@@ -43,6 +44,7 @@ export type LpcCatalog = {
       | "replacesBodyParts"
       | "defaultColor"
       | "defaultEyes"
+      | "preview"
     >
   >;
 };
@@ -78,10 +80,18 @@ export const buildLpcCatalog = (
   const compileAtlas = (
     atlas: Pick<
       LpcAssetSheet,
-      "image" | "depth" | "bodyRegions" | "palette" | "z" | "layout" | "offhand"
+      | "image"
+      | "intensityTint"
+      | "depth"
+      | "bodyRegions"
+      | "palette"
+      | "z"
+      | "layout"
+      | "offhand"
     >,
   ): LpcSheet => ({
     image: atlas.image,
+    ...(atlas.intensityTint ? { intensityTint: atlas.intensityTint } : {}),
     z: atlas.z,
     layout: layoutId(atlas.layout),
     ...(atlas.depth ? { depth: atlas.depth } : {}),
@@ -101,6 +111,7 @@ export const buildLpcCatalog = (
         : {}),
       defaultColor: config.defaultColor,
       defaultEyes: config.defaultEyes,
+      ...(config.preview ? { preview: config.preview } : {}),
     };
     for (const [key, sheets] of Object.entries(config.variants))
       catalog.entries[`${asset.id}/${key}`] = sheets.map((sheet) => ({
@@ -199,6 +210,21 @@ export const spriteBodyPartMasks = (catalog: LpcCatalog, layers: SpriteLayer[]) 
   );
 };
 
+/** Apply outfit replacement slots consistently before rendering, framing or loading preview media. */
+export const visibleSpriteLayers = (
+  catalog: LpcCatalog,
+  appearance: SpriteAppearance,
+) => {
+  const replaced = new Set<string>(
+    appearance.layers.flatMap((layer) =>
+      (catalog.designs[layer.profile]?.replacementSlots ?? []).filter(
+        (slot) => slot !== layer.slot,
+      ),
+    ),
+  );
+  return appearance.layers.filter((layer) => !layer.slot || !replaced.has(layer.slot));
+};
+
 /** Restore editable variants from shared tables for editor delivery and bundled asset seeds. */
 export const expandLpcDesignVariants = (
   catalog: LpcCatalog,
@@ -285,6 +311,9 @@ export const spriteLayerSheets = (
     return {
       ...sheet,
       image: palette?.images[characterPalette[palette.channel]] ?? sheet.image,
+      ...(palette?.intensityTints?.[characterPalette[palette.channel]]
+        ? { intensityTint: palette.intensityTints[characterPalette[palette.channel]] }
+        : {}),
       ...(sheet.offhand ? { offhand: resolvePalette(sheet.offhand) } : {}),
     };
   };

@@ -1,4 +1,5 @@
 import { buildLpcCatalog, lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
+import { loadLpcPreviewCatalog } from "@/libs/lpc/previewAssets";
 import { composeCharacterPixels } from "@/libs/rendering/characterDepth";
 import { textureImageUrl } from "@/utils/image";
 import type { LpcBody } from "@/validators/lpc";
@@ -40,13 +41,20 @@ export const renderLpcThumbnail = async (
   signal: AbortSignal,
   body: LpcBody = "male",
 ) => {
-  const catalog = buildLpcCatalog([{ id: "thumbnail", lpcConfig: config }]);
+  const base = buildLpcCatalog([{ id: "thumbnail", lpcConfig: config }]);
   const layer = {
     profile: "thumbnail",
     color: config.defaultColor,
     eyes: config.defaultEyes,
   };
   const appearance = { version: 1 as const, body, layers: [layer] };
+  const catalog = await loadLpcPreviewCatalog(base, appearance, "stand", signal).catch(
+    (cause: unknown) => {
+      if (signal.aborted) throw cause;
+      // Gallery cards retain their gameplay-resolution image if detailed media is unavailable.
+      return base;
+    },
+  );
   const sheets = spriteLayerSheets(catalog, appearance, layer);
   const hasStand = sheets.some((sheet) => catalog.layouts[sheet.layout]?.clips.stand);
   const parts = sheets.flatMap((sheet) => {
@@ -71,6 +79,7 @@ export const renderLpcThumbnail = async (
       pixelsPerUnit: layout.pixelsPerUnit ?? 64,
       mirror: !!frame.mirror,
       z: sheet.z,
+      ...(sheet.intensityTint ? { intensityTint: sheet.intensityTint } : {}),
       ...(sheet.bodyRegions ? { bodyRegions: new Set<number>() } : {}),
       frame: { ...frame, x: 0, y: 0 },
     });

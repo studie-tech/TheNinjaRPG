@@ -1,4 +1,5 @@
 import type { LpcCatalog } from "@/libs/lpc/catalog";
+import { loadLpcPreviewCatalog } from "@/libs/lpc/previewAssets";
 import {
   CHARACTER_PREVIEW_HEIGHT,
   CHARACTER_PREVIEW_WIDTH,
@@ -10,6 +11,7 @@ import {
 } from "@/libs/rendering/primitives/character";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { createRenderScope } from "@/libs/rendering/scope";
+import { reportRendererFailure } from "@/libs/rendering/telemetry";
 import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
 
 /**
@@ -25,6 +27,7 @@ export const createCharacterPreviewScene = async (options: {
   const game = await createGameRenderer({
     ...options,
     surface: "character-preview",
+    characterResolution: "preview",
     width: CHARACTER_PREVIEW_WIDTH,
     height: () => CHARACTER_PREVIEW_HEIGHT,
   });
@@ -36,6 +39,7 @@ export const createCharacterPreviewScene = async (options: {
     animation: LpcAnimation;
   } | null = null;
   let direction: LpcDirection = 2;
+  let loading: ReturnType<typeof createRenderScope> | null = null;
   let request = 0;
   game.setUpdate((frame) => {
     if (!shown) return false;
@@ -60,20 +64,50 @@ export const createCharacterPreviewScene = async (options: {
       catalog: LpcCatalog | Promise<LpcCatalog>,
     ) => {
       const id = ++request;
-      const scope = createRenderScope(game);
+      loading?.dispose();
+      let scope = createRenderScope(game);
+      loading = scope;
       try {
         // The appearance owns its catalog load and failure, independently of renderer readiness.
-        scope.lpcCatalog = await catalog;
+        const base = await catalog;
         if (id !== request || scope.isDisposed()) {
           scope.dispose();
           return;
         }
-        const actor = await createLpcCharacter(
-          scope,
+        // A failed detailed-media request leaves the complete gameplay artwork available.
+        scope.lpcCatalog = await loadLpcPreviewCatalog(
+          base,
           appearance,
+          animation,
+          scope.signal,
+        ).catch((cause: unknown) => {
+          if (scope.signal.aborted) throw cause;
+          reportRendererFailure(cause, { surface: "character-preview", phase: "init" });
+          return base;
+        });
+        if (id !== request || scope.isDisposed()) {
+          scope.dispose();
+          return;
+        }
+        const mode =
           animation === "stand" || animation === "idle" || animation === "walk"
             ? "travel"
-            : "all",
+            : "all";
+        const actor = await createLpcCharacter(scope, appearance, mode).catch(
+          async (cause: unknown) => {
+            if (scope.isDisposed() || id !== request || scope.lpcCatalog === base)
+              throw cause;
+            // Detailed textures can fail independently of their manifest; preserve the usable figure.
+            reportRendererFailure(cause, {
+              surface: "character-preview",
+              phase: "init",
+            });
+            scope.dispose();
+            scope = createRenderScope(game);
+            loading = scope;
+            scope.lpcCatalog = base;
+            return createLpcCharacter(scope, appearance, mode);
+          },
         );
         if (id !== request || scope.isDisposed()) {
           scope.dispose();
@@ -99,6 +133,8 @@ export const createCharacterPreviewScene = async (options: {
         shown = null;
         game.invalidate();
         throw error;
+      } finally {
+        if (loading === scope) loading = null;
       }
     },
     /** Turn through the six hex facings without reloading the appearance. */

@@ -75,11 +75,19 @@ export const composeCharacterPixels = (
         }
       }
       const offset = (y * size + x) * 4;
-      if (opaqueLayer >= 0)
-        output.set(
-          mapped[opaqueLayer]!.pixels.subarray(opaqueIndex, opaqueIndex + 4),
-          offset,
-        );
+      if (opaqueLayer >= 0) {
+        const layer = mapped[opaqueLayer]!;
+        output.set(layer.pixels.subarray(opaqueIndex, opaqueIndex + 4), offset);
+        if (layer.intensityTint) {
+          const intensity =
+            (((layer.pixels[opaqueIndex]! << 8) | layer.pixels[opaqueIndex + 1]!) * 2) /
+            65535;
+          for (let channel = 0; channel < 3; channel++)
+            output[offset + channel] = linearByte(
+              intensity * layer.intensityTint[channel]!,
+            );
+        }
+      }
       if (!transparent.length) continue;
       transparent.sort((a, b) => b.depth - a.depth || a.z - b.z);
       for (const surface of transparent) {
@@ -88,13 +96,20 @@ export const composeCharacterPixels = (
           (surface.depth === closest && surface.z < frontZ)
         )
           continue;
-        const source = mapped[surface.layer]!.pixels;
+        const layer = mapped[surface.layer]!;
+        const source = layer.pixels;
+        const intensity = layer.intensityTint
+          ? (((source[surface.index]! << 8) | source[surface.index + 1]!) * 2) / 65535
+          : 0;
         const alpha = source[surface.index + 3]! / 255;
         const previous = output[offset + 3]! / 255;
         const combined = alpha + previous * (1 - alpha);
         for (let channel = 0; channel < 3; channel++)
           output[offset + channel] = Math.round(
-            (source[surface.index + channel]! * alpha +
+            ((layer.intensityTint
+              ? linearByte(intensity * layer.intensityTint[channel]!)
+              : source[surface.index + channel]!) *
+              alpha +
               output[offset + channel]! * previous * (1 - alpha)) /
               combined,
           );
@@ -105,9 +120,21 @@ export const composeCharacterPixels = (
   return output;
 };
 
+const linearByte = (value: number) =>
+  Math.round(
+    Math.min(
+      1,
+      Math.max(
+        0,
+        value <= 0.0031308 ? value * 12.92 : 1.055 * value ** (1 / 2.4) - 0.055,
+      ),
+    ) * 255,
+  );
+
 /** Opaque RGB depth stores micrometres from the shared orthographic camera; RGB zero is empty. */
 export type CharacterDepthLayer = {
   pixels: Uint8Array;
+  intensityTint?: [number, number, number];
   depth: Uint8Array;
   width: number;
   height: number;

@@ -13,6 +13,9 @@ import {
   CHARACTER_COMPOSITE_CELL,
   CHARACTER_COMPOSITE_PAGE_SIZE,
   CHARACTER_PIXELS_PER_UNIT,
+  CHARACTER_PREVIEW_COMPOSITE_CELL,
+  CHARACTER_PREVIEW_COMPOSITE_MAX_PAGES,
+  CHARACTER_PREVIEW_PIXELS_PER_UNIT,
 } from "@/libs/rendering/characterFrame";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop, MAX_FRAME_RATE } from "@/libs/rendering/frameLoop";
@@ -58,6 +61,8 @@ const frames = createFrameLoop(
  */
 export const createGameRenderer = async (options: {
   lpcCatalog?: LpcCatalog;
+  /** Detailed character portraits own their compositor; gameplay keeps its native density. */
+  characterResolution?: "gameplay" | "preview";
   /** Labels this renderer in failure reports and frame metrics. */
   surface: RendererSurface;
   mount: HTMLElement;
@@ -149,9 +154,18 @@ export const createGameRenderer = async (options: {
   stage.eventMode = "none";
   const assets = createSceneAssets();
   const characterComposites = createCharacterComposites(renderer, {
-    cellSize: CHARACTER_COMPOSITE_CELL,
-    pixelsPerUnit: CHARACTER_PIXELS_PER_UNIT,
+    cellSize:
+      options.characterResolution === "preview"
+        ? CHARACTER_PREVIEW_COMPOSITE_CELL
+        : CHARACTER_COMPOSITE_CELL,
+    pixelsPerUnit:
+      options.characterResolution === "preview"
+        ? CHARACTER_PREVIEW_PIXELS_PER_UNIT
+        : CHARACTER_PIXELS_PER_UNIT,
     pageSize: CHARACTER_COMPOSITE_PAGE_SIZE,
+    ...(options.characterResolution === "preview"
+      ? { maxPages: CHARACTER_PREVIEW_COMPOSITE_MAX_PAGES }
+      : {}),
   });
   const canvas = renderer.canvas as HTMLCanvasElement;
   canvas.style.display = "block";

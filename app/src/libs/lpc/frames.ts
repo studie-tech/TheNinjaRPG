@@ -6,15 +6,19 @@ export const lpcAtlasFrame = (
   animation: LpcAnimation,
   index: number,
 ) => {
+  const packed = layout.cells?.[index];
   const region = layout.regions?.[animation];
-  const trim = region?.trim ?? layout.trim;
+  const trim = packed?.trim ?? region?.trim ?? layout.trim;
   const width = trim?.width ?? layout.cell,
     height = trim?.height ?? layout.cell;
   const gutter = trim ? 1 : 0,
     columns = region?.columns ?? layout.columns;
   return {
-    x: (region?.x ?? 0) + (index % columns) * (width + gutter * 2) + gutter,
-    y: (region?.y ?? 0) + Math.floor(index / columns) * (height + gutter * 2) + gutter,
+    x:
+      packed?.x ?? (region?.x ?? 0) + (index % columns) * (width + gutter * 2) + gutter,
+    y:
+      packed?.y ??
+      (region?.y ?? 0) + Math.floor(index / columns) * (height + gutter * 2) + gutter,
     size: layout.cell,
     width,
     height,
@@ -31,6 +35,7 @@ type AtlasGrid = {
   trim?: Crop;
   pixelsPerUnit?: number;
   ground?: { x: number; y: number };
+  cells?: { x: number; y: number; trim: Crop }[];
   regions?: Partial<
     Record<LpcAnimation, { x: number; y: number; columns: number; trim: Crop }>
   >;

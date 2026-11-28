@@ -34,6 +34,17 @@ const layer = (
 };
 
 describe("character camera-depth composition", () => {
+  it("decodes shared RG16 intensity into the selected linear colour without changing ordinary layers", () => {
+    const source = layer([0, 0, 0, 255], [16, 16, 16, 16]);
+    source.pixels.set([64, 0, 0, 255], 4);
+    source.pixels.set([128, 0, 0, 255], 8);
+    source.pixels.set([255, 255, 0, 255], 12);
+    source.intensityTint = [1, 0.25, 0];
+    expect([...composeCharacterPixels([source], 2, 2)]).toEqual([
+      0, 0, 0, 255, 188, 99, 0, 255, 255, 137, 0, 255, 255, 188, 0, 255,
+    ]);
+    expect([...source.pixels.slice(4, 8)]).toEqual([64, 0, 0, 255]);
+  });
   it("preserves adjacent native detail pixels instead of collapsing them to the lower density", () => {
     const pixels = new Uint8Array(4 * 4 * 4);
     const depth = new Uint8Array(pixels.length);

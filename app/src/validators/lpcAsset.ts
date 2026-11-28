@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { lpcAtlasFrame } from "@/libs/lpc/frames";
+import { isBunnyCdnUrl } from "@/utils/image";
 import type { LpcAnimation } from "@/validators/lpc";
 import { lpcAnimations, lpcMaterials } from "@/validators/lpc";
 
@@ -46,6 +47,42 @@ export const lpcBodyParts = [
 const directions = z
   .array(z.array(z.number().int().min(0).max(65535)).min(1).max(256))
   .length(4);
+
+/** Immutable preview manifests are media files, served without image optimizers or redirects. */
+export const lpcPreviewMediaUrlValidator = z
+  .url()
+  .max(191)
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return (
+        isBunnyCdnUrl(value) &&
+        url.protocol === "https:" &&
+        !url.username &&
+        !url.password &&
+        !url.port &&
+        !url.search &&
+        !url.hash &&
+        /^\/f\/[A-Za-z0-9_.-]+$/.test(url.pathname)
+      );
+    } catch {
+      return false;
+    }
+  }, "Choose an immutable game media URL.");
+
+/** Linear RGB multiplies a lossless RG16 intensity value in [0,2]; ordinary RGBA omits this. */
+export const lpcIntensityTintValidator = z.tuple([
+  z.number().min(0).max(1),
+  z.number().min(0).max(1),
+  z.number().min(0).max(1),
+]);
+
+const crop = z.object({
+  x: z.number().int().min(0),
+  y: z.number().int().min(0),
+  width: z.number().int().min(1),
+  height: z.number().int().min(1),
+});
 /** Authored frame indices can be sparse; cell and columns locate them in the packed atlas. */
 export const lpcLayoutValidator = z
   .object({
@@ -55,6 +92,7 @@ export const lpcLayoutValidator = z
       z.literal(192),
       z.literal(256),
       z.literal(320),
+      z.literal(640),
     ]),
     columns: z.number().int().min(1).max(2048),
     /** Logical character scale is independent of an oversized weapon's cell dimensions. */
@@ -79,6 +117,18 @@ export const lpcLayoutValidator = z
         width: z.number().int().min(1),
         height: z.number().int().min(1),
       })
+      .optional(),
+    /** Individual cropped poses avoid padding wide weapon swings into every frame. */
+    cells: z
+      .array(
+        z.object({
+          x: z.number().int().min(1).max(2047),
+          y: z.number().int().min(1).max(2047),
+          trim: crop,
+        }),
+      )
+      .min(1)
+      .max(1024)
       .optional(),
     /** Animation-specific crops pack standing, attacks and falling poses without large empty cells. */
     regions: z
@@ -118,7 +168,8 @@ export const lpcLayoutValidator = z
     const frames = Object.values(layout.clips).flat(2);
     if (
       !frames.length ||
-      (!layout.regions && columns * (width + gutter) > 2048) ||
+      (!layout.regions && !layout.cells && columns * (width + gutter) > 2048) ||
+      (layout.cells && frames.some((index) => !layout.cells?.[index])) ||
       Object.entries(layout.clips).some(([animation, rows]) =>
         rows.flat().some((index) => {
           const frame = lpcAtlasFrame(layout, animation as LpcAnimation, index),
@@ -138,6 +189,7 @@ export const lpcLayoutValidator = z
       [
         ...(trim ? [trim] : []),
         ...Object.values(layout.regions ?? {}).map((region) => region.trim),
+        ...(layout.cells ?? []).map((frame) => frame.trim),
       ].some((crop) => crop.x + crop.width > cell || crop.y + crop.height > cell)
     )
       ctx.addIssue({
@@ -188,6 +240,7 @@ export const lpcLayoutValidator = z
 
 const atlas = z.object({
   image: z.url().max(191),
+  intensityTint: lpcIntensityTintValidator.optional(),
   /** Lossless, opaque RGB bytes encode camera depth; zero denotes an empty surface. */
   depth: z.url().max(191).optional(),
   /** The low four depth bits identify a natural mesh section; zero denotes an accessory. */
@@ -210,6 +263,7 @@ const atlas = z.object({
             Object.keys(images).length > 0 && Object.keys(images).length <= 32,
           "Provide between one and 32 character palettes.",
         ),
+      intensityTints: z.record(z.string(), lpcIntensityTintValidator).optional(),
     })
     .optional(),
   z: z.number().int().min(-1000).max(1000),
@@ -271,6 +325,13 @@ export const lpcConfigValidator = z
     attributions: z.array(lpcAttributionValidator).min(1).max(100),
     sourceRevision: z.string().max(191).optional(),
     sourceUrl: z.url().optional(),
+    /** The fingerprint binds preview clips to the gameplay geometry, palettes and masks. */
+    preview: z
+      .object({
+        source: z.string().regex(/^[a-f0-9]{64}$/),
+        index: lpcPreviewMediaUrlValidator,
+      })
+      .optional(),
     /** Exact generator definition IDs allow recipe import without name-based guessing. */
     upstream: z
       .array(

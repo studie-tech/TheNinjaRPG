@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { canonicalJson } from "@/libs/contentReview/version";
 import { lpcAtlasResources } from "@/libs/lpc/atlases";
 import { lpcAtlasFrame } from "@/libs/lpc/frames";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import { chunkArray } from "@/utils/array";
+import { canonicalJson } from "@/utils/canonicalJson";
 import { textureImageUrl } from "@/utils/image";
 import { withRetry } from "@/utils/retry";
 import type { LpcAnimation } from "@/validators/lpc";
@@ -84,7 +84,9 @@ export const validateLpcAtlas = async (
     height = layout.trim?.height ?? layout.cell,
     gutter = layout.trim ? 2 : 0;
   if (
-    (!layout.regions && layout.columns * (width + gutter) > metadata.width) ||
+    (!layout.regions &&
+      !layout.cells &&
+      layout.columns * (width + gutter) > metadata.width) ||
     Object.entries(layout.clips).some(([animation, rows]) =>
       rows.flat().some((index) => {
         const frame = lpcAtlasFrame(layout, animation as LpcAnimation, index),

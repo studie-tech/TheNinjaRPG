@@ -4,7 +4,7 @@ import {
   type LpcCatalog,
   type LpcSheet,
 } from "@/libs/lpc/catalog";
-import type { LpcConfig } from "@/validators/lpcAsset";
+import type { LpcAssetSheet, LpcConfig } from "@/validators/lpcAsset";
 
 type PackedSheet = Omit<LpcSheet, "image" | "depth" | "travel" | "offhand"> & {
   image: number;
@@ -17,7 +17,11 @@ type PackedSheet = Omit<LpcSheet, "image" | "depth" | "travel" | "offhand"> & {
 export type PackedLpcCatalog = Omit<LpcCatalog, "entries" | "palettes"> & {
   version: 1;
   entries: Record<string, number[]>;
-  palettes: { channel: "skin" | "hair" | "eyes"; images: Record<string, number> }[];
+  palettes: {
+    channel: "skin" | "hair" | "eyes";
+    images: Record<string, number>;
+    intensityTints?: NonNullable<LpcAssetSheet["palette"]>["intensityTints"];
+  }[];
   images: string[];
   sheets: PackedSheet[];
 };
@@ -64,6 +68,7 @@ export const packLpcCatalog = (catalog: LpcCatalog): PackedLpcCatalog => {
     designs: catalog.designs,
     palettes: (catalog.palettes ?? []).map((palette) => ({
       channel: palette.channel,
+      ...(palette.intensityTints ? { intensityTints: palette.intensityTints } : {}),
       images: Object.fromEntries(
         Object.entries(palette.images).map(([color, url]) => [color, image(url)]),
       ),
@@ -111,6 +116,7 @@ export const unpackLpcCatalog = (packed: PackedLpcCatalog): LpcCatalog => {
     designs: packed.designs,
     palettes: packed.palettes.map((palette) => ({
       channel: palette.channel,
+      ...(palette.intensityTints ? { intensityTints: palette.intensityTints } : {}),
       images: Object.fromEntries(
         Object.entries(palette.images).map(([color, index]) => [color, images(index)]),
       ),

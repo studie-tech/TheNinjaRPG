@@ -4,6 +4,7 @@ import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { lpcAtlasResources } from "@/libs/lpc/atlases";
 import { lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
 import { lpcAtlasFrame } from "@/libs/lpc/frames";
+import { lpcPreviewFingerprint } from "@/libs/lpc/previewAssets";
 import { CHARACTER_PIXELS_PER_UNIT } from "@/libs/rendering/characterFrame";
 import { isBunnyCdnUrl } from "@/utils/image";
 import { lpcAnimations } from "@/validators/lpc";
@@ -12,6 +13,18 @@ import { lpcAssets, lpcCatalog } from "../../setup/lpc";
 
 // Publication verifies CDN bytes; these checks validate the complete bundled manifest offline.
 describe("published character artwork", () => {
+  it("binds every detailed preview index to the exact gameplay definition", async () => {
+    for (const asset of lpcAssets) {
+      const preview = asset.lpcConfig.preview;
+      expect(preview).toBeDefined();
+      expect(preview?.source).toBe(await lpcPreviewFingerprint(lpcCatalog, asset.id));
+      const index = new URL(preview!.index);
+      expect(isBunnyCdnUrl(index.href)).toBe(true);
+      expect(index.pathname).toMatch(/^\/f\/[A-Za-z0-9_-]+$/);
+      expect(index.search).toBe("");
+      expect(index.hash).toBe("");
+    }
+  });
   it("serves every colour, depth and handed atlas through immutable raw CDN keys", () => {
     expect(existsSync(new URL("../../../public/lpc", import.meta.url))).toBe(false);
     for (const image of [

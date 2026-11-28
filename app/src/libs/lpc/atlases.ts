@@ -14,12 +14,15 @@ export const lpcAtlasResources = (config?: LpcConfig | null) => {
     });
   };
   const visit = (
-    atlas: Pick<LpcAssetSheet, "image" | "depth" | "palette" | "layout" | "offhand">,
+    atlas: Pick<
+      LpcAssetSheet,
+      "image" | "intensityTint" | "depth" | "palette" | "layout" | "offhand"
+    >,
   ) => {
-    add(atlas.image, atlas.layout);
+    add(atlas.image, atlas.layout, !!atlas.intensityTint);
     if (atlas.depth) add(atlas.depth, atlas.layout, true);
     for (const image of Object.values(atlas.palette?.images ?? {}))
-      add(image, atlas.layout);
+      add(image, atlas.layout, !!atlas.intensityTint);
     if (atlas.offhand) visit(atlas.offhand);
   };
   for (const sheet of Object.values(config?.variants ?? {}).flat()) {

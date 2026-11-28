@@ -1,8 +1,10 @@
 import {
   type LpcCatalog,
   lpcFrame,
+  lpcFrameDuration,
   lpcOppositeFacing,
   spriteLayerSheets,
+  visibleSpriteLayers,
 } from "@/libs/lpc/catalog";
 import { characterFrameOffset } from "@/libs/rendering/characterFrame";
 import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
@@ -17,15 +19,7 @@ export const characterPreviewFraming = (
   animation: LpcAnimation,
 ) => {
   const boxes: { left: number; top: number; right: number; bottom: number }[] = [];
-  const replaced = new Set<string>(
-    appearance.layers.flatMap((layer) =>
-      (catalog.designs[layer.profile]?.replacementSlots ?? []).filter(
-        (slot) => slot !== layer.slot,
-      ),
-    ),
-  );
-  for (const layer of appearance.layers) {
-    if (layer.slot && replaced.has(layer.slot)) continue;
+  for (const layer of visibleSpriteLayers(catalog, appearance)) {
     const selected = spriteLayerSheets(
       catalog,
       appearance,
@@ -53,26 +47,38 @@ export const characterPreviewFraming = (
       for (const direction of [0, 1, 2, 3, 4, 5] as const) {
         const facing: LpcDirection =
           layer.mirror && !offhand ? lpcOppositeFacing(direction) : direction;
-        const frame = lpcFrame(catalog, sheet, animation, facing, 0);
-        if (!frame) continue;
-        const mirrored = (!!layer.mirror && !offhand) !== !!frame.mirror;
-        const ppu = catalog.layouts[sheet.layout]?.pixelsPerUnit ?? 64;
-        const origin = characterFrameOffset(frame, ppu, mirrored);
-        const trim = frame.trim ?? {
-          x: 0,
-          y: 0,
-          width: frame.size,
-          height: frame.size,
-        };
-        const left = (trim.x - frame.size / 2) / ppu;
-        const right = left + trim.width / ppu;
-        const top = origin.y + (trim.y - frame.size / 2) / ppu;
-        boxes.push({
-          left: origin.x + (mirrored ? -right : left),
-          right: origin.x + (mirrored ? -left : right),
-          top,
-          bottom: top + trim.height / ppu,
-        });
+        const layout = catalog.layouts[sheet.layout]!;
+        const count = layout.cells
+          ? Math.max(1, ...(layout.clips[animation] ?? []).map((row) => row.length))
+          : 1;
+        for (let step = 0; step < count; step++) {
+          const frame = lpcFrame(
+            catalog,
+            sheet,
+            animation,
+            facing,
+            (step + 0.5) * lpcFrameDuration(animation, layout),
+          );
+          if (!frame) continue;
+          const mirrored = (!!layer.mirror && !offhand) !== !!frame.mirror;
+          const ppu = catalog.layouts[sheet.layout]?.pixelsPerUnit ?? 64;
+          const origin = characterFrameOffset(frame, ppu, mirrored);
+          const trim = frame.trim ?? {
+            x: 0,
+            y: 0,
+            width: frame.size,
+            height: frame.size,
+          };
+          const left = (trim.x - frame.size / 2) / ppu;
+          const right = left + trim.width / ppu;
+          const top = origin.y + (trim.y - frame.size / 2) / ppu;
+          boxes.push({
+            left: origin.x + (mirrored ? -right : left),
+            right: origin.x + (mirrored ? -left : right),
+            top,
+            bottom: top + trim.height / ppu,
+          });
+        }
       }
     }
   }

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { Container } from "pixi.js";
 import * as lpcHooks from "@/hooks/lpc";
 import { CharacterPreview } from "@/layout/CharacterPreview";
+import * as previewAssets from "@/libs/lpc/previewAssets";
 import type { LpcCharacter } from "@/libs/rendering/primitives/character";
 import * as character from "@/libs/rendering/primitives/character";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
@@ -25,6 +26,9 @@ let setAnimating: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   Object.assign(visualEffects, DEFAULT_VISUAL_EFFECTS);
   vi.spyOn(lpcHooks, "useLpcCatalogLoader").mockReturnValue(loadCatalog);
+  vi.spyOn(previewAssets, "loadLpcPreviewCatalog").mockImplementation(
+    async (base) => base,
+  );
   vi.spyOn(telemetry, "reportRendererFailure").mockImplementation(() => {});
   draw.mockClear();
   draw.mockImplementation(() => true);
@@ -80,6 +84,22 @@ const rotateButton = (view: ReturnType<typeof render>) =>
   view.getByRole("button", { name: "Rotate character preview" }) as HTMLButtonElement;
 
 describe("character preview", () => {
+  it("uses the detailed compositor and recovers the gameplay figure if a detailed texture fails", async () => {
+    vi.spyOn(previewAssets, "loadLpcPreviewCatalog").mockResolvedValue({
+      ...lpcCatalog,
+    });
+    createActor.mockRejectedValueOnce(new Error("Detailed image unavailable"));
+    const view = render(<CharacterPreview user={{}} />);
+    await waitFor(() => expect(rotateButton(view).disabled).toBe(false));
+    expect(
+      (runtime.createGameRenderer as Mock<typeof runtime.createGameRenderer>).mock
+        .calls[0]?.[0],
+    ).toMatchObject({ characterResolution: "preview" });
+    expect(createActor).toHaveBeenCalledTimes(2);
+    expect(createActor.mock.lastCall?.[0].lpcCatalog).toBe(lpcCatalog);
+    expect(view.getByRole("status").textContent).toBe("Your ninja");
+  });
+
   it("freezes preview sprites without mutating the source frame or rebuilding the renderer", async () => {
     const view = render(<CharacterPreview user={{}} />);
     await waitFor(() => expect(rotateButton(view).disabled).toBe(false));

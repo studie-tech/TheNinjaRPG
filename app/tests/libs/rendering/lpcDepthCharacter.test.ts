@@ -155,3 +155,98 @@ it("composes real atlas buffers with the selected skin, body replacement and mir
     for (const texture of textures.values()) texture.destroy(true);
   }
 });
+
+it("shares intensity textures across colours while keeping distinct cached poses and ignoring preview manifests", async () => {
+  const source = new Uint8Array(128 * 128 * 4);
+  const distance = new Uint8Array(source.length);
+  source.set([128, 0, 0, 255], (63 * 128 + 63) * 4);
+  distance.set([0, 1, 0, 255], (63 * 128 + 63) * 4);
+  const colour = new Texture({
+    source: new BufferImageSource({ resource: source, width: 128, height: 128 }),
+  });
+  const depth = new Texture({
+    source: new BufferImageSource({ resource: distance, width: 128, height: 128 }),
+  });
+  const atlas = {
+    image: "intensity",
+    depth: "depth",
+    palette: 0,
+    z: 1,
+    layout: 0,
+    intensityTint: [1, 0, 0] as [number, number, number],
+  };
+  const catalog: LpcCatalog = {
+    entries: { "body/male/light/blue": [atlas] },
+    palettes: [
+      {
+        channel: "skin",
+        images: { light: "intensity", black: "intensity" },
+        intensityTints: { light: [1, 0.25, 0], black: [0, 0.25, 1] },
+      },
+    ],
+    layouts: [
+      {
+        cell: 128,
+        columns: 1,
+        pixelsPerUnit: 128,
+        clips: { stand: [[0], [0], [0], [0]] },
+      },
+    ],
+    designs: {
+      body: {
+        category: "body",
+        replacementSlots: [],
+        defaultColor: "light",
+        defaultEyes: "blue",
+        preview: {
+          source: "0".repeat(64),
+          index: "https://uploadthing.b-cdn.net/f/preview-unused",
+        },
+      },
+    },
+  };
+  const paints = new Map<string, Uint8Array>();
+  const cleanups: (() => void)[] = [];
+  const game = {
+    lpcCatalog: catalog,
+    signal: new AbortController().signal,
+    isDisposed: () => false,
+    own: (cleanup: () => void) => cleanups.push(cleanup),
+    assets: {
+      texture: vi.fn(async (url: string) => (url === "intensity" ? colour : depth)),
+    },
+    characterComposites: {
+      cellSize: 128,
+      pixelsPerUnit: 128,
+      epoch: () => 0,
+      release: vi.fn(),
+      acquire: (key: string, _rig: unknown, rasterize: () => Uint8Array) => {
+        paints.set(key, rasterize());
+        return { key, texture: Texture.EMPTY } as CompositeCell;
+      },
+    },
+  } as unknown as GameRenderer;
+  const fetch = vi.spyOn(globalThis, "fetch");
+  try {
+    for (const color of ["light", "black"])
+      await createLpcCharacter(game, {
+        version: 1,
+        body: "male",
+        layers: [{ profile: "body", slot: "body", color }],
+      });
+    expect(paints.size).toBe(2);
+    const pixels = [...paints.values()].map((bytes) => [
+      ...bytes.slice((63 * 128 + 63) * 4, (63 * 128 + 63) * 4 + 4),
+    ]);
+    expect(pixels).toEqual([
+      [255, 137, 0, 255],
+      [0, 137, 255, 255],
+    ]);
+    expect(fetch).not.toHaveBeenCalled();
+  } finally {
+    fetch.mockRestore();
+    for (const cleanup of cleanups) cleanup();
+    colour.destroy(true);
+    depth.destroy(true);
+  }
+});

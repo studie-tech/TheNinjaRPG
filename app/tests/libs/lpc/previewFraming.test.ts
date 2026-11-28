@@ -83,3 +83,48 @@ it("fits oversized weapons more loosely than the neutral outfit", () => {
   );
   expect(armed.scale).toBeLessThan(plain.scale);
 });
+
+it("fits the complete high-resolution animation even when its first pose has a narrow crop", () => {
+  const base = lpcAssets.find((asset) => asset.id === "spear")!.lpcConfig;
+  const ppu = 128000 / 381;
+  const catalog = buildLpcCatalog([
+    {
+      id: "weapon",
+      lpcConfig: {
+        ...base,
+        variants: {
+          "male/gray/blue": [
+            {
+              image: "https://example.test/weapon.png",
+              z: 1,
+              layout: {
+                cell: 640,
+                columns: 1,
+                pixelsPerUnit: ppu,
+                clips: {
+                  slash: [
+                    [0, 1],
+                    [0, 1],
+                    [0, 1],
+                    [0, 1],
+                  ],
+                },
+                cells: [
+                  { x: 1, y: 1, trim: { x: 318, y: 210, width: 6, height: 250 } },
+                  { x: 10, y: 1, trim: { x: 14, y: 190, width: 610, height: 260 } },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
+  ]);
+  const frame = characterPreviewFraming(
+    catalog,
+    { version: 1, body: "male", layers: [{ profile: "weapon", color: "gray" }] },
+    "slash",
+  );
+  expect(frame.x + ((14 - 320) / ppu) * frame.scale).toBeCloseTo(16);
+  expect(frame.x + ((624 - 320) / ppu) * frame.scale).toBeCloseTo(240);
+});
