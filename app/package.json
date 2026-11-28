@@ -33,7 +33,7 @@
     "emptymigration": "drizzle-kit generate --custom",
     "migrate": "drizzle-kit migrate",
     "typecheck": "tsc --noEmit",
-    "prepare": "cd .. && husky",
+    "prepare": "cd .. && node app/node_modules/husky/bin.js",
     "bundle:report": "node node_modules/nextjs-bundle-analysis/report.js",
     "bundle:compare": "node node_modules/nextjs-bundle-analysis/compare.js"
   },

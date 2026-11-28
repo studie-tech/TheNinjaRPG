@@ -1,14 +1,20 @@
 import { z } from "zod";
-import { getBuyFoodUserUpdate } from "@/deltas/village";
+import { getBuyFoodUserUpdate, getVillageKickUserUpdate } from "@/deltas/village";
 import type { AllianceState, AllianceVillageType } from "@/drizzle/constants";
 import {
   ALLIANCE_VILLAGE_TYPES,
   COST_SWAP_VILLAGE,
+  KAGE_KICK_COOLDOWN_DAYS,
+  VILLAGE_KICK_REASON_MAX_LENGTH,
+  VILLAGE_KICK_REASON_MIN_LENGTH,
+  VILLAGE_KICK_REJOIN_DAYS,
   VILLAGE_LEAVE_REQUIRED_RANK,
 } from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
+import { getServerPusher } from "@/libs/pusher";
 import { hasRequiredRank } from "@/libs/rank";
-import { fetchUser } from "@/queries/profile";
+import { isTutorialActive } from "@/libs/tutorial";
+import { fetchUser, findUserById } from "@/queries/profile";
 import { deleteRequests, fetchRequests, insertRequest } from "@/queries/sparring";
 import {
   countVillageSectors,
@@ -23,6 +29,8 @@ import {
   insertNotificationForDeclareEnemy,
   insertSectorReleaseLog,
   insertVillageAllianceForUpsertAllianceStatus,
+  insertVillageKickLog,
+  kickVillageMember,
   listKageDefendedChallengesForGet,
   listSectorForGetSectorOwnerships,
   listVillageForGetAllNames,
@@ -218,6 +226,84 @@ export const villageRouter = createTRPCRouter({
         );
       }
     }),
+  kickMember: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string().min(1),
+        reason: z
+          .string()
+          .trim()
+          .min(VILLAGE_KICK_REASON_MIN_LENGTH)
+          .max(VILLAGE_KICK_REASON_MAX_LENGTH),
+      }),
+    )
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const [actor, target] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        findUserById(ctx.drizzle, input.userId),
+      ]);
+      if (!actor?.villageId || actor.isOutlaw || actor.isBanned)
+        return errorResponse("You cannot expel village members");
+      const home = await fetchVillage(ctx.drizzle, actor.villageId);
+      if (home?.type !== "VILLAGE" || home.kageId !== actor.userId)
+        return errorResponse("Only the village Kage can expel members");
+      if (!target || target.isAi || target.isOutlaw || target.villageId !== home.id)
+        return errorResponse("This player is not a member of your village");
+      if (target.userId === actor.userId)
+        return errorResponse("You cannot expel yourself");
+      if (isTutorialActive(target))
+        return errorResponse("Players completing the tutorial cannot be expelled");
+      if (target.status === "BATTLE" || target.status === "QUEUED")
+        return errorResponse("Wait until this player finishes their battle or queue");
+      const now = new Date();
+      if (
+        actor.lastKageKickAt &&
+        now.getTime() - actor.lastKageKickAt.getTime() <
+          KAGE_KICK_COOLDOWN_DAYS * 86400000
+      )
+        return errorResponse(
+          `You can expel one player every ${KAGE_KICK_COOLDOWN_DAYS} days`,
+        );
+      const result = await kickVillageMember(
+        ctx.drizzle,
+        actor.userId,
+        target.userId,
+        home.id,
+        now,
+        input.reason,
+      );
+      if (!result.rowsAffected)
+        return errorResponse(
+          "Leadership, membership or cooldown changed. Please try again.",
+        );
+      await Promise.all([
+        insertVillageKickLog(
+          ctx.drizzle,
+          actor.userId,
+          target.userId,
+          input.reason,
+          home.id,
+        ),
+        detachFromVillageRelations({ drizzle: ctx.drizzle, userId: target.userId }),
+        fetchUpdatedUser({ client: ctx.drizzle, userId: target.userId }),
+      ]);
+      scheduleDiscordSync(ctx.drizzle, target.userId);
+      // The saved reason remains visible in the village screen if realtime delivery fails.
+      await getServerPusher()
+        .trigger(target.userId, "event", {
+          type: "userMessage",
+          message: `You were expelled from ${home.name}. Reason: ${input.reason}. You cannot rejoin for ${VILLAGE_KICK_REJOIN_DAYS} days. Your next village join and subsequent leave are exempt from the training and regeneration slow.`,
+          route: "/profile",
+          routeText: "To Profile",
+        })
+        .catch(() => undefined);
+      return {
+        success: true,
+        message: `${target.username} has been expelled. They cannot rejoin for ${VILLAGE_KICK_REJOIN_DAYS} days.`,
+        ...getVillageKickUserUpdate(now),
+      };
+    }),
   leaveVillage: protectedProcedure
     .meta({
       mcp: { description: "Leave current village to become outlaw" },
@@ -285,6 +371,11 @@ export const villageRouter = createTRPCRouter({
       if (!village) return errorResponse("Village does not exist");
       if (!user.isOutlaw) return errorResponse("You are not an outlaw");
       if (!village.joinable) return errorResponse("Not joinable");
+      const rejoinBan = user.villageRejoinBans?.[village.id];
+      if (rejoinBan && new Date(rejoinBan).getTime() > Date.now())
+        return errorResponse(
+          `You cannot rejoin this village for ${VILLAGE_KICK_REJOIN_DAYS} days after being expelled`,
+        );
       if (user.villageId === village.id) return errorResponse("Already joined");
       if (user.clanId) return errorResponse("Leave faction first");
       if (user.isBanned) return errorResponse("Cannot join while banned");
@@ -338,6 +429,11 @@ export const villageRouter = createTRPCRouter({
       if (!village) return errorResponse("Village does not exist");
       if (isKage(user)) return errorResponse("You are the kage or leader");
       if (user.villageId === village.id) return errorResponse("Already in village");
+      const rejoinBan = user.villageRejoinBans?.[village.id];
+      if (rejoinBan && new Date(rejoinBan).getTime() > Date.now())
+        return errorResponse(
+          `You cannot rejoin this village for ${VILLAGE_KICK_REJOIN_DAYS} days after being expelled`,
+        );
       if (user.anbuId) return errorResponse("Leave ANBU squad first");
       if (user.clanId) return errorResponse("Leave Clan or Faction first");
       if (user.isBanned) return errorResponse("Cannot leave while banned");

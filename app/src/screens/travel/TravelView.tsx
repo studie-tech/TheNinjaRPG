@@ -647,10 +647,11 @@ export function TravelView({
             joinVillage({ villageId: sectorVillage.id }, { onSettled: close })
           }
         >
-          Do you confirm that you wish to join {sectorVillage.name}? Please be aware
-          that if you join this village your training benefits & regen will be reduced
-          for {VILLAGE_REDUCED_GAINS_DAYS} days, and village loyalty bonuses will begin
-          from day 0.
+          Do you confirm that you wish to join {sectorVillage.name}?
+          {userData.villagePenaltyWaivers > 0
+            ? " Your expulsion exemption covers this join, so no training or regeneration slow applies."
+            : ` Joining reduces training benefits and regeneration for ${VILLAGE_REDUCED_GAINS_DAYS} days.`}{" "}
+          Village loyalty bonuses begin from day 0.
         </Confirm>
       ),
     },

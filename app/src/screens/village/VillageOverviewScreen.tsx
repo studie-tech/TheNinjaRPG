@@ -184,16 +184,27 @@ export function VillageOverviewScreen() {
                   leaveVillage(undefined, { onSettled: close })
                 }
               >
-                Do you confirm that you wish to leave your village? Your prestige will
-                be reset to 0. Please be aware that if you join another village your
-                training benefits & regen will be reduced for{" "}
-                {VILLAGE_REDUCED_GAINS_DAYS} days, and your village loyalty bonuses will
-                restart from day 0.
+                Do you confirm that you wish to leave your village?
+                {userData.villagePenaltyWaivers > 0
+                  ? " Your expulsion exemption covers this departure, so no training or regeneration slow applies."
+                  : ` Changing villages reduces training benefits and regeneration for ${VILLAGE_REDUCED_GAINS_DAYS} days.`}{" "}
+                Village loyalty bonuses restart from day 0.
               </Confirm>
             )}
           </div>
         }
       >
+        {userData.isOutlaw &&
+          userData.villagePenaltyWaivers === 2 &&
+          userData.villageKickReason && (
+            <Alert className="mb-4">
+              <AlertTitle>Village expulsion</AlertTitle>
+              <AlertDescription>
+                Reason: {userData.villageKickReason}. Your next village join and
+                subsequent leave are exempt from the training and regeneration slow.
+              </AlertDescription>
+            </Alert>
+          )}
         {isKage && villageData.structureMaintenanceDue > 0 && (
           <Alert className="mb-4" role="status">
             <LockKeyhole aria-hidden="true" />

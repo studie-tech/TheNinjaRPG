@@ -25,7 +25,10 @@ import {
   ALLIANCEHALL_LONG,
   FACTION_MIN_MEMBERS_FOR_STRONGHOLD,
   IMG_AVATAR_DEFAULT,
+  KAGE_KICK_COOLDOWN_DAYS,
   KAGE_WAR_DECLARE_COST,
+  TUTORIAL_STEPS_COUNT,
+  VILLAGE_KICK_REJOIN_DAYS,
   VILLAGE_SYNDICATE_ID,
   WAR_FUNDS_COST,
 } from "@/drizzle/constants";
@@ -434,10 +437,13 @@ export const updateUserDataForLeaveVillage = (
       isOutlaw: true,
       joinedVillageAt: new Date(),
       ...villageChangeFields(user),
+      villagePenaltyExempt: sql`${userData.villagePenaltyWaivers} > 0`,
+      villagePenaltyWaivers: sql`GREATEST(1, ${userData.villagePenaltyWaivers}) - 1`,
     })
     .where(
       and(
         eq(userData.userId, ctx.userId),
+        eq(userData.isOutlaw, false),
         readiness?.where ?? eq(userData.status, "AWAKE"),
       ),
     );
@@ -459,10 +465,14 @@ export const updateUserDataForJoinVillage = (
       isOutlaw: false,
       joinedVillageAt: new Date(),
       ...villageChangeFields(user),
+      villagePenaltyExempt: sql`${userData.villagePenaltyWaivers} > 0`,
+      villagePenaltyWaivers: sql`GREATEST(1, ${userData.villagePenaltyWaivers}) - 1`,
     })
     .where(
       and(
         eq(userData.userId, ctx.userId),
+        eq(userData.isOutlaw, true),
+        villageRejoinAllowed(village.id),
         readiness?.where ?? eq(userData.status, "AWAKE"),
       ),
     );
@@ -501,11 +511,14 @@ export const updateUserDataForSwapVillage = (
       longitude: ALLIANCEHALL_LONG,
       latitude: ALLIANCEHALL_LAT,
       ...villageChangeFields(user),
+      villagePenaltyExempt: sql`${userData.villagePenaltyWaivers} > 0`,
+      villagePenaltyWaivers: sql`GREATEST(1, ${userData.villagePenaltyWaivers}) - 1`,
     })
     .where(
       and(
         eq(userData.userId, ctx.userId),
         gte(userData.reputationPoints, cost),
+        villageRejoinAllowed(village.id),
         readiness?.where ?? eq(userData.status, "AWAKE"),
       ),
     );
@@ -687,3 +700,63 @@ const villageChangeFields = (user: { rank: UserRank }) => ({
   ...(user.rank === "GENIN" && { senseiId: null }),
   ...(user.rank === "ELDER" && { rank: "JONIN" as const }),
 });
+
+/** Guard membership entry paths against active expulsion bans. */
+const villageRejoinAllowed = (villageId: string) => sql`(
+  JSON_EXTRACT(${userData.villageRejoinBans}, ${`$.${JSON.stringify(villageId)}`}) IS NULL
+  OR JSON_UNQUOTE(JSON_EXTRACT(${userData.villageRejoinBans}, ${`$.${JSON.stringify(villageId)}`})) <= ${new Date().toISOString()}
+)`;
+
+/** Atomically expel a member and consume the acting Kage's cooldown under current leadership. */
+export const kickVillageMember = (
+  client: Pick<DrizzleClient, "execute">,
+  actorId: string,
+  targetId: string,
+  villageId: string,
+  now: Date,
+  reason: string,
+) =>
+  client.execute(sql`
+  UPDATE ${userData} AS target
+  INNER JOIN ${village} AS home ON home.id = target.villageId
+  INNER JOIN ${userData} AS actor ON actor.userId = home.kageId
+  SET target.villageId = ${VILLAGE_SYNDICATE_ID},
+      target.isOutlaw = true,
+      target.villagePrestige = ABS(target.villagePrestige),
+      target.joinedVillageAt = ${now},
+      target.villagePenaltyExempt = true,
+      target.villagePenaltyWaivers = 2,
+      target.villageKickReason = ${reason},
+      target.villageRejoinBans = JSON_SET(COALESCE(target.villageRejoinBans, JSON_OBJECT()),
+        ${`$.${JSON.stringify(villageId)}`}, ${new Date(now.getTime() + VILLAGE_KICK_REJOIN_DAYS * 86400000).toISOString()}),
+      target.villageDutyVillageId = NULL,
+      target.villageDutyStartedAt = NULL,
+      target.senseiId = NULL,
+      target.rank = IF(target.rank = 'ELDER', 'JONIN', target.rank),
+      actor.lastKageKickAt = ${now}
+  WHERE actor.userId = ${actorId} AND target.userId = ${targetId}
+    AND actor.userId <> target.userId AND home.id = ${villageId} AND home.type = 'VILLAGE'
+    AND actor.villageId = home.id AND actor.isOutlaw = false AND actor.isBanned = false
+    AND target.isOutlaw = false AND target.isAi = false
+    AND (target.tutorialOn = false OR target.tutorialStep >= ${TUTORIAL_STEPS_COUNT})
+    AND target.status NOT IN ('BATTLE', 'QUEUED')
+    AND (actor.lastKageKickAt IS NULL OR actor.lastKageKickAt <= ${new Date(now.getTime() - KAGE_KICK_COOLDOWN_DAYS * 86400000)})
+`);
+
+/** Record the required expulsion reason for staff review. */
+export const insertVillageKickLog = (
+  client: Pick<DrizzleClient, "insert">,
+  actorId: string,
+  targetId: string,
+  reason: string,
+  villageId: string,
+) =>
+  client.insert(actionLog).values({
+    id: nanoid(),
+    userId: actorId,
+    tableName: "user",
+    changes: [`Expelled from village ${villageId}: ${reason}`],
+    relatedId: targetId,
+    relatedMsg: "Village expulsion",
+    relatedImage: IMG_AVATAR_DEFAULT,
+  });

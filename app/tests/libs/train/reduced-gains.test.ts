@@ -12,6 +12,13 @@ const makeUser = (rank: UserData["rank"], createdAgoMs: number, joinedAgoMs: num
   }) as UserData;
 
 describe("getReducedGainsDays", () => {
+  it("waives the slow without changing village tenure", () => {
+    const user = { ...makeUser("CHUNIN", 30 * DAY, DAY), villagePenaltyExempt: true };
+    expect(getReducedGainsDays(user)).toBe(0);
+    expect(
+      getReducedGainsDays({ ...user, villagePenaltyExempt: false }),
+    ).toBeGreaterThan(0);
+  });
   it("does not slow a new chunin who never changed village", () => {
     expect(getReducedGainsDays(makeUser("CHUNIN", DAY, DAY))).toBe(0);
   });

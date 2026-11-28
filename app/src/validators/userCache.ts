@@ -269,6 +269,7 @@ export const userPatchSchema = z.object({
   latitude: z.number().optional(),
   isOutlaw: z.boolean().optional(),
   joinedVillageAt: z.date().optional(),
+  lastKageKickAt: z.date().optional(),
   immunityUntil: z.date().optional(),
   stealthActive: z.boolean().optional(),
   stealthActivatedAt: z.date().nullable().optional(),
