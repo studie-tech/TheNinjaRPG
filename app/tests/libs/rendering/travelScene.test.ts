@@ -30,8 +30,8 @@ import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import type { UserWithRelations } from "@/routers/profile";
+import { customCharacterCatalog as lpcCatalog } from "../../setup/customCharacters";
 import { deferred } from "../../setup/deferred";
-import { lpcCatalog } from "../../setup/lpc";
 
 const cleanups: (() => void)[] = [];
 const frame = (now = 1000, reducedMotion = true): runtime.GameFrame => ({

@@ -6,11 +6,12 @@ import {
   type LpcConfig,
   lpcConfigValidator,
 } from "@/validators/lpcAsset";
+import { customCharacterConfig } from "../../setup/customCharacters";
 import { lpcAssets } from "../../setup/lpc";
 
 describe("LPC design preview and credits", () => {
   it("keeps a 256-variant design export within the settings import limit", () => {
-    const source = lpcAssets.find((asset) => asset.id === "head-hard")!.lpcConfig;
+    const source = customCharacterConfig("head-hard");
     const variants: LpcConfig["variants"] = {};
     for (const body of ["male", "female"])
       for (let index = 0; index < 128; index++)
@@ -59,6 +60,8 @@ describe("LPC design preview and credits", () => {
     );
     for (const asset of lpcAssets)
       for (const credit of asset.lpcConfig.attributions)
-        expect(lpcLicenseUrl(credit.chosenLicense)).toBeDefined();
+        if (credit.chosenLicense === "Commercial license")
+          expect(lpcLicenseUrl(credit.chosenLicense)).toBeUndefined();
+        else expect(lpcLicenseUrl(credit.chosenLicense)).toBeDefined();
   });
 });

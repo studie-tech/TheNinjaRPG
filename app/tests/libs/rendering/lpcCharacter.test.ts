@@ -18,8 +18,8 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { SpriteAppearance } from "@/validators/lpc";
 import type { LpcLayout } from "@/validators/lpcAsset";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
+import { customCharacterCatalog as lpcCatalog } from "../../setup/customCharacters";
 import { deferred } from "../../setup/deferred";
-import { lpcCatalog } from "../../setup/lpc";
 
 const cleanups: (() => void)[] = [];
 const originalCreate = characters.createLpcCharacter;
@@ -73,6 +73,151 @@ afterEach(() => {
 });
 
 describe("layered LPC actors", () => {
+  it.each(["all", "travel"] as const)(
+    "uses authored left-hand equipment in %s mode before reflecting the complete facing",
+    async (mode) => {
+      const { game } = gameFixture();
+      const atlas = {
+        image: "https://example.com/right.webp",
+        z: 0,
+        layout: 0,
+        offhand: { image: "https://example.com/left.webp", z: 0, layout: 0 },
+      };
+      game.lpcCatalog = {
+        designs: {
+          blade: {
+            category: "equipment",
+            replacementSlots: [],
+            defaultColor: "gray",
+            defaultEyes: "blue",
+          },
+        },
+        entries: {
+          "blade/male/gray/blue": [
+            {
+              ...atlas,
+              travel: {
+                ...atlas,
+                image: "https://example.com/right-travel.webp",
+                offhand: {
+                  ...atlas.offhand,
+                  image: "https://example.com/left-travel.webp",
+                },
+              },
+            },
+          ],
+        },
+        layouts: [
+          {
+            cell: 128,
+            columns: 8,
+            clips: { stand: [[0], [8], [16], [24]], walk: [[0], [8], [16], [24]] },
+            facings: [
+              { row: 0, mirror: false },
+              { row: 2, mirror: true },
+              { row: 3, mirror: false },
+              { row: 2, mirror: false },
+              { row: 1, mirror: true },
+              { row: 1, mirror: false },
+            ],
+          },
+        ],
+      };
+      const appearance: SpriteAppearance = {
+        version: 1,
+        body: "male",
+        layers: [{ profile: "blade", color: "gray", slot: "HAND_2", mirror: true }],
+      };
+      const actor = await characters.createLpcCharacter(game, appearance, mode);
+      const part = actor.layers[0]!;
+      expect(part.image).toBe(
+        mode === "travel"
+          ? "https://example.com/left-travel.webp"
+          : "https://example.com/left.webp",
+      );
+      actor.render(frame(1000), "stand", 5);
+      expect(part.sprite.scale.x).toBe(1 / 64);
+      expect(part.sprite.texture.frame.y).toBe(128);
+      actor.render(frame(1100), "stand", 4);
+      expect(part.sprite.scale.x).toBe(-1 / 64);
+      expect(appearance.layers[0]?.mirror).toBe(true);
+    },
+  );
+
+  it("updates mirrored hex views and samples native clip timing in the retained actor", async () => {
+    const { game } = gameFixture();
+    game.lpcCatalog = {
+      designs: {
+        body: {
+          category: "body",
+          replacementSlots: [],
+          defaultColor: "light",
+          defaultEyes: "blue",
+        },
+      },
+      entries: {
+        "body/male/light/blue": [
+          { image: "https://example.com/hex.webp", z: 0, layout: 0 },
+        ],
+      },
+      layouts: [
+        {
+          cell: 128,
+          columns: 8,
+          clips: {
+            stand: [[0], [8], [16], [24]],
+            idle: [0, 16, 32, 48].map((offset) =>
+              Array.from({ length: 16 }, (_, index) => offset + index),
+            ),
+            walk: [
+              [0, 1, 2],
+              [8, 9, 10],
+              [16, 17, 18],
+              [24, 25, 26],
+            ],
+            slash: [
+              [3, 4, 5],
+              [11, 12, 13],
+              [19, 20, 21],
+              [27, 28, 29],
+            ],
+          },
+          facings: [
+            { row: 0, mirror: false },
+            { row: 2, mirror: true },
+            { row: 3, mirror: false },
+            { row: 2, mirror: false },
+            { row: 1, mirror: true },
+            { row: 1, mirror: false },
+          ],
+          frameMs: { walk: 90, slash: 50, idle: 110 },
+        },
+      ],
+    };
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const character = await characters.createLpcCharacter(game, {
+      version: 1,
+      body: "male",
+      layers: [{ profile: "body", color: "light" }],
+    });
+    const sprite = character.layers[0]!.sprite;
+    character.render(frame(1000), "walk", 4);
+    expect(sprite.scale.x).toBe(-1 / 64);
+    expect(sprite.texture.frame.y).toBe(128);
+    character.render(frame(1090), "walk", 5);
+    expect(sprite.scale.x).toBe(1 / 64);
+    expect(sprite.texture.frame.x).toBe(128);
+    expect(character.durations.slash).toBe(150);
+    character.render(frame(2000), "slash", 5);
+    character.render(frame(2050), "slash", 5);
+    expect(sprite.texture.frame.x).toBe(512);
+    character.render(frame(10000), "slash", 5);
+    expect(sprite.texture.frame.x).toBe(640);
+    character.render({ ...frame(11000), delta: 0 }, "idle", 5);
+    expect(sprite.texture.frame.x).toBe(896);
+    expect(sprite.texture.frame.y).toBe(384);
+  });
+
   it("stabilizes every cached character frame while retaining atlas/trim coordinates and shared source ownership", async () => {
     const { game, source } = gameFixture();
     source.source.style.scaleMode = "nearest";

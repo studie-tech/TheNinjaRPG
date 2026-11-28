@@ -169,11 +169,15 @@ export const importLpcRecipe = (
     throw new Error("No selected artwork is available in the game library.");
   const variants: LpcConfig["variants"] = {};
   const replacementSlots = new Set<LpcConfig["replacementSlots"][number]>();
+  const replacesBodyParts = new Set<
+    NonNullable<LpcConfig["replacesBodyParts"]>[number]
+  >();
   for (const style of ["male", "female"] as const) {
     const sheets: LpcConfig["variants"][string] = [];
     for (const [selectionIndex, entry] of selections.entries()) {
       const config = entry.design.lpcConfig;
       for (const slot of config.replacementSlots) replacementSlots.add(slot);
+      for (const part of config.replacesBodyParts ?? []) replacesBodyParts.add(part);
       if (["body", "head", "hair", "beard"].includes(config.category))
         replacementSlots.add(config.category as "body" | "head" | "hair" | "beard");
       const eyes = entry.eyes ?? config.defaultEyes,
@@ -230,6 +234,7 @@ export const importLpcRecipe = (
     version: 2,
     category: settings.category,
     replacementSlots: [...replacementSlots],
+    ...(replacesBodyParts.size ? { replacesBodyParts: [...replacesBodyParts] } : {}),
     defaultColor: "gray",
     defaultEyes: "blue",
     variants,

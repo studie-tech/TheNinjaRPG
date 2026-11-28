@@ -23,6 +23,7 @@ import * as statusBar from "@/layout/StatusBar";
 import * as combatSettings from "@/layout/UserCombatSettings";
 import { resolveHotkeys } from "@/libs/combat/hotkeys";
 import type { BattleState } from "@/libs/combat/types";
+import { packLpcCatalog, unpackLpcCatalog } from "@/libs/lpc/transport";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
 import {
@@ -146,10 +147,11 @@ const mount = (
   const prefetchAssets = vi.fn(async ({ ids }: { ids: string[] }) => {
     loadingEvents.push(`assets:${ids.join(",")}`);
   });
-  const sceneCatalog = { designs: {}, layouts: {} };
+  const packedCatalog = packLpcCatalog({ designs: {}, layouts: [], entries: {} });
+  const sceneCatalog = unpackLpcCatalog(packedCatalog);
   const fetchSceneCatalog = vi.fn(async () => {
     loadingEvents.push("catalog");
-    return sceneCatalog;
+    return packedCatalog;
   });
   const utils = {
     gameAsset: {
@@ -536,8 +538,9 @@ it("requests the battlefield's artwork catalog alongside the battle and hands it
 });
 
 it("draws with the catalog the travel map already holds while refreshing it", async () => {
-  const held = { designs: { held: {} }, layouts: {} };
-  heldSceneCatalog = held;
+  const packed = packLpcCatalog({ designs: {}, layouts: [], entries: {} });
+  const held = unpackLpcCatalog(packed);
+  heldSceneCatalog = packed;
   const battle = makeCompleteBattle({
     id: "held-catalog",
     usersState: [makeUser({ userId: "player" })],

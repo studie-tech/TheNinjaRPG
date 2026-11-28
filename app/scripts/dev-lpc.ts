@@ -1,5 +1,5 @@
 /** Prepare the bundled LPC designs before a managed local Next server starts. */
-import { lpcSeedAssets } from "../drizzle/data/lpc/seed";
+import { lpcSeedIds } from "../drizzle/data/lpc/seed";
 import type { DrizzleClient } from "../src/server/db";
 import { lpcConfigValidator } from "../src/validators/lpcAsset";
 
@@ -57,7 +57,7 @@ export const prepareDevLpc = async ({
       await seedLpcAssets(database);
     }
     const assets = await listLpcAssets(database);
-    const required = lpcSeedAssets().map((asset) => asset.id);
+    const required = lpcSeedIds;
     const saved = new Map(assets.map((asset) => [asset.id, asset]));
     const missing = required.filter((id) => !saved.has(id));
     const invalid = required.filter(

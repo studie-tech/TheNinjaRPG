@@ -1,4 +1,5 @@
 import {
+  BufferImageSource,
   Container,
   Rectangle,
   type Renderer,
@@ -20,11 +21,18 @@ import { stabilizeNearestTexture } from "@/libs/rendering/assets";
  */
 export const createCharacterComposites = (
   renderer: Renderer,
-  options: { pageSize?: number; maxPages?: number } = {},
+  options: {
+    pageSize?: number;
+    maxPages?: number;
+    cellSize?: number;
+    pixelsPerUnit?: number;
+  } = {},
 ) => {
+  const cellSize = options.cellSize ?? COMPOSITE_CELL;
+  const pixelsPerUnit = options.pixelsPerUnit ?? COMPOSITE_CELL;
   const pageSize = options.pageSize ?? COMPOSITE_PAGE_SIZE;
   const maxPages = options.maxPages ?? COMPOSITE_MAX_PAGES;
-  const columns = Math.floor(pageSize / COMPOSITE_CELL);
+  const columns = Math.floor(pageSize / cellSize);
   const pages: RenderTexture[] = [];
   const free: CompositeCell[] = [];
   const byKey = new Map<string, CompositeCell>();
@@ -32,6 +40,7 @@ export const createCharacterComposites = (
   const idle = new Set<CompositeCell>();
   /** Each rig's latest requested pose, so a frame is only drawn from a rig still in that pose. */
   const rigKeys = new WeakMap<Container, string>();
+  const rasterizers = new WeakMap<Container, () => Uint8Array>();
   const pending = new Map<CompositeCell, Set<Container>>();
   const pass = new Container();
   const slots: { erase: Sprite; holder: Container }[] = [];
@@ -52,8 +61,8 @@ export const createCharacterComposites = (
     const cells: CompositeCell[] = [];
     for (let row = 0; row < columns; row++)
       for (let column = 0; column < columns; column++) {
-        const x = column * COMPOSITE_CELL,
-          y = row * COMPOSITE_CELL;
+        const x = column * cellSize,
+          y = row * cellSize;
         cells.push({
           page,
           x,
@@ -63,7 +72,7 @@ export const createCharacterComposites = (
           texture: stabilizeNearestTexture(
             new Texture({
               source: page.source,
-              frame: new Rectangle(x, y, COMPOSITE_CELL, COMPOSITE_CELL),
+              frame: new Rectangle(x, y, cellSize, cellSize),
             }),
           ),
         });
@@ -96,15 +105,19 @@ export const createCharacterComposites = (
   };
 
   return {
+    cellSize,
+    pixelsPerUnit,
     /** Incremented whenever every cell's content is lost; displayed frames must be requested again. */
     epoch: () => epoch,
     /**
      * The cell holding `key`, drawn from `rig` at the next flush when it is new. The caller
      * displays it until it releases it. Null when every cell is on screen.
      */
-    acquire: (key: string, rig: Container) => {
+    acquire: (key: string, rig: Container, rasterize?: () => Uint8Array) => {
       if (destroyed) return null;
       rigKeys.set(rig, key);
+      if (rasterize) rasterizers.set(rig, rasterize);
+      else rasterizers.delete(rig);
       let cell: CompositeCell | null | undefined = byKey.get(key);
       if (cell) {
         if (!cell.users++) idle.delete(cell);
@@ -155,38 +168,66 @@ export const createCharacterComposites = (
         // A rig appears once per pass; identical outfits in one frame share one cell already.
         const used = new Set<Container>();
         const holders: Container[] = [];
+        const temporary: Sprite[] = [];
         let index = 0;
-        for (const [cell, rig] of cells) {
-          if (used.has(rig)) {
-            unmap(cell);
-            continue;
+        try {
+          for (const [cell, rig] of cells) {
+            if (used.has(rig)) {
+              unmap(cell);
+              continue;
+            }
+            used.add(rig);
+            let slot = slots[index];
+            if (!slot) {
+              const erase = new Sprite(Texture.WHITE);
+              erase.blendMode = "erase";
+              erase.width = cellSize;
+              erase.height = cellSize;
+              const holder = new Container();
+              holder.scale.set(pixelsPerUnit);
+              slot = { erase, holder };
+              slots.push(slot);
+            }
+            index++;
+            slot.erase.position.set(cell.x, cell.y);
+            slot.holder.position.set(cell.x + cellSize / 2, cell.y + cellSize / 2);
+            pass.addChildAt(slot.erase, 0);
+            pass.addChild(slot.holder);
+            holders.push(slot.holder);
+            const rasterize = rasterizers.get(rig);
+            if (rasterize) {
+              const pixels = rasterize();
+              if (pixels.length !== cellSize * cellSize * 4)
+                throw new Error(
+                  "Composited character dimensions must match the cache cell",
+                );
+              const texture = new Texture({
+                source: new BufferImageSource({
+                  resource: pixels,
+                  width: cellSize,
+                  height: cellSize,
+                  format: "rgba8unorm",
+                  alphaMode: "premultiply-alpha-on-upload",
+                  scaleMode: "nearest",
+                }),
+              });
+              const composed = new Sprite(texture);
+              composed.anchor.set(0.5);
+              composed.scale.set(1 / pixelsPerUnit);
+              slot.holder.addChild(composed);
+              temporary.push(composed);
+            } else slot.holder.addChild(rig);
           }
-          used.add(rig);
-          let slot = slots[index];
-          if (!slot) {
-            const erase = new Sprite(Texture.WHITE);
-            erase.blendMode = "erase";
-            erase.width = COMPOSITE_CELL;
-            erase.height = COMPOSITE_CELL;
-            const holder = new Container();
-            holder.scale.set(COMPOSITE_CELL);
-            slot = { erase, holder };
-            slots.push(slot);
-          }
-          index++;
-          slot.erase.position.set(cell.x, cell.y);
-          slot.holder.position.set(
-            cell.x + COMPOSITE_CELL / 2,
-            cell.y + COMPOSITE_CELL / 2,
-          );
-          pass.addChildAt(slot.erase, 0);
-          pass.addChild(slot.holder);
-          slot.holder.addChild(rig);
-          holders.push(slot.holder);
+          renderer.render({ container: pass, target: page, clear: false });
+        } catch (error) {
+          for (const [cell] of cells) if (cell.key !== null) unmap(cell);
+          throw error;
+        } finally {
+          for (const holder of holders) holder.removeChildren();
+          for (const sprite of temporary)
+            sprite.destroy({ texture: true, textureSource: true });
+          pass.removeChildren();
         }
-        renderer.render({ container: pass, target: page, clear: false });
-        for (const holder of holders) holder.removeChildren();
-        pass.removeChildren();
       }
     },
     /** After a lost context every page is blank again; displayed actors redraw on their next frame. */
@@ -232,5 +273,5 @@ export type CompositeCell = {
 export const COMPOSITE_CELL = 64;
 /** 4 MB pages hold 256 frames each (about two dozen walking characters); every WebGL device supports the size. */
 export const COMPOSITE_PAGE_SIZE = 1024;
-/** Eight pages hold every on-screen frame of a 100-player crowd within 32 MB. */
+/** Default pages use 32 MiB; each renderer can supply native frame and page dimensions. */
 export const COMPOSITE_MAX_PAGES = 8;

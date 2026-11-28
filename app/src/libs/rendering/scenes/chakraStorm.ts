@@ -36,6 +36,7 @@ import {
 } from "@/libs/chakraStorm/sim";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { lpcFacing } from "@/libs/lpc/catalog";
+import { CHARACTER_FOOT_Y } from "@/libs/rendering/characterFrame";
 import {
   createLpcCharacter,
   type LpcCharacter,
@@ -77,8 +78,6 @@ const VIEW_UNITS = 15;
 const TERRAIN_SIZE = 2 * CS_ARENA_HALF + 25;
 /** How long the field keeps animating after the run ends, for its closing effects. */
 const GAME_OVER_SETTLE_MS = 2_500;
-/** The LPC sheet's feet sit this far below its frame's centre, in frame heights. */
-const LPC_FOOT = 60 / 64 - 0.5;
 const HERO_SCALE = 1.5;
 /** Screen-edge pointers: how far in from the edge they sit, in CSS pixels. */
 const POINTER_INSET = 22;
@@ -266,7 +265,7 @@ export const createChakraStormScene = async (options: {
       throw new DOMException("Chakra Storm cancelled", "AbortError");
     if (hero) {
       hero.sprite.scale.set(HERO_SCALE, -HERO_SCALE);
-      hero.sprite.position.set(0, LPC_FOOT * HERO_SCALE);
+      hero.sprite.position.set(0, CHARACTER_FOOT_Y * HERO_SCALE);
       heroRoot.addChild(hero.sprite);
     } else
       heroRoot.addChild(

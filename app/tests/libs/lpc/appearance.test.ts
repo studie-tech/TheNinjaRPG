@@ -11,6 +11,7 @@ import { buildLpcCatalog, spriteLayerSheets } from "@/libs/lpc/catalog";
 import { lpcColors } from "@/validators/lpc";
 import { lpcConfigValidator } from "@/validators/lpcAsset";
 import { attributes, colors, skin_colors } from "@/validators/register";
+import { customCharacterConfig } from "../../setup/customCharacters";
 import { lpcAssets, lpcCatalog } from "../../setup/lpc";
 
 describe("character appearances", () => {
@@ -39,9 +40,7 @@ describe("character appearances", () => {
   ])(
     "resolves equipment eyes $eyes with saved default $defaultEyes",
     ({ eyes, defaultEyes, expectedEyes }) => {
-      const config = structuredClone(
-        lpcAssets.find((asset) => asset.id === "shirt")!.lpcConfig,
-      );
+      const config = customCharacterConfig("shirt");
       config.defaultEyes = defaultEyes;
       for (const body of ["male", "female"])
         for (const color of ["gray", "red"])

@@ -31,7 +31,7 @@ export const EquipmentPreview = ({
     <PopoverContent
       align="start"
       side="right"
-      className="w-64 max-w-[calc(100vw-1rem)] p-3"
+      className="w-72 max-w-[calc(100vw-1rem)] p-3"
       aria-label="Equipped appearance"
     >
       <CharacterPreview

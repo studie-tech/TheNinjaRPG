@@ -11,6 +11,7 @@ import {
   exists,
   getTableColumns,
   inArray,
+  isNotNull,
   like,
   ne,
   notExists,
@@ -50,6 +51,37 @@ export const listLpcAssets = (client: Pick<DrizzleClient, "query">) =>
     columns: { id: true, name: true, hidden: true, lpcConfig: true },
     where: eq(gameAsset.type, "LPC"),
   });
+
+/** Hash the scene definition itself so every write path changes its immutable cache key. */
+const lpcSceneRevision = sql<string>`SHA2(COALESCE(CAST(${gameAsset.lpcConfig} AS CHAR), 'null'), 256)`;
+
+/** Read current design revisions without transferring the complete character library. */
+export const selectLpcSceneRevisions = (client: Pick<DrizzleClient, "select">) =>
+  client
+    .select({ id: gameAsset.id, revision: lpcSceneRevision })
+    .from(gameAsset)
+    .where(and(eq(gameAsset.type, "LPC"), isNotNull(gameAsset.lpcConfig)))
+    .orderBy(asc(gameAsset.id));
+
+/** Load missing immutable scene definitions together, retaining their exact content revisions. */
+export const selectLpcSceneDefinitions = (
+  client: Pick<DrizzleClient, "select">,
+  ids: string[],
+) =>
+  client
+    .select({
+      id: gameAsset.id,
+      revision: lpcSceneRevision,
+      lpcConfig: gameAsset.lpcConfig,
+    })
+    .from(gameAsset)
+    .where(
+      and(
+        eq(gameAsset.type, "LPC"),
+        isNotNull(gameAsset.lpcConfig),
+        inArray(gameAsset.id, ids),
+      ),
+    );
 
 /** Insert immutable catalog seeds without overwriting staff-authored changes. */
 export const insertLpcSeedAsset = (
@@ -135,11 +167,11 @@ export const selectGameAssetForGetAllFolders = (
     .orderBy(gameAsset.folder);
 
 /**
- * Build a deterministically ordered listing, retaining animation-free picker defaults.
+ * Page small asset IDs without putting large character definitions in MySQL's sort buffer.
  * `folder` matches substrings; `exactFolder` also accepts an empty Unfiled folder.
  * Callers can opt into animations and request an extra row for pagination lookahead.
  */
-export const selectGameAssetForGetAll = (
+export const selectGameAssetIdsForGetAll = (
   client: Pick<DrizzleClient, "select">,
   input: {
     name?: undefined | string;
@@ -155,7 +187,7 @@ export const selectGameAssetForGetAll = (
   skip: number,
 ) =>
   client
-    .select({ ...getTableColumns(gameAsset) })
+    .select({ id: gameAsset.id })
     .from(gameAsset)
     .where(
       and(
@@ -201,6 +233,12 @@ export const selectGameAssetForGetAll = (
     )
     .limit(limit)
     .offset(skip);
+
+/** Load a selected page without sorting JSON payloads; callers restore the ID page's order. */
+export const selectGameAssetPageRows = (
+  client: Pick<DrizzleClient, "select">,
+  ids: string[],
+) => client.select().from(gameAsset).where(inArray(gameAsset.id, ids));
 
 /** Build the `gameAsset` listing for `getSceneAssets`, using predicates on `id`. */
 export const listGameAssetForGetSceneAssets = (

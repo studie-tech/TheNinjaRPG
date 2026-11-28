@@ -17,7 +17,7 @@ import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
 import type { SpriteAppearance } from "@/validators/lpc";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
-import { lpcCatalog } from "../../setup/lpc";
+import { customCharacterCatalog as lpcCatalog } from "../../setup/customCharacters";
 
 const cleanups: (() => void)[] = [];
 let sequence = 0;

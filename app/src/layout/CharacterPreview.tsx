@@ -77,7 +77,7 @@ export const CharacterPreview = ({
     <figure className={cn("mx-auto w-64 max-w-full text-center", className)}>
       <div
         ref={mount}
-        className="aspect-square w-full overflow-hidden rounded-lg bg-black/10"
+        className="aspect-[4/5] w-full overflow-hidden rounded-lg bg-black/10"
         role="img"
         aria-label={`Animated appearance: ${label}`}
       />

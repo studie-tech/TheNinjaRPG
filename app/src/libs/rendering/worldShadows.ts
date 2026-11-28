@@ -17,6 +17,7 @@ import {
 } from "pixi.js";
 import { NEAREST_TEXTURE_UV_BIAS, spriteGroundContact } from "@/libs/rendering/assets";
 import type { BakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
+import { CHARACTER_FOOT_Y } from "@/libs/rendering/characterFrame";
 import type { ProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
@@ -873,7 +874,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         const contact =
           dynamic && !record.character ? spriteGroundContact(sprite) : undefined;
         const characterFoot = characterRoot
-          ? characterRoot.matrix.apply({ x: 0, y: 28 / 64 })
+          ? characterRoot.matrix.apply({ x: 0, y: CHARACTER_FOOT_Y })
           : contact
             ? m.apply({
                 x: contact.x - w * sprite.anchor.x,

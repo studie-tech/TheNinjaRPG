@@ -35,6 +35,9 @@ const CUE_IMPACT: Partial<Record<LpcAnimation, number>> = {
   thrust: 0.55,
   spellcast: 0.6,
   shoot: 0.7,
+  punch: 0.5,
+  throw: 0.55,
+  crossbow: 0.45,
 };
 
 /**

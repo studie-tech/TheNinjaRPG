@@ -22,6 +22,7 @@ import { GameAssetLibrary } from "@/layout/GameAssetLibrary";
 import * as preview from "@/layout/GameAssetPreview";
 import * as Link from "@/layout/Link";
 import * as Modal from "@/layout/Modal";
+import { packLpcDesigns } from "@/libs/lpc/transport";
 import * as toast from "@/libs/toast";
 import { mockUserContextValue } from "../setup/userContext";
 
@@ -138,11 +139,16 @@ beforeEach(() => {
       getAll: {
         useInfiniteQuery: (
           _input: unknown,
-          options: { getNextPageParam: (page: Page) => number | null },
+          options: {
+            getNextPageParam: (page: { nextCursor: number | null }) => number | null;
+          },
         ) =>
           useInfiniteQuery({
             queryKey: ["assets"],
-            queryFn: ({ pageParam }) => read(pageParam),
+            queryFn: async ({ pageParam }) => {
+              const page = await read(pageParam);
+              return { ...page, data: packLpcDesigns(page.data) };
+            },
             initialPageParam: null as number | null,
             ...options,
           }),

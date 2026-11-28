@@ -12,6 +12,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { customCharacterConfig } from "../setup/customCharacters";
 import { lpcAssets } from "../setup/lpc";
 
 type Fields = {
@@ -95,6 +96,7 @@ describe("staff equipment preview", () => {
 
   it("updates coverage with inherited and unsaved material palettes on either body", async () => {
     const source = structuredClone(lpcAssets.find((asset) => asset.id === "shirt")!);
+    source.lpcConfig = customCharacterConfig("shirt");
     for (const [key, sheets] of Object.entries(source.lpcConfig.variants))
       for (const sheet of sheets) {
         sheet.part = "fabric";
@@ -123,13 +125,13 @@ describe("staff equipment preview", () => {
         variant={{ name: "Inherited" }}
       />,
     );
-    expect(view.getByText(/Held-pose fallback: idle\./)).toBeTruthy();
+    expect(view.getByText(/Held-pose fallback: idle(?:,|\.)/)).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "Slender" }));
-    expect(view.getByText(/Held-pose fallback: idle\./)).toBeTruthy();
+    expect(view.getByText(/Held-pose fallback: idle(?:,|\.)/)).toBeTruthy();
     await act(async () =>
       result.current.setValue("lpcMaterialColors", { cloth: "gray" }),
     );
-    expect(view.queryByText(/Held-pose fallback: idle\./)).toBeNull();
+    expect(view.queryByText(/Held-pose fallback: idle(?:,|\.)/)).toBeNull();
     expect(view.getByText(/^Authored:/).textContent).toContain("idle");
   });
 
@@ -145,7 +147,11 @@ describe("staff equipment preview", () => {
       target: { value: "leather" },
     });
     expect(view.getByText("1 designs")).toBeTruthy();
-    expect(view.getByRole("img", { name: "LPC leather, slender" })).toBeTruthy();
+    expect(
+      view.getByRole("img", {
+        name: `${lpcAssets.find((asset) => asset.id === "leather")!.name}, slender`,
+      }),
+    ).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: /leather.*12 colours/i }));
     expect(result.current.getValues()).toMatchObject({
       lpcProfile: "leather",

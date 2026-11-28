@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type GameAssetType, GameAssetTypes } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
+import { useGameAssetPages } from "@/hooks/asset";
 import { useLpcCatalogInvalidation } from "@/hooks/lpc";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -151,18 +152,15 @@ export function GameAssetLibrary() {
     }
   };
 
-  const listing = api.gameAsset.getAll.useInfiniteQuery(
-    {
-      limit: 48,
-      name: name || undefined,
-      type: type === "ALL" ? undefined : type,
-      includeAnimations: true,
-      exactFolder: folder,
-      sort,
-      nameTokens: hasKeywords && keywords.length ? keywords : undefined,
-    },
-    { getNextPageParam: (page) => page.nextCursor },
-  );
+  const listing = useGameAssetPages({
+    limit: 48,
+    name: name || undefined,
+    type: type === "ALL" ? undefined : type,
+    includeAnimations: true,
+    exactFolder: folder,
+    sort,
+    nameTokens: hasKeywords && keywords.length ? keywords : undefined,
+  });
   const folders = api.gameAsset.getAllFolders.useQuery({
     type: type === "ALL" ? undefined : type,
   });

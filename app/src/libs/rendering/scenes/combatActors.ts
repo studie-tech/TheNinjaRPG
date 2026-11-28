@@ -60,6 +60,11 @@ const CUE_DURATIONS: Record<LpcAnimation, number> = {
   spellcast: 560,
   shoot: 1040,
   hurt: 480,
+  punch: 1000,
+  throw: 867,
+  crossbow: 633,
+  block: 467,
+  die: 1467,
 };
 
 /** Scene-owned fighters keep art, interpolation and display values outside battle state. */
@@ -514,15 +519,17 @@ export const createCombatActors = (
           }
         }
         if (!entry.character) continue;
+        const death = entry.character.durations.die ? "die" : "hurt";
         const falling =
           record.deathAt !== undefined &&
           !frame.reducedMotion &&
-          frame.now - record.deathAt < 480;
+          frame.now - record.deathAt <
+            (entry.character.durations[death] ?? CUE_DURATIONS[death]);
         if (falling) animating = true;
         entry.sprite.visible = record.alive || falling;
         entry.character.render(
           frame,
-          falling ? "hurt" : walk ? "walk" : active ? cue.animation : "combat",
+          falling ? death : walk ? "walk" : active ? cue.animation : "combat",
           record.facing ?? (user.direction === "left" ? 3 : 1),
           startsAction,
           walk ? WALK_CYCLE_RATE : 1,

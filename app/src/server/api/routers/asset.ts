@@ -9,6 +9,7 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { prepareLpcSheet, validateLpcImages } from "@/libs/lpc/import";
+import { packLpcCatalog, packLpcDesigns } from "@/libs/lpc/transport";
 import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { callDiscordContent } from "@/libs/socials";
 import {
@@ -23,8 +24,9 @@ import {
   listGameAssetForGetSceneAssets,
   listLpcAssets,
   selectDistinctGameAssetTagForGetAllGameAssetContentTagNames,
-  selectGameAssetForGetAll,
   selectGameAssetForGetAllFolders,
+  selectGameAssetIdsForGetAll,
+  selectGameAssetPageRows,
   updateGameAssetForUpdate,
 } from "@/queries/asset";
 import { fetchUser } from "@/queries/profile";
@@ -54,11 +56,11 @@ export const gameAssetRouter = createTRPCRouter({
     .meta({
       mcp: { description: "Get LPC character designs, variants and attribution" },
     })
-    .query(({ ctx }) => listLpcAssets(ctx.drizzle)),
+    .query(async ({ ctx }) => packLpcDesigns(await listLpcAssets(ctx.drizzle))),
   /** Renderers share frame layouts and omit design-editor metadata from their network snapshot. */
   getLpcSceneCatalog: publicProcedure
     .meta({ mcp: { description: "Get the compiled LPC scene artwork catalog" } })
-    .query(({ ctx }) => fetchLpcSceneCatalog(ctx.drizzle)),
+    .query(async ({ ctx }) => packLpcCatalog(await fetchLpcSceneCatalog(ctx.drizzle))),
   /** Prepare immutable image files; only the separate asset save persists their design settings. */
   prepareLpcSheet: protectedProcedure
     .input(
@@ -180,16 +182,29 @@ export const gameAssetRouter = createTRPCRouter({
       const { limit } = input;
       const skip = currentCursor * limit;
       // Look ahead one row to avoid an empty final page or a separate count query.
-      const results = await selectGameAssetForGetAll(
+      const ids = await selectGameAssetIdsForGetAll(
         ctx.drizzle,
         input,
         limit + 1,
         skip,
       );
 
-      const nextCursor = results.length > limit ? currentCursor + 1 : null;
+      // The second read depends on the page selection: sorting full LPC JSON can exhaust MySQL memory.
+      const page = ids.slice(0, limit);
+      const rows = page.length
+        ? await selectGameAssetPageRows(
+            ctx.drizzle,
+            page.map(({ id }) => id),
+          )
+        : [];
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      const results = page.flatMap(({ id }) => {
+        const row = byId.get(id);
+        return row ? [row] : [];
+      });
+      const nextCursor = ids.length > limit ? currentCursor + 1 : null;
       return {
-        data: results.slice(0, limit),
+        data: packLpcDesigns(results),
         nextCursor: nextCursor,
       };
     }),

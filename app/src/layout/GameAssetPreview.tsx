@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import type { GameAsset } from "@/drizzle/schema";
 import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
+import { LpcDepthThumbnail } from "@/layout/LpcDepthThumbnail";
+import { lpcAtlasResources } from "@/libs/lpc/atlases";
 import { buildLpcCatalog, lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
 import { cn } from "@/libs/shadui";
 import { bunnyImageUrl, textureImageUrl } from "@/utils/image";
@@ -30,6 +32,19 @@ export function GameAssetPreview({
   const isAudio = asset.type === "SFX" || asset.type === "MUSIC";
   const handleError = useCallback(() => setFailedImage(asset.image), [asset.image]);
   const Icon = asset.type === "MUSIC" ? Music2 : Volume2;
+  const hasDepth =
+    asset.type === "LPC" &&
+    !!asset.lpcConfig &&
+    Object.values(asset.lpcConfig.variants).some((sheets) =>
+      sheets.some((sheet) => !!sheet.depth),
+    );
+  const hasPoster =
+    hasDepth &&
+    !!asset.lpcConfig &&
+    !lpcAtlasResources(asset.lpcConfig).some(
+      (resource) =>
+        textureImageUrl(resource.image, 0) === textureImageUrl(asset.image, 0),
+    );
 
   return (
     <div
@@ -45,8 +60,16 @@ export function GameAssetPreview({
         className,
       )}
     >
-      {asset.type === "LPC" && asset.lpcConfig ? (
-        <LpcThumbnail name={asset.name} config={asset.lpcConfig} />
+      {asset.type === "LPC" && asset.lpcConfig && !hasPoster ? (
+        hasDepth ? (
+          <LpcDepthThumbnail
+            label={asset.name}
+            config={asset.lpcConfig}
+            className="absolute inset-2 m-auto h-[calc(100%-1rem)] w-[calc(100%-1rem)]"
+          />
+        ) : (
+          <LpcThumbnail name={asset.name} config={asset.lpcConfig} />
+        )
       ) : isAudio ? (
         <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
           <Icon className="size-8" strokeWidth={1.5} />
@@ -80,11 +103,19 @@ export function GameAssetPreview({
         </div>
       ) : (
         <Image
-          src={bunnyImageUrl(asset.image, renditionWidth)}
+          src={
+            asset.type === "LPC"
+              ? textureImageUrl(asset.image, 0)
+              : bunnyImageUrl(asset.image, renditionWidth)
+          }
           alt={asset.name}
           fill
+          unoptimized={asset.type === "LPC"}
           sizes="(max-width: 640px) 45vw, 240px"
-          className="object-contain p-2"
+          className={cn(
+            "object-contain p-2",
+            asset.type === "LPC" && "[image-rendering:pixelated]",
+          )}
           onError={handleError}
         />
       )}

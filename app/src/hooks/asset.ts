@@ -1,16 +1,47 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { InfiniteData } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
 import { GameAssetTypes } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import { useContentSubmit } from "@/hooks/contentSubmit";
 import { useLpcCatalogInvalidation } from "@/hooks/lpc";
 import type { FormEntry } from "@/layout/EditContent";
 import { assetTypeLabels } from "@/libs/assetLibrary";
+import { unpackLpcDesigns } from "@/libs/lpc/transport";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import type { ZodGameAssetInput, ZodGameAssetType } from "@/validators/asset";
 import { gameAssetValidator } from "@/validators/asset";
+
+/** Decode a picker page independently of its immutable shared atlas transport tables. */
+export const useGameAssetPage = (
+  input: RouterInputs["gameAsset"]["getAll"],
+  enabled = true,
+) =>
+  api.gameAsset.getAll.useQuery(input, {
+    enabled,
+    select: selectGameAssetPage,
+    trpc: { context: { skipBatch: true } },
+  });
+
+/** Keep discovery pagination and decoded page results shared by asset-library views. */
+export const useGameAssetPages = (
+  input: Omit<RouterInputs["gameAsset"]["getAll"], "cursor">,
+) =>
+  api.gameAsset.getAll.useInfiniteQuery(input, {
+    getNextPageParam: (page) => page.nextCursor,
+    select: selectGameAssetPages,
+    trpc: { context: { skipBatch: true } },
+  });
+
+const selectGameAssetPage = (page: RouterOutputs["gameAsset"]["getAll"]) => ({
+  ...page,
+  data: unpackLpcDesigns(page.data),
+});
+const selectGameAssetPages = <T>(
+  result: InfiniteData<RouterOutputs["gameAsset"]["getAll"], T>,
+) => ({ ...result, pages: result.pages.map(selectGameAssetPage) });
 
 /**
  * Share media and metadata form state, retain failed edits, and refresh consumers on save.

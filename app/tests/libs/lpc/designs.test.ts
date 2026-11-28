@@ -4,12 +4,11 @@ import { buildLpcCatalog, spriteLayerSheets } from "@/libs/lpc/catalog";
 import { lpcDesignColors, lpcDesignCoverage } from "@/libs/lpc/designs";
 import { importLpcRecipe } from "@/libs/lpc/recipe";
 import { lpcConfigValidator } from "@/validators/lpcAsset";
+import { customCharacterConfig } from "../../setup/customCharacters";
 import { lpcAssets } from "../../setup/lpc";
 
 const layeredDesign = () => {
-  const source = structuredClone(
-    lpcAssets.find((asset) => asset.id === "shirt")!.lpcConfig,
-  );
+  const source = customCharacterConfig("shirt");
   source.upstream = [
     {
       id: "test_shirt",
@@ -80,7 +79,11 @@ it("selects each material's exact matching sheet part and preserves its movement
     expect(full[0]!.image).toBe(config.variants[`${body}/blue/blue`]![0]!.image);
     expect(full[1]!.image).toBe(config.variants[`${body}/gold/blue`]![1]!.image);
     expect(spriteLayerSheets(catalog, appearance, layer, "travel")).toEqual(
-      full.map((sheet) => sheet.travel!),
+      full.map((sheet) => ({
+        ...sheet.travel!,
+        part: sheet.part,
+        material: sheet.material,
+      })),
     );
   }
 });
@@ -232,6 +235,7 @@ it("keeps imported outfit components separate when checking both full and moveme
 
 it("composes upstream recipes with exact definition IDs, material colours, replacement slots and attribution", () => {
   const config = layeredDesign();
+  config.replacesBodyParts = ["torso", "upper-arms"];
   const result = importLpcRecipe(
     JSON.stringify({
       version: 2,
@@ -247,6 +251,7 @@ it("composes upstream recipes with exact definition IDs, material colours, repla
   );
   expect(result.body).toBe("female");
   expect(result.config.replacementSlots).toEqual(["shirt", "legs", "hair"]);
+  expect(result.config.replacesBodyParts).toEqual(["torso", "upper-arms"]);
   expect(result.config.variants["female/gray/blue"]![0]!.image).toBe(
     config.variants["female/blue/blue"]![0]!.image,
   );
