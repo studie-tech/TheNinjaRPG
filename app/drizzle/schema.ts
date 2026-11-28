@@ -3257,6 +3257,13 @@ export const userData = mysqlTable(
     location: varchar("location", { length: 191 }).default(""),
     villageDutyVillageId: varchar("villageDutyVillageId", { length: 191 }),
     villageDutyStartedAt: datetime("villageDutyStartedAt", { mode: "date", fsp: 3 }),
+    lastKageKickAt: datetime("lastKageKickAt", { mode: "date", fsp: 3 }),
+    villageRejoinBans: json("villageRejoinBans").$type<Record<string, string>>(),
+    villageKickReason: varchar("villageKickReason", { length: 1000 }),
+    villagePenaltyExempt: boolean("villagePenaltyExempt").default(false).notNull(),
+    villagePenaltyWaivers: tinyint("villagePenaltyWaivers", { unsigned: true })
+      .default(0)
+      .notNull(),
     joinedVillageAt: datetime("joinedVillageAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY)`)
       .notNull(),

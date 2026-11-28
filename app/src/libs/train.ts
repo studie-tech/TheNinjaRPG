@@ -87,6 +87,7 @@ const joinedVillageAtSignup = (user: Pick<UserData, "joinedVillageAt" | "created
   ) < 60_000;
 
 export const getReducedGainsDays = (user: UserData) => {
+  if (user.villagePenaltyExempt) return 0;
   if (
     hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK) &&
     !joinedVillageAtSignup(user)

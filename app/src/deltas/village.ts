@@ -1,5 +1,10 @@
 import { getUserProgressionUpdate } from "@/deltas/profile";
 
+/** Confirm the acting Kage's consumed expulsion cooldown without refetching their profile. */
+export const getVillageKickUserUpdate = (now: Date) => ({
+  userPatch: { lastKageKickAt: now },
+});
+
 /**
  * Project restored stamina and chakra with public progression and the integer-rounded ryo
  * debit. Omit the update when progression requires a refresh.

@@ -2052,6 +2052,10 @@ export const COST_RESKIN_JUTSU = 60;
 // Village config
 export const VILLAGE_LEAVE_REQUIRED_RANK = "CHUNIN";
 export const VILLAGE_REDUCED_GAINS_DAYS = 7;
+export const KAGE_KICK_COOLDOWN_DAYS = 14;
+export const VILLAGE_KICK_REJOIN_DAYS = 7;
+export const VILLAGE_KICK_REASON_MIN_LENGTH = 10;
+export const VILLAGE_KICK_REASON_MAX_LENGTH = 1000;
 // Regeneration and training multiplier while village gains are reduced.
 export const VILLAGE_REDUCED_GAINS_FACTOR = 0.5;
 // Highest level a Horizon user can reach before joining one of the main villages.

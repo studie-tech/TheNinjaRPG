@@ -3130,6 +3130,8 @@ const fetchUpdatedUserOnce = async (
           villageId: syndicate.id,
           isOutlaw: true,
           joinedVillageAt: new Date(),
+          villagePenaltyExempt: user.villagePenaltyWaivers > 0,
+          villagePenaltyWaivers: Math.max(0, (user.villagePenaltyWaivers ?? 0) - 1),
         };
         const expectedVillage = previousVillageId
           ? eq(userData.villageId, previousVillageId)

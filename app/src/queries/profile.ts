@@ -2314,6 +2314,8 @@ export const updateUserDataForFetchUpdatedUserOnce = (
     villageId: string;
     isOutlaw: false | true;
     joinedVillageAt: Date;
+    villagePenaltyExempt: boolean;
+    villagePenaltyWaivers: number;
   },
   user: { userId: string; villagePrestige: number },
   expectedVillage: SQL<unknown>,
