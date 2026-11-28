@@ -20,6 +20,7 @@ import type { GameAsset } from "@/drizzle/schema";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { lpcFacing } from "@/libs/lpc/catalog";
 import { assetAnimationClip, sampleAnimationClip } from "@/libs/rendering/animation";
+import { CHARACTER_FOOT_Y } from "@/libs/rendering/characterFrame";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
 import {
   createLpcCharacter,
@@ -457,7 +458,7 @@ export const createTowerDefenseScene = async (options: {
           .stroke({ color: 0xffffff, width: 0.06 }),
       );
     if (hero && heroCast) {
-      heroCast.sprite.position.set(0, -LPC_FOOT);
+      heroCast.sprite.position.set(0, -CHARACTER_FOOT_Y);
       heroCast.sprite.tint = CAST_SHADOW_TINT;
       heroCastRoot.alpha = CAST_SHADOW_ALPHA;
       heroCastRoot.addChild(heroCast.sprite);
@@ -2067,10 +2068,8 @@ const FLIGHT_ART_WIDTH: Record<Exclude<FlightArt, "shuriken">, number> = {
   bomb: 0.4,
 };
 const CAST_SHADOW_ALPHA = 0.22;
-/** LPC feet sit near row 60 of the 64px frame, in the unit-square actor's space. */
-const LPC_FOOT = 60 / 64 - 0.5;
 /** Raise the hero so its feet meet its contact shadow at the root. */
-const HERO_CENTER_Y = LPC_FOOT * 1.6;
+const HERO_CENTER_Y = CHARACTER_FOOT_Y * 1.6;
 
 const LOOT_COLORS = {
   ryo: 0xffd34d,

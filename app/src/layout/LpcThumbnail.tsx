@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { LpcDepthThumbnail } from "@/layout/LpcDepthThumbnail";
 import { cn } from "@/libs/shadui";
 import { textureImageUrl } from "@/utils/image";
 import type { LpcBody } from "@/validators/lpc";
@@ -17,6 +18,17 @@ export const LpcThumbnail = ({
   label: string;
 }) => {
   const id = useId();
+  if (
+    Object.values(config.variants).some((sheets) => sheets.some((sheet) => sheet.depth))
+  )
+    return (
+      <LpcDepthThumbnail
+        label={label}
+        config={config}
+        body={body}
+        className={cn("size-20 shrink-0", className)}
+      />
+    );
   const sheets = [
     ...(config.variants[`${body}/${config.defaultColor}/${config.defaultEyes}`] ?? []),
   ].sort((a, b) => a.z - b.z);

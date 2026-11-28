@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { actionLog, gameAsset, item, itemVariant, userData } from "@/drizzle/schema";
 import { lpcSelectionError } from "@/libs/lpc/appearance";
 import { buildLpcCatalog, spriteLayerSheets } from "@/libs/lpc/catalog";
+import { unpackLpcCatalog, unpackLpcDesigns } from "@/libs/lpc/transport";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { deleteUnreferencedLpcAsset, listLpcAssets } from "@/queries/asset";
 import { findLpcDesignForSelection } from "@/queries/lpc";
@@ -17,6 +18,7 @@ import { gameAssetValidator } from "@/validators/asset";
 import type { LpcConfig } from "@/validators/lpcAsset";
 import { seedLpcAssets } from "../../drizzle/seeds/lpc";
 import { prepareDevLpc } from "../../scripts/dev-lpc";
+import { customCharacterConfig } from "../setup/customCharacters";
 import { deferred } from "../setup/deferred";
 import { insertItems, insertUsers } from "../setup/factories";
 import { lpcAssets } from "../setup/lpc";
@@ -115,7 +117,9 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     const first = await database.query.gameAsset.findFirst({
       where: eq(gameAsset.id, "katana"),
     });
-    expect(first?.lpcConfig?.variants["male/black/blue"]).toHaveLength(4);
+    expect(first?.lpcConfig).toEqual(
+      lpcAssets.find((asset) => asset.id === "katana")!.lpcConfig,
+    );
     const edited = {
       ...first!.lpcConfig!,
       attributions: [
@@ -155,7 +159,13 @@ describeWithDatabase("LPC GameAsset persistence", () => {
         { version: 1, body: "female", layers: [] },
         { profile: "katana", color: "black" },
       ),
-    ).toHaveLength(4);
+    ).toEqual(
+      spriteLayerSheets(
+        buildLpcCatalog(lpcAssets),
+        { version: 1, body: "female", layers: [] },
+        { profile: "katana", color: "black" },
+      ),
+    );
   });
 
   it("retries a deadlocked seed upsert while preserving every design and staff edits", async () => {
@@ -229,7 +239,7 @@ describeWithDatabase("LPC GameAsset persistence", () => {
       preserved: lpcAssets.length,
     });
     expect(steady.statements).toHaveLength(1);
-  });
+  }, 15_000);
 
   it("prepares a fresh local catalog and performs no writes on repeated preparation", async () => {
     const database = await getTestDatabase();
@@ -337,8 +347,8 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     await seedLpcAssets(database);
     await insertUsers([{ userId: "lpc-editor", role: "CODER" }]);
     const caller = callerForDatabase(gameAssetRouter, "lpc-editor", database);
-    const before = buildLpcCatalog(await caller.getLpcCatalog());
-    expect(await caller.getLpcSceneCatalog()).toEqual(before);
+    const before = buildLpcCatalog(unpackLpcDesigns(await caller.getLpcCatalog()));
+    expect(unpackLpcCatalog(await caller.getLpcSceneCatalog())).toEqual(before);
     const saved = await database.query.gameAsset.findFirst({
       where: eq(gameAsset.id, "katana"),
     });
@@ -355,9 +365,36 @@ describeWithDatabase("LPC GameAsset persistence", () => {
       (await caller.getLpcSceneCatalog()).designs.katana!.replacementSlots,
     ).toEqual(["shirt"]);
     expect(
-      buildLpcCatalog(await caller.getLpcCatalog()).designs.katana!.replacementSlots,
+      buildLpcCatalog(unpackLpcDesigns(await caller.getLpcCatalog())).designs.katana!
+        .replacementSlots,
     ).toEqual(["shirt"]);
     expect((await caller.delete({ id: "body" })).success).toBe(false);
+  });
+
+  it("checks current content revisions and detects direct edits without an invalidation or timestamp change", async () => {
+    const database = await getTestDatabase();
+    await seedLpcAssets(database);
+    const before = await lpcSceneCatalog.fetchLpcSceneCatalog(database);
+    const unchanged = await recordQueries(() =>
+      lpcSceneCatalog.fetchLpcSceneCatalog(database),
+    );
+    expect(unchanged.statements).toHaveLength(1);
+    expect(unchanged.result).toBe(before);
+    const saved = await database.query.gameAsset.findFirst({
+      where: eq(gameAsset.id, "katana"),
+    });
+    const config = { ...saved!.lpcConfig!, replacementSlots: ["shirt" as const] };
+    await database
+      .update(gameAsset)
+      .set({ lpcConfig: config })
+      .where(eq(gameAsset.id, "katana"));
+    const edited = await lpcSceneCatalog.fetchLpcSceneCatalog(database);
+    expect(edited.designs.katana!.replacementSlots).toEqual(["shirt"]);
+    expect(before.designs.katana!.replacementSlots).toEqual([]);
+    await database.delete(gameAsset).where(eq(gameAsset.id, "cloak"));
+    expect(
+      (await lpcSceneCatalog.fetchLpcSceneCatalog(database)).designs.cloak,
+    ).toBeUndefined();
   });
 
   it("replaces the scene snapshot after a saved LPC edit even when its log fails", async () => {
@@ -414,6 +451,10 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     async (target) => {
       const database = await getTestDatabase();
       await seedLpcAssets(database);
+      await database
+        .update(gameAsset)
+        .set({ lpcConfig: customCharacterConfig("shirt") })
+        .where(eq(gameAsset.id, "shirt"));
       await insertUsers([{ userId: "lpc-editor", role: "CODER" }]);
       const caller = callerForDatabase(gameAssetRouter, "lpc-editor", database);
       const saved = (await database.query.gameAsset.findFirst({

@@ -8,6 +8,7 @@ import {
   hasBakedShadow,
   placeBakedShadow,
 } from "@/libs/rendering/bakedShadowAtlas";
+import { CHARACTER_FOOT_Y } from "@/libs/rendering/characterFrame";
 import {
   createCharacterShadowPoses,
   type ShadowPose,
@@ -203,7 +204,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
             x: contact ? contact.x - source.anchor.x * source.texture.orig.width : 0,
             y: contact
               ? contact.y - source.anchor.y * source.texture.orig.height
-              : 28 / 64,
+              : CHARACTER_FOOT_Y,
           },
         };
         characters.set(root, record);

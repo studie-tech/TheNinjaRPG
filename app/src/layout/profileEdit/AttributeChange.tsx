@@ -93,10 +93,10 @@ export const AttributeChange: React.FC = () => {
   };
 
   return (
-    <div className="space-y-3 py-3">
-      <div className="flex items-start gap-3">
+    <div className="@container space-y-3 py-3">
+      <div className="grid items-start gap-4 @[420px]:grid-cols-[12rem_minmax(0,1fr)]">
         <CharacterPreview
-          className="mx-0 w-28 max-w-[35%] shrink-0 sm:w-36"
+          className="w-48 @[420px]:w-full"
           user={{ ...spriteUser, attributes: data ?? spriteUser?.attributes }}
         />
         <div className="min-w-0 flex-1 space-y-3">

@@ -8,6 +8,7 @@ import { LpcAssetEditor } from "@/layout/LpcAssetEditor";
 import * as uploads from "@/utils/uploadthing";
 import type { ZodGameAssetInput, ZodGameAssetType } from "@/validators/asset";
 import { gameAssetValidator } from "@/validators/asset";
+import { customCharacterConfig } from "../setup/customCharacters";
 import { lpcAssets } from "../setup/lpc";
 
 beforeEach(() => {
@@ -89,7 +90,10 @@ it("reviews generator imports with explicit warnings before applying an editable
 });
 
 it("discards an unapplied layout draft when selecting a variant with an identical saved layout", async () => {
-  const asset = lpcAssets.find((entry) => entry.id === "shirt")!;
+  const asset = {
+    ...lpcAssets.find((entry) => entry.id === "shirt")!,
+    lpcConfig: customCharacterConfig("shirt"),
+  };
   const { result } = renderHook(() =>
     useForm<ZodGameAssetInput, unknown, ZodGameAssetType>({ defaultValues: asset }),
   );

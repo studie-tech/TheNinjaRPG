@@ -1,188 +1,161 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync } from "node:fs";
-import { lpcFacing, lpcFrame } from "@/libs/lpc/catalog";
-import { UPLOADTHING_HOST } from "@/libs/uploadthing";
+import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import { lpcAtlasResources } from "@/libs/lpc/atlases";
+import { lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
+import { lpcAtlasFrame } from "@/libs/lpc/frames";
+import { isBunnyCdnUrl } from "@/utils/image";
+import { lpcAnimations } from "@/validators/lpc";
 import credits from "../../../drizzle/data/lpc/credits.json";
 import { lpcAssets, lpcCatalog } from "../../setup/lpc";
 
-// Publication verifies decoded RGBA pixels; runtime tests validate our atlas/frame manifest offline.
-describe("published LPC artwork", () => {
-  it("references immutable UploadThing assets without shipping sprites in public", () => {
+// Publication verifies CDN bytes; these checks validate the complete bundled manifest offline.
+describe("published character artwork", () => {
+  it("serves every colour, depth and handed atlas through immutable raw CDN keys", () => {
     expect(existsSync(new URL("../../../public/lpc", import.meta.url))).toBe(false);
-    const origin = new URL(UPLOADTHING_HOST).origin;
-    expect(new URL(lpcCatalog.creditsUrl).origin).toBe(origin);
-    expect(new URL(lpcCatalog.creditsUrl).pathname).toMatch(
-      /^\/f\/lpc-credits-[a-f0-9]{24}\.json$/,
-    );
-    for (const layers of Object.values(lpcCatalog.entries))
-      for (const sheet of layers.flatMap((sheet) => [
-        sheet,
-        ...(sheet.travel ? [sheet.travel] : []),
-      ])) {
-        const url = new URL(sheet.image);
-        expect(url.origin).toBe(origin);
-        expect(url.pathname).toMatch(/^\/f\/[A-Za-z0-9_-]+$/);
-        expect(url.search).toBe("");
-        const layout = lpcCatalog.layouts[sheet.layout]!;
-        expect(layout).toBeDefined();
-        const width = layout.trim?.width ?? layout.cell;
-        const height = layout.trim?.height ?? layout.cell;
-        const gutter = layout.trim ? 1 : 0;
-        expect((width + gutter * 2) * layout.columns).toBeLessThanOrEqual(2048);
-        if (layout.trim) {
-          expect(layout.trim.x).toBeGreaterThanOrEqual(0);
-          expect(layout.trim.y).toBeGreaterThanOrEqual(0);
-          expect(layout.trim.x + width).toBeLessThanOrEqual(layout.cell);
-          expect(layout.trim.y + height).toBeLessThanOrEqual(layout.cell);
-        }
-        for (const directions of Object.values(layout.clips)) {
-          expect(directions).toHaveLength(4);
-          for (const indices of directions)
-            for (const index of indices) {
-              expect(index).toBeGreaterThanOrEqual(0);
-              expect(
-                (Math.floor(index / layout.columns) + 1) * (height + gutter * 2),
-              ).toBeLessThanOrEqual(2048);
-            }
-        }
-      }
-  });
-  it("uses one slash alternative, and supplies compact resting/movement poses for every silhouette", () => {
-    const sword = lpcCatalog.entries["sword/male/gray/blue"]!;
-    expect(
-      sword.filter((sheet) => lpcCatalog.layouts[sheet.layout]!.clips.slash),
-    ).toHaveLength(2);
-    for (const sheets of Object.values(lpcCatalog.entries)) {
-      expect(sheets.some((sheet) => !!sheet.travel)).toBe(true);
-      for (const sheet of sheets)
-        if (sheet.travel) {
-          const layout = lpcCatalog.layouts[sheet.travel.layout]!;
-          expect(layout.clips.stand).toBeDefined();
-          expect(layout.clips.walk).toBeDefined();
-          expect(
-            Object.keys(layout.clips).every((state) =>
-              ["stand", "idle", "walk"].includes(state),
-            ),
-          ).toBe(true);
-          for (const direction of [0, 1, 2, 3] as const) {
-            expect(
-              lpcFrame(lpcCatalog, sheet.travel, "stand", direction, 0),
-            ).not.toBeNull();
-            expect(
-              lpcFrame(lpcCatalog, sheet.travel, "walk", direction, 100),
-            ).not.toBeNull();
-          }
-        }
+    for (const image of [
+      lpcCatalog.creditsUrl,
+      ...lpcAssets.flatMap((asset) => [
+        asset.image,
+        ...lpcAtlasResources(asset.lpcConfig).map((resource) => resource.image),
+      ]),
+    ]) {
+      const url = new URL(image);
+      expect(isBunnyCdnUrl(image)).toBe(true);
+      expect(url.pathname).toMatch(/^\/f\/[A-Za-z0-9_-]+$/);
+      expect(url.search).toBe("");
+      expect(url.hash).toBe("");
     }
   });
-  it("retains attribution for every imported profile and pins the upstream revision", () => {
-    expect(lpcCatalog.revision).toMatch(/^[a-f0-9]{40}$/);
-    for (const asset of lpcAssets)
-      expect(
-        asset.lpcConfig.attributions.length > 0 &&
-          asset.lpcConfig.attributions.every(
-            (entry) =>
-              entry.authors.length &&
-              entry.chosenLicense &&
-              entry.urls.length &&
-              credits.some(
-                (source) =>
-                  source.profile === entry.profile && source.file === entry.file,
-              ),
+  it("retains both body builds, independent depth layers and every authored action for all designs", () => {
+    expect(lpcAssets).toHaveLength(95);
+    for (const asset of lpcAssets) {
+      for (const body of ["male", "female"]) {
+        expect(
+          Object.keys(asset.lpcConfig.variants).some((key) =>
+            key.startsWith(`${body}/`),
           ),
-      ).toBe(true);
-  });
-  it("bounds movement texture memory while retaining authored resting and walking steps", () => {
-    const images = new Map<string, number>();
-    for (const sheets of Object.values(lpcCatalog.entries))
-      for (const parent of sheets) {
-        const sheet = parent.travel;
-        if (!sheet) continue;
-        const layout = lpcCatalog.layouts[sheet.layout]!;
-        expect(layout.trim).toBeDefined();
-        const trim = layout.trim!;
-        for (const state of ["stand", "idle", "walk"] as const) {
-          expect(layout.clips[state]?.map((frames) => frames.length)).toEqual(
-            lpcCatalog.layouts[parent.layout]!.clips[state]?.map(
-              (frames) => frames.length,
-            ),
+        ).toBe(true);
+      }
+      for (const sheets of Object.values(asset.lpcConfig.variants)) {
+        const components = new Map<string, Set<string>>();
+        for (const sheet of sheets) {
+          expect(sheet.depth).toBeDefined();
+          const states =
+            components.get(sheet.component ?? sheet.part ?? "base") ??
+            new Set<string>();
+          for (const state of Object.keys(sheet.layout.clips)) states.add(state);
+          components.set(sheet.component ?? sheet.part ?? "base", states);
+          if (sheet.offhand) expect(sheet.offhand.depth).toBeDefined();
+        }
+        for (const [component, states] of components) {
+          expect([...states].sort()).toEqual([...lpcAnimations].sort());
+          const companions = sheets.filter(
+            (sheet) =>
+              (sheet.component ?? sheet.part ?? "base") === component && sheet.travel,
           );
+          expect(companions.length).toBeGreaterThan(0);
         }
-        const count = Math.max(...Object.values(layout.clips).flat(2)) + 1;
-        images.set(
-          sheet.image,
-          layout.columns *
-            (trim.width + 2) *
-            Math.ceil(count / layout.columns) *
-            (trim.height + 2) *
-            4,
-        );
       }
-    // The complete movement catalogue bounds distinct visible outfits independently of sharing.
-    expect([...images.values()].reduce((sum, bytes) => sum + bytes, 0)).toBeLessThan(
-      128 * 1024 * 1024,
-    );
+    }
   });
-  it("uses the authored four directions, freezes reduced motion and clamps one-shot frames", () => {
-    expect([
-      lpcFacing(0, 1),
-      lpcFacing(-1, 0),
-      lpcFacing(0, -1),
-      lpcFacing(1, 0),
-    ]).toEqual([0, 1, 2, 3]);
-    const sheet = lpcCatalog.entries["body/male/light/blue"]![0]!;
-    expect(lpcFrame(lpcCatalog, sheet, "walk", 2, 10000, true)).toEqual(
-      lpcFrame(lpcCatalog, sheet, "walk", 2, 0, true),
-    );
-    expect(lpcFrame(lpcCatalog, sheet, "slash", 2, 10000)).toEqual(
-      lpcFrame(lpcCatalog, sheet, "slash", 2, 20000),
-    );
-  });
-  it("records valid custom body timelines and a neutral held pose for reverse-slash weapons", () => {
-    for (const body of ["male", "female"] as const)
-      for (const profile of ["club", "whip", "crossbow"]) {
-        const state = profile === "crossbow" ? "shoot" : "slash";
-        for (const sheet of lpcCatalog.entries[`${profile}/${body}/brown/blue`]!) {
-          const layout = lpcCatalog.layouts[sheet.layout]!;
-          const pose = layout.bodyPoses?.[state];
-          expect(pose).toBeDefined();
-          expect(pose!.frames).toHaveLength(4);
-          for (const direction of [0, 1, 2, 3] as const) {
-            expect(pose!.frames[direction]).toHaveLength(
-              layout.clips[state]![direction]!.length,
-            );
-            expect(
-              pose!.frames[direction]!.every(
-                (index) => index >= 0 && index < (pose!.animation === "thrust" ? 8 : 6),
-              ),
-            ).toBe(true);
-            if (profile === "club")
-              expect(layout.clips.stand![direction]).toEqual([
-                layout.clips.slash![direction]![5]!,
-              ]);
+  it("keeps cropped frames inside bounded atlases and aligned to one scale and foot point", () => {
+    for (const layout of lpcCatalog.layouts) {
+      expect([128, 192]).toContain(layout.cell);
+      expect(layout.pixelsPerUnit).toBe(100);
+      expect(layout.ground).toEqual({ x: layout.cell / 2, y: layout.cell / 2 + 41 });
+      expect(layout.facings).toHaveLength(6);
+      expect(layout.facings?.map((facing) => facing.mirror)).toEqual([
+        false,
+        true,
+        false,
+        false,
+        true,
+        false,
+      ]);
+      for (const state of lpcAnimations) {
+        const directions = layout.clips[state];
+        if (!directions) continue;
+        expect(directions).toHaveLength(4);
+        for (const indices of directions)
+          for (const index of indices) {
+            const frame = lpcAtlasFrame(layout, state, index);
+            expect(index).toBeGreaterThanOrEqual(0);
+            expect(frame.x).toBeGreaterThanOrEqual(0);
+            expect(frame.y).toBeGreaterThanOrEqual(0);
+            expect(frame.x + frame.width + 1).toBeLessThanOrEqual(2048);
+            expect(frame.y + frame.height + 1).toBeLessThanOrEqual(2048);
+            expect(frame.trim).toBeDefined();
+            expect(frame.trim!.x + frame.width).toBeLessThanOrEqual(layout.cell);
+            expect(frame.trim!.y + frame.height).toBeLessThanOrEqual(layout.cell);
           }
+      }
+    }
+  });
+  it("pins attribution and revision for every published design", () => {
+    expect(lpcCatalog.revision).toMatch(/^[a-f0-9]{64}-[a-f0-9]{12}$/);
+    for (const asset of lpcAssets) {
+      expect(asset.lpcConfig.sourceRevision).toBe(lpcCatalog.revision);
+      expect(asset.lpcConfig.attributions.length).toBeGreaterThan(0);
+      for (const credit of asset.lpcConfig.attributions) {
+        expect(credit.authors.length).toBeGreaterThan(0);
+        expect(credit.urls.length).toBeGreaterThan(0);
+        expect(credit.chosenLicense).toBeTruthy();
+        expect(
+          credits.some(
+            (source) =>
+              source.profile === credit.profile &&
+              source.chosenLicense === credit.chosenLicense,
+          ),
+        ).toBe(true);
+      }
+    }
+  });
+  it("retains compact movement companions and freezes or clamps playback without changing layer selection", () => {
+    for (const body of ["male", "female"] as const) {
+      const appearance = resolveSpriteAppearance({ spriteBodyStyle: body });
+      const resources = new Map<string, number>();
+      for (const layer of appearance.layers) {
+        const full = spriteLayerSheets(lpcCatalog, appearance, layer, "travel");
+        for (const sheet of full) {
+          const travel = sheet;
+          const layout = lpcCatalog.layouts[travel.layout]!;
+          expect(Object.keys(layout.clips).sort()).toEqual(["idle", "stand", "walk"]);
+          expect(layout.clips.stand?.map((frames) => frames.length)).toEqual([
+            1, 1, 1, 1,
+          ]);
+          expect(layout.clips.walk?.map((frames) => frames.length)).toEqual([
+            8, 8, 8, 8,
+          ]);
+          for (const facing of [0, 1, 2, 3, 4, 5] as const) {
+            expect(lpcFrame(lpcCatalog, travel, "walk", facing, 10000, true)).toEqual(
+              lpcFrame(lpcCatalog, travel, "walk", facing, 0, true),
+            );
+          }
+          let width = 0,
+            height = 0;
+          for (const state of ["stand", "idle", "walk"] as const)
+            for (const index of layout.clips[state]!.flat()) {
+              const frame = lpcAtlasFrame(layout, state, index);
+              width = Math.max(width, frame.x + frame.width + 1);
+              height = Math.max(height, frame.y + frame.height + 1);
+            }
+          resources.set(travel.image, width * height * 4);
+          resources.set(travel.depth!, width * height * 4);
         }
       }
-  });
-  it("keeps authored breathing holds distinct from neutral and weapon fallback poses", () => {
-    for (const body of ["male", "female"] as const) {
-      const base = lpcCatalog.entries[`body/${body}/light/blue`]![0]!;
-      const layout = lpcCatalog.layouts[base.layout]!;
-      for (const state of ["idle", "combat"] as const)
-        for (const frames of layout.clips[state]!) {
-          expect(frames).toHaveLength(3);
-          expect(frames[0]).toBe(frames[1]);
-          expect(frames[1]).not.toBe(frames[2]);
-        }
-      expect(lpcFrame(lpcCatalog, base, "combat", 2, 600)).toEqual(
-        lpcFrame(lpcCatalog, base, "combat", 2, 0),
+      const attack = spriteLayerSheets(
+        lpcCatalog,
+        appearance,
+        appearance.layers[0]!,
+      ).find((sheet) => lpcCatalog.layouts[sheet.layout]!.clips.slash)!;
+      expect(attack).toBeDefined();
+      expect(lpcFrame(lpcCatalog, attack, "slash", 2, 10000)).toEqual(
+        lpcFrame(lpcCatalog, attack, "slash", 2, 20000),
       );
-      const held = lpcCatalog.entries[`club/${body}/brown/blue`]![0]!;
-      expect(lpcCatalog.layouts[held.layout]!.clips.idle).toBeUndefined();
-      expect(lpcCatalog.layouts[held.layout]!.clips.combat).toBeUndefined();
-      expect(lpcFrame(lpcCatalog, held, "stand", 2, 600)).toEqual(
-        lpcFrame(lpcCatalog, held, "stand", 2, 0),
-      );
+      expect(
+        [...resources.values()].reduce((sum, bytes) => sum + bytes, 0),
+      ).toBeLessThan(10 * 1024 * 1024);
     }
   });
 });

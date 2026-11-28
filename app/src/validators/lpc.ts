@@ -56,10 +56,15 @@ export const lpcAnimations = [
   "spellcast",
   "shoot",
   "hurt",
+  "punch",
+  "throw",
+  "crossbow",
+  "block",
+  "die",
 ] as const;
 export type LpcAnimation = (typeof lpcAnimations)[number];
-/** Authored row order: north, west, south, east. */
-export type LpcDirection = 0 | 1 | 2 | 3;
+/** North, lower-left, south, lower-right, upper-left and upper-right facings. */
+export type LpcDirection = 0 | 1 | 2 | 3 | 4 | 5;
 /** A visual layer; slot replaces base clothing and mirror flips off-hand equipment. */
 export type SpriteLayer = {
   profile: string;

@@ -9,9 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
+import { useLpcDesigns } from "@/hooks/lpc";
 import { CharacterPreview } from "@/layout/CharacterPreview";
 import { LpcAnimationCoverage } from "@/layout/LpcAnimationCoverage";
 import { previewSpriteDesign, resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import { lpcAtlasResources } from "@/libs/lpc/atlases";
 import { buildLpcCatalog } from "@/libs/lpc/catalog";
 import { importLpcRecipe } from "@/libs/lpc/recipe";
 import { chunkArray } from "@/utils/array";
@@ -72,11 +74,7 @@ export function LpcAssetEditor({
         ?.focus();
     }
   }, [submitCount, hasAttributionErrors]);
-  const {
-    data: designs,
-    error: catalogError,
-    refetch: retryCatalog,
-  } = api.gameAsset.getLpcCatalog.useQuery();
+  const { data: designs, error: catalogError, refetch: retryCatalog } = useLpcDesigns();
   const [body, setBody] = useState<LpcBody>("male");
   const [color, setColor] = useState(config.defaultColor);
   const [eyes, setEyes] = useState(config.defaultEyes);
@@ -506,8 +504,8 @@ export function LpcAssetEditor({
             {format === "standard" && (
               <p className="text-muted-foreground text-xs">
                 Imports standing, walking, idle, combat idle, slash, thrust, spellcast,
-                shoot and hurt. Other generator poses are not used by the game. Empty
-                animation rows use a held-pose fallback.
+                shoot and hurt. Use a packed atlas with a frame layout for additional
+                combat poses. Empty animation rows use a held-pose fallback.
               </p>
             )}
             {format === "packed" && (
@@ -944,16 +942,7 @@ async function downloadLpcDesign(name: string, config: LpcConfig) {
   // Archive support is needed only on export, so it stays out of the initial editor bundle.
   const { default: JSZip } = await import("jszip");
   const zip = new JSZip(),
-    urls = [
-      ...new Set(
-        Object.values(config.variants)
-          .flat()
-          .flatMap((sheet) => [
-            sheet.image,
-            ...(sheet.travel ? [sheet.travel.image] : []),
-          ]),
-      ),
-    ];
+    urls = [...new Set(lpcAtlasResources(config).map((resource) => resource.image))];
   const files: Record<string, string> = {};
   for (const batch of chunkArray(urls, 5))
     await Promise.all(

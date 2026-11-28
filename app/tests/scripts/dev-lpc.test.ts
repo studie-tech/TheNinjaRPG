@@ -3,6 +3,8 @@ import type { DrizzleClient } from "@/server/db";
 import { lpcSeedAssets } from "../../drizzle/data/lpc/seed";
 import { isLocalLpcDatabase, prepareDevLpc } from "../../scripts/dev-lpc";
 
+const bundledAssets = lpcSeedAssets();
+
 const environment = {
   NODE_ENV: process.env.NODE_ENV,
   VERCEL: process.env.VERCEL,
@@ -15,7 +17,7 @@ afterEach(() => {
   }
 });
 const local = "http://root:private@localhost:3002/";
-const clientFor = (rows = lpcSeedAssets()) => {
+const clientFor = (rows = bundledAssets) => {
   const read = vi.fn(async () => rows);
   const write = vi.fn(() => {
     throw new Error("Unexpected write");
@@ -89,8 +91,8 @@ it("checks a complete catalog and its travel atlases without writing", async () 
     await prepareDevLpc({ databaseUrl: local, readOnly: true, client: db.client }),
   ).toMatchObject({
     status: "ready",
-    designs: lpcSeedAssets().length,
-    expectedDesigns: lpcSeedAssets().length,
+    designs: bundledAssets.length,
+    expectedDesigns: bundledAssets.length,
     missing: [],
     invalid: [],
   });
@@ -99,7 +101,7 @@ it("checks a complete catalog and its travel atlases without writing", async () 
 });
 
 it("reports missing designs and the preparation command without seeding in doctor mode", async () => {
-  const db = clientFor(lpcSeedAssets().filter((asset) => asset.id !== "body"));
+  const db = clientFor(bundledAssets.filter((asset) => asset.id !== "body"));
   const report = await prepareDevLpc({
     databaseUrl: local,
     readOnly: true,
@@ -107,7 +109,7 @@ it("reports missing designs and the preparation command without seeding in docto
   });
   expect(report).toMatchObject({
     status: "incomplete",
-    designs: lpcSeedAssets().length - 1,
+    designs: bundledAssets.length - 1,
     missing: ["body"],
   });
   expect(report.message).toContain("make dev-prepare");
@@ -115,10 +117,10 @@ it("reports missing designs and the preparation command without seeding in docto
 });
 
 it("reports invalid existing artwork rather than replacing it", async () => {
-  const rows = lpcSeedAssets();
+  const rows = structuredClone(bundledAssets);
   rows.find((asset) => asset.id === "body")!.lpcConfig.variants[
     "male/light/blue"
-  ]![0]!.travel = undefined;
+  ]![0]!.layout.columns = 0;
   const db = clientFor(rows);
   const report = await prepareDevLpc({
     databaseUrl: local,

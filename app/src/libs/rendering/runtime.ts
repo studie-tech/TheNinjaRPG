@@ -143,7 +143,10 @@ export const createGameRenderer = async (options: {
   );
   stage.eventMode = "none";
   const assets = createSceneAssets();
-  const characterComposites = createCharacterComposites(renderer);
+  const characterComposites = createCharacterComposites(renderer, {
+    cellSize: 192,
+    pixelsPerUnit: 100,
+  });
   const canvas = renderer.canvas as HTMLCanvasElement;
   canvas.style.display = "block";
   canvas.style.width = "100%";

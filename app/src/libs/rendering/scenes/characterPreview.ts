@@ -1,5 +1,10 @@
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import {
+  CHARACTER_PREVIEW_HEIGHT,
+  CHARACTER_PREVIEW_WIDTH,
+  characterPreviewFraming,
+} from "@/libs/lpc/previewFraming";
+import {
   createLpcCharacter,
   type LpcCharacter,
 } from "@/libs/rendering/primitives/character";
@@ -20,10 +25,10 @@ export const createCharacterPreviewScene = async (options: {
   const game = await createGameRenderer({
     ...options,
     surface: "character-preview",
-    width: 256,
-    height: () => 256,
+    width: CHARACTER_PREVIEW_WIDTH,
+    height: () => CHARACTER_PREVIEW_HEIGHT,
   });
-  // Preserve the square aspect when the rem-sized mount follows the player's font scale.
+  // Preserve portrait proportions when the mount follows the player's font scale.
   game.canvas.style.height = "auto";
   let shown: {
     scope: ReturnType<typeof createRenderScope>;
@@ -74,9 +79,13 @@ export const createCharacterPreviewScene = async (options: {
           scope.dispose();
           return;
         }
-        actor.sprite.position.set(128, 125);
-        // Enlarge facial details within the compact preview without expanding the form.
-        actor.sprite.scale.set(160);
+        const framing = characterPreviewFraming(
+          scope.lpcCatalog,
+          appearance,
+          animation,
+        );
+        actor.sprite.position.set(framing.x, framing.y);
+        actor.sprite.scale.set(framing.scale);
         game.stage.addChild(actor.sprite);
         shown?.scope.dispose();
         shown = { scope, actor, animation };
@@ -92,9 +101,10 @@ export const createCharacterPreviewScene = async (options: {
         throw error;
       }
     },
-    /** Turns the figure a quarter to the right without reloading it. */
+    /** Turn through the six hex facings without reloading the appearance. */
     rotate: () => {
-      direction = ((direction + 1) % 4) as LpcDirection;
+      const order = [2, 3, 5, 0, 4, 1] as const;
+      direction = order[(order.indexOf(direction) + 1) % order.length] ?? 2;
       game.invalidate();
     },
   };

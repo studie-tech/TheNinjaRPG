@@ -55,6 +55,7 @@ import {
   type IMG_ORIENTATION,
   STARTER_VILLAGES,
 } from "@/drizzle/constants";
+import { useGameAssetPage } from "@/hooks/asset";
 import { UnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
@@ -177,7 +178,7 @@ export const EditContent = <
     isFetching: fetchingPickerAssets,
     isError: pickerAssetsFailed,
     refetch: retryPickerAssets,
-  } = api.gameAsset.getAll.useQuery(
+  } = useGameAssetPage(
     {
       limit: 50,
       type: assetPickerType,
@@ -185,9 +186,7 @@ export const EditContent = <
       exactFolder: pickerFolder,
       cursor: assetPage,
     },
-    {
-      enabled: showPickerAssets,
-    },
+    showPickerAssets,
   );
   const pickerAssets = useMemo(
     () => (assetPageData?.data ?? []).filter((a) => !a.hidden),

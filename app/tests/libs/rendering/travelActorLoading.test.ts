@@ -29,8 +29,8 @@ import type { WorldBounds } from "@/libs/rendering/visibility";
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
+import { customCharacterCatalog as lpcCatalog } from "../../setup/customCharacters";
 import { deferred } from "../../setup/deferred";
-import { lpcCatalog } from "../../setup/lpc";
 
 const cleanups: (() => void)[] = [];
 const originalCreate = characters.createLpcCharacter;

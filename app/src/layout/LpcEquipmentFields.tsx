@@ -254,7 +254,7 @@ export const LpcEquipmentFields = <
       </div>
       <div className="space-y-1 self-center">
         <CharacterPreview
-          className="w-32"
+          className="w-48 max-w-full"
           label={
             visual.profile === "NONE" ? "Hidden on character" : "Equipment preview"
           }

@@ -1457,7 +1457,12 @@ export const performBattleAction = (props: {
     }
   }
   const animated = newBattle.usersState.find((entry) => entry.userId === actorId);
-  const animation = spriteActionAnimation(action);
+  const animation = spriteActionAnimation(
+    action,
+    "userItemId" in action && typeof action.userItemId === "string"
+      ? animated?.spriteEquipment?.[action.userItemId]?.profile
+      : undefined,
+  );
   // Batched auto turns can end with wait/stance bookkeeping after the visible attack.
   if (animated && animation !== "idle")
     animated.spriteAction = {

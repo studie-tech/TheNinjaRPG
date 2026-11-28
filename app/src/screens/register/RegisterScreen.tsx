@@ -490,129 +490,134 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
   );
 
   return (
-    <div className="grid grid-cols-1 items-start gap-3 px-3 sm:grid-cols-[min(9rem,30%)_minmax(0,1fr)]">
-      <CharacterPreview
-        className="w-40 sm:row-span-2 sm:w-full"
-        user={{
-          gender,
-          spriteBodyStyle: body,
-          attributes: [
-            watchAttr1,
-            watchAttr2,
-            watchAttr3,
-            `${hair} hair`,
-            `${eyes} eyes`,
-            `${skin} skin`,
-          ].filter((value): value is string => !!value),
-        }}
-      />
-      <FormField
-        control={form.control}
-        name="spriteBodyStyle"
-        render={({ field }) => (
-          <FormItem className="min-w-0 gap-1 self-center">
-            <FormLabel>Body style</FormLabel>
-            <Select
-              value={field.value ?? "AUTO"}
-              onValueChange={(value) =>
-                field.onChange(value === "AUTO" ? undefined : value)
-              }
-            >
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                <SelectItem value="AUTO">
-                  Follow gender ({gender === "Female" ? "slender" : "broad"})
-                </SelectItem>
-                <SelectItem value="male">Broad build</SelectItem>
-                <SelectItem value="female">Slender build</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-xs">
-              Gender sets the default build. Choosing broad or slender keeps that build
-              when gender changes.
-            </p>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
-        {(
-          [
-            ["hair_color", "Hair color", option_colors],
-            ["eye_color", "Eye color", option_colors],
-            ["skin_color", "Skin color", option_skins],
-          ] as const
-        ).map(([name, label, options]) => (
-          <FormField
-            key={name}
-            control={form.control}
-            name={name}
-            render={({ field }) => (
-              <FormItem className="min-w-0 gap-1">
-                <FormLabel>{label}</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={`None`} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>{options}</SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        ))}
-
-        {(["attribute_1", "attribute_2", "attribute_3"] as const).map((name, slot) => {
-          const otherChoices = [watchAttr1, watchAttr2, watchAttr3].filter(
-            (_, other) => other !== slot,
-          );
-          return (
+    <div className="@container px-3">
+      {/* The classic form fits a 168px portrait beside its controls above 420px. */}
+      <div className="grid grid-cols-1 items-start gap-4 @[420px]:grid-cols-[14rem_minmax(0,1fr)]">
+        <CharacterPreview
+          className="w-48 @[420px]:row-span-2 @[420px]:w-full"
+          user={{
+            gender,
+            spriteBodyStyle: body,
+            attributes: [
+              watchAttr1,
+              watchAttr2,
+              watchAttr3,
+              `${hair} hair`,
+              `${eyes} eyes`,
+              `${skin} skin`,
+            ].filter((value): value is string => !!value),
+          }}
+        />
+        <FormField
+          control={form.control}
+          name="spriteBodyStyle"
+          render={({ field }) => (
+            <FormItem className="min-w-0 gap-1 self-center">
+              <FormLabel>Body style</FormLabel>
+              <Select
+                value={field.value ?? "AUTO"}
+                onValueChange={(value) =>
+                  field.onChange(value === "AUTO" ? undefined : value)
+                }
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="AUTO">
+                    Follow gender ({gender === "Female" ? "slender" : "broad"})
+                  </SelectItem>
+                  <SelectItem value="male">Broad build</SelectItem>
+                  <SelectItem value="female">Slender build</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-xs">
+                Gender sets the default build. Choosing broad or slender keeps that
+                build when gender changes.
+              </p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 @[420px]:grid-cols-3">
+          {(
+            [
+              ["hair_color", "Hair color", option_colors],
+              ["eye_color", "Eye color", option_colors],
+              ["skin_color", "Skin color", option_skins],
+            ] as const
+          ).map(([name, label, options]) => (
             <FormField
               key={name}
               control={form.control}
               name={name}
               render={({ field }) => (
                 <FormItem className="min-w-0 gap-1">
-                  <FormLabel>Trait {slot + 1}</FormLabel>
+                  <FormLabel>{label}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value ?? ""}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder={`None`} />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
-                      {attributes
-                        .filter(
-                          (e) =>
-                            !otherChoices.some(
-                              (chosen) =>
-                                chosen && getAttributeGroup(e).includes(chosen),
-                            ),
-                        )
-                        .map((attribute, i) => (
-                          <SelectItem key={`${attribute}-${i}`} value={attribute}>
-                            {attribute}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
+                    <SelectContent>{options}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
-          );
-        })}
-        {[watchAttr1, watchAttr2, watchAttr3].includes("Bald") && (
-          <p className="text-muted-foreground col-span-2 text-sm sm:col-span-3">
-            Bald hides scalp hair; hair color still applies to beards.
-          </p>
-        )}
+          ))}
+
+          {(["attribute_1", "attribute_2", "attribute_3"] as const).map(
+            (name, slot) => {
+              const otherChoices = [watchAttr1, watchAttr2, watchAttr3].filter(
+                (_, other) => other !== slot,
+              );
+              return (
+                <FormField
+                  key={name}
+                  control={form.control}
+                  name={name}
+                  render={({ field }) => (
+                    <FormItem className="min-w-0 gap-1">
+                      <FormLabel>Trait {slot + 1}</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={`None`} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {attributes
+                            .filter(
+                              (e) =>
+                                !otherChoices.some(
+                                  (chosen) =>
+                                    chosen && getAttributeGroup(e).includes(chosen),
+                                ),
+                            )
+                            .map((attribute, i) => (
+                              <SelectItem key={`${attribute}-${i}`} value={attribute}>
+                                {attribute}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              );
+            },
+          )}
+          {[watchAttr1, watchAttr2, watchAttr3].includes("Bald") && (
+            <p className="text-muted-foreground col-span-2 text-sm @[420px]:col-span-3">
+              Bald hides scalp hair; hair color still applies to beards.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

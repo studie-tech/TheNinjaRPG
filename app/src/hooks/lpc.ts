@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
+import { unpackLpcCatalog, unpackLpcDesigns } from "@/libs/lpc/transport";
 
 /** Share the staff design discovery query across equipment and design editors. */
-export const useLpcDesigns = () => api.gameAsset.getLpcCatalog.useQuery();
+export const useLpcDesigns = () =>
+  api.gameAsset.getLpcCatalog.useQuery(undefined, {
+    select: unpackLpcDesigns,
+    trpc: { context: { skipBatch: true } },
+  });
 
 /** Artwork changes only when staff save it, so a recently loaded scene catalog is reused. */
 const LPC_SCENE_CATALOG_STALE_MS = 5 * 60 * 1000;
@@ -55,7 +60,7 @@ export const useLpcCatalogLoader = ({
     if (cached) {
       // Cached artwork remains usable if revalidation fails; a later scene retries.
       void latest.catch(() => undefined);
-      return cached;
+      return unpackLpcCatalog(cached);
     }
     return latest;
   }, [utils, revalidateInBackground]);
@@ -83,8 +88,10 @@ export const useLpcCatalogLoader = ({
  * while a request is in flight shares it.
  */
 export const fetchLpcSceneCatalog = (utils: ReturnType<typeof api.useUtils>) =>
-  utils.gameAsset.getLpcSceneCatalog.fetch(undefined, {
-    staleTime: LPC_SCENE_CATALOG_STALE_MS,
-    gcTime: Infinity,
-    trpc: { context: { skipBatch: true } },
-  });
+  utils.gameAsset.getLpcSceneCatalog
+    .fetch(undefined, {
+      staleTime: LPC_SCENE_CATALOG_STALE_MS,
+      gcTime: Infinity,
+      trpc: { context: { skipBatch: true } },
+    })
+    .then(unpackLpcCatalog);

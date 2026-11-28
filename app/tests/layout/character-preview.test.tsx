@@ -106,7 +106,7 @@ describe("character preview", () => {
     expect(update({ now: 300, delta: 0.016, reducedMotion: false })).toBe(true);
   });
 
-  it("holds its facing over time and turns through four views without reloading or submitting a form", async () => {
+  it("holds its facing over time and turns through six hex views without reloading or submitting a form", async () => {
     const submit = vi.fn();
     const view = render(
       <form
@@ -126,7 +126,7 @@ describe("character preview", () => {
     expect(draw.mock.lastCall?.[2]).toBe(2);
     update({ now: 10000, delta: 0.1, reducedMotion: false });
     expect(draw.mock.lastCall?.[2]).toBe(2);
-    for (const direction of [3, 0, 1, 2] as const) {
+    for (const direction of [3, 5, 0, 4, 1, 2] as const) {
       invalidate.mockClear();
       fireEvent.click(button);
       // A turn presents even when the figure is otherwise frozen.

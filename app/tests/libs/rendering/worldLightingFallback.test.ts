@@ -38,7 +38,7 @@ import type { SectorUser } from "@/libs/sector-map/world-types";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import type { UserWithRelations } from "@/routers/profile";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
-import { lpcCatalog } from "../../setup/lpc";
+import { customCharacterCatalog as lpcCatalog } from "../../setup/customCharacters";
 
 const cleanups: (() => void)[] = [];
 const map: NormalizedSectorMap = {

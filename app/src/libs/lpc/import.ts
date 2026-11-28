@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "@/libs/contentReview/version";
+import { lpcAtlasResources } from "@/libs/lpc/atlases";
+import { lpcAtlasFrame } from "@/libs/lpc/frames";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import { chunkArray } from "@/utils/array";
@@ -53,7 +55,11 @@ export const readLpcImage = async (url: string) => {
 };
 
 /** Require decodable atlas pixels within the declared layout and bounded image dimensions. */
-export const validateLpcAtlas = async (bytes: Buffer, layout: LpcLayout) => {
+export const validateLpcAtlas = async (
+  bytes: Buffer,
+  layout: LpcLayout,
+  numerical = false,
+) => {
   lpcLayoutValidator.parse(layout);
   const { default: sharp } = await import("sharp");
   const image = sharp(bytes, { limitInputPixels: 2048 * 2048 });
@@ -67,21 +73,35 @@ export const validateLpcAtlas = async (bytes: Buffer, layout: LpcLayout) => {
     (metadata.pages ?? 1) !== 1
   )
     throw new Error("Packed sheets must be single-frame PNG/WebP images up to 2048px.");
+  if (
+    numerical &&
+    (metadata.format !== "png" || metadata.depth !== "uchar" || metadata.icc)
+  )
+    throw new Error(
+      "Character depth must be an eight-bit PNG without a colour profile.",
+    );
   const width = layout.trim?.width ?? layout.cell,
     height = layout.trim?.height ?? layout.cell,
     gutter = layout.trim ? 2 : 0;
   if (
-    layout.columns * (width + gutter) > metadata.width ||
-    Object.values(layout.clips)
-      .flat(2)
-      .some(
-        (index) =>
-          (Math.floor(index / layout.columns) + 1) * (height + gutter) >
-          metadata.height,
-      )
+    (!layout.regions && layout.columns * (width + gutter) > metadata.width) ||
+    Object.entries(layout.clips).some(([animation, rows]) =>
+      rows.flat().some((index) => {
+        const frame = lpcAtlasFrame(layout, animation as LpcAnimation, index),
+          padding = frame.trim ? 1 : 0;
+        return (
+          frame.x + frame.width + padding > metadata.width ||
+          frame.y + frame.height + padding > metadata.height
+        );
+      }),
+    )
   )
     throw new Error("The animation layout extends outside the uploaded image.");
-  await image.raw().toBuffer();
+  const decoded = await image.ensureAlpha().raw().toBuffer();
+  if (numerical)
+    for (let index = 3; index < decoded.length; index += 4)
+      if (decoded[index] !== 255)
+        throw new Error("Character depth must have an opaque alpha channel.");
 };
 
 /** Convert the standard 13-column LPC export's supported poses into a bounded atlas. */
@@ -193,21 +213,24 @@ export const packLpcTravel = async (bytes: Buffer, layout: LpcLayout) => {
   const selected: Partial<Record<LpcAnimation, number[][]>> = {};
   for (const animation of ["stand", "idle", "walk"] as const)
     if (layout.clips[animation]) selected[animation] = layout.clips[animation];
-  const indices = [...new Set(Object.values(selected).flat(2))],
-    frames = new Map<number, Buffer>();
+  const indices = Object.entries(selected).flatMap(([animation, rows]) =>
+      [...new Set(rows.flat())].map((index) => ({
+        animation: animation as LpcAnimation,
+        index,
+        key: `${animation}:${index}`,
+      })),
+    ),
+    frames = new Map<string, Buffer>();
   let left: number = cell,
     top: number = cell,
     right = 0,
     bottom = 0;
   // Reconstruct logical cells before measuring a crop shared by every movement pose.
-  for (const index of indices) {
+  for (const { animation, index, key } of indices) {
     const frame = Buffer.alloc(cell * cell * 4),
-      trim = layout.trim;
-    const width = trim?.width ?? cell,
-      height = trim?.height ?? cell,
-      gutter = trim ? 1 : 0;
-    const sx = (index % layout.columns) * (width + gutter * 2) + gutter,
-      sy = Math.floor(index / layout.columns) * (height + gutter * 2) + gutter;
+      source = lpcAtlasFrame(layout, animation, index),
+      trim = source.trim;
+    const { width, height, x: sx, y: sy } = source;
     for (let y = 0; y < height; y++)
       for (let x = 0; x < width; x++) {
         const at = ((sy + y) * info.width + sx + x) * 4,
@@ -220,7 +243,7 @@ export const packLpcTravel = async (bytes: Buffer, layout: LpcLayout) => {
         right = Math.max(right, dx + 1);
         bottom = Math.max(bottom, dy + 1);
       }
-    frames.set(index, frame);
+    frames.set(key, frame);
   }
   if (!right) {
     left = 0;
@@ -232,7 +255,7 @@ export const packLpcTravel = async (bytes: Buffer, layout: LpcLayout) => {
     height = bottom - top,
     unique: Buffer[] = [],
     hashes = new Map<string, number>(),
-    remap = new Map<number, number>();
+    remap = new Map<string, number>();
   // Identical cells share storage; remap clips without changing their authored pose order.
   for (const [index, frame] of frames) {
     const hash = createHash("sha256").update(frame).digest("hex");
@@ -283,10 +306,22 @@ export const packLpcTravel = async (bytes: Buffer, layout: LpcLayout) => {
       clips: Object.fromEntries(
         Object.entries(selected).map(([animation, rows]) => [
           animation,
-          rows.map((row) => row.map((index) => remap.get(index)!)),
+          rows.map((row) => row.map((index) => remap.get(`${animation}:${index}`)!)),
         ]),
       ),
       trim: { x: left, y: top, width, height },
+      ...(layout.pixelsPerUnit ? { pixelsPerUnit: layout.pixelsPerUnit } : {}),
+      ...(layout.ground ? { ground: layout.ground } : {}),
+      ...(layout.facings ? { facings: layout.facings } : {}),
+      ...(layout.frameMs
+        ? {
+            frameMs: Object.fromEntries(
+              Object.entries(layout.frameMs).filter(
+                ([animation]) => animation in selected,
+              ),
+            ),
+          }
+        : {}),
     } satisfies LpcLayout,
   };
 };
@@ -356,24 +391,32 @@ export const validateLpcImages = async (
   config: LpcConfig,
   previous?: LpcConfig | null,
 ) => {
-  const atlases = (value?: LpcConfig | null) =>
-    Object.values(value?.variants ?? {})
-      .flat()
-      .flatMap((sheet) => [sheet, ...(sheet.travel ? [sheet.travel] : [])]);
   const saved = new Set(
-    atlases(previous).map((sheet) => canonicalJson([sheet.image, sheet.layout])),
+    lpcAtlasResources(previous).map((sheet) =>
+      canonicalJson([sheet.image, sheet.layout, sheet.numerical]),
+    ),
   );
   const pending = [
     ...new Map(
-      atlases(config)
-        .filter((sheet) => !saved.has(canonicalJson([sheet.image, sheet.layout])))
-        .map((sheet) => [canonicalJson([sheet.image, sheet.layout]), sheet]),
+      lpcAtlasResources(config)
+        .filter(
+          (sheet) =>
+            !saved.has(canonicalJson([sheet.image, sheet.layout, sheet.numerical])),
+        )
+        .map((sheet) => [
+          canonicalJson([sheet.image, sheet.layout, sheet.numerical]),
+          sheet,
+        ]),
     ).values(),
   ];
   for (const batch of chunkArray(pending, 5))
     await Promise.all(
       batch.map(async (sheet) =>
-        validateLpcAtlas(await readLpcImage(sheet.image), sheet.layout),
+        validateLpcAtlas(
+          await readLpcImage(sheet.image),
+          sheet.layout,
+          sheet.numerical,
+        ),
       ),
     );
 };

@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { drizzle } from "drizzle-orm/mysql-proxy";
 import {
   insertGameAssetForCreate,
-  selectGameAssetForGetAll,
   selectGameAssetForGetAllFolders,
+  selectGameAssetIdsForGetAll,
 } from "@/queries/asset";
 import type { DrizzleClient } from "@/server/db";
 
@@ -11,10 +11,15 @@ import type { DrizzleClient } from "@/server/db";
 const client = drizzle(async () => ({ rows: [] })) as unknown as DrizzleClient;
 
 /** Compile our filter and pagination choices without executing database statements. */
-const listing = (input: Parameters<typeof selectGameAssetForGetAll>[1]) =>
-  selectGameAssetForGetAll(client, input, 49, 48).toSQL();
+const listing = (input: Parameters<typeof selectGameAssetIdsForGetAll>[1]) =>
+  selectGameAssetIdsForGetAll(client, input, 49, 48).toSQL();
 
 describe("asset library queries", () => {
+  it("keeps large artwork definitions out of the paginated sort", () => {
+    const query = listing({ includeAnimations: true });
+    expect(query.sql).toStartWith("select `id` from `GameAsset`");
+    expect(query.sql).not.toContain("lpcConfig");
+  });
   it("counts complete folders for the selected media type without pagination", () => {
     const query = selectGameAssetForGetAllFolders(client, {
       type: "SCENE_BACKGROUND",

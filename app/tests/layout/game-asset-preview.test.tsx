@@ -7,7 +7,10 @@ afterEach(cleanup);
 
 it("anchors mixed-size and trimmed LPC layers in one logical viewport", () => {
   const asset = lpcAssets.find(({ id }) => id === "shirt")!;
-  const source = asset.lpcConfig.variants["male/gray/blue"]![0]!;
+  const source = {
+    image: asset.lpcConfig.variants["male/gray/blue"]![0]!.image,
+    z: 35,
+  };
   const stand = [[0], [1], [2], [3]];
   const view = render(
     <GameAssetPreview
@@ -47,4 +50,31 @@ it("anchors mixed-size and trimmed LPC layers in one logical viewport", () => {
   expect(layers[1]!.style.backgroundPosition).toBe("-45px -1px");
   expect(layers[0]!.style.zIndex).toBe("1035");
   expect(layers[1]!.style.zIndex).toBe("995");
+});
+
+it("uses the composed poster for a depth-aware design without loading its atlases", () => {
+  const asset = lpcAssets.find(({ id }) => id === "shirt")!;
+  const source = asset.lpcConfig.variants["male/gray/blue"]![0]!;
+  const view = render(
+    <GameAssetPreview
+      asset={{
+        ...asset,
+        image: "https://uploadthing.b-cdn.net/f/composed-character-poster",
+        frames: 1,
+        speed: 50,
+        lpcConfig: {
+          ...asset.lpcConfig,
+          variants: {
+            "male/gray/blue": [{ ...source, depth: "https://example.test/depth.png" }],
+          },
+        },
+      }}
+    />,
+  );
+  const image = view.getByRole("img", { name: asset.name });
+  expect(image.tagName).toBe("IMG");
+  expect(image.getAttribute("src")).toBe(
+    "https://uploadthing.b-cdn.net/f/composed-character-poster",
+  );
+  expect(view.container.querySelector("canvas,svg")).toBeNull();
 });

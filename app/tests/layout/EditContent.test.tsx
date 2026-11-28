@@ -33,6 +33,7 @@ import {
 import { ObjectiveFormWrapper } from "@/layout/ObjectiveFormWrapper";
 import { RewardEditor, RewardFormWrapper } from "@/layout/RewardEditor";
 import { JUTSU_EFFECT_COSMETICS } from "@/libs/jutsu/reskins";
+import { packLpcDesigns } from "@/libs/lpc/transport";
 import * as toastHelpers from "@/libs/toast";
 import * as errorUtils from "@/utils/error";
 import {
@@ -57,6 +58,11 @@ import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGl
 import { deferred } from "../setup/deferred";
 import { spyOnToasts } from "../setup/toastMock";
 import { mockUserContextValue } from "../setup/userContext";
+
+const packedAssetPage = <T extends { data: { id: string }[] }>(page: T) => ({
+  ...page,
+  data: packLpcDesigns(page.data.map((asset) => ({ ...asset, lpcConfig: null }))),
+});
 
 const save = vi.fn(async (_input: { id: string; data: { effects: ZodAllTags[] } }) => ({
   success: true,
@@ -2521,15 +2527,20 @@ describe("schema-derived field visibility", () => {
     } as never);
     vi.spyOn(api.gameAsset.getAll, "useQuery").mockImplementation(((
       input: { exactFolder?: string },
-      options: Pick<UseQueryOptions<AssetPage>, "enabled" | "placeholderData">,
+      options: Pick<
+        UseQueryOptions<ReturnType<typeof packedAssetPage<AssetPage>>>,
+        "enabled" | "placeholderData"
+      >,
     ) =>
       useQuery({
         ...options,
         queryKey: ["picker-assets", input],
         queryFn: async () =>
-          input.exactFolder === "Water"
-            ? secondFolder.promise
-            : { data: [asset("flame", "Flame Burst")], nextCursor: undefined },
+          packedAssetPage(
+            await (input.exactFolder === "Water"
+              ? secondFolder.promise
+              : { data: [asset("flame", "Flame Burst")], nextCursor: undefined }),
+          ),
       })) as never);
     const onEffectsChange = vi.fn();
     const PickerForm = () => {
@@ -2615,12 +2626,15 @@ describe("schema-derived field visibility", () => {
     } as never);
     vi.spyOn(api.gameAsset.getAll, "useQuery").mockImplementation(((
       input: PickerInput,
-      options: Pick<UseQueryOptions<PickerPage>, "enabled">,
+      options: Pick<
+        UseQueryOptions<ReturnType<typeof packedAssetPage<PickerPage>>>,
+        "enabled"
+      >,
     ) =>
       useQuery({
         ...options,
         queryKey: ["picker-assets", input],
-        queryFn: () => read(input, input.cursor),
+        queryFn: async () => packedAssetPage(await read(input, input.cursor)),
       })) as never);
     const onEffectsChange = vi.fn();
     const PickerForm = () => {
